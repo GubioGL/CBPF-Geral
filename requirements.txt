@@ -4,3 +4,9 @@ matplotlib
 qiskit
 qiskit-machine-learning
 qiskit-algorithms
+pylatexencnumpy
+torch
+matplotlib
+qiskit
+qiskit-machine-learning
+qiskit-algorithms

@@ -1,0 +1,17 @@
+{
+  "class_name": "QuantumPINN",
+  "config": {
+    "n_qubits": 2,
+    "pre_neurons": 20,
+    "pre_depth": 1,
+    "post_neurons": 20,
+    "post_depth": 1,
+    "angle_scale": 3.141592653589793,
+    "fixed_layer": "reverse_linear_cnot",
+    "fixed_layer_repeats": 1,
+    "input_rotation_axis": "rx",
+    "seed": 42,
+    "L": 1.0,
+    "Tfin": 0.1
+  }
+}

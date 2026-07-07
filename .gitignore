@@ -1,0 +1,17 @@
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Temp folder
+tmp/
+
+# Optional: compiled C extensions
+*.so

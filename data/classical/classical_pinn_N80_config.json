@@ -1,0 +1,9 @@
+{
+  "class_name": "ClassicalPINN",
+  "config": {
+    "hidden_neurons": 20,
+    "hidden_depth": 2,
+    "L": 1.0,
+    "Tfin": 0.1
+  }
+}
