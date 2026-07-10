@@ -203,7 +203,7 @@ class QuantumPINN(PINNBase):
             # unset, silently making the "exact" StatevectorEstimator run
             # with shot-noise-like approximation instead. Pass it explicitly
             # to get the exact simulation the surrounding code intends.
-            default_precision=0.0,
+            #default_precision=0.0,
         )
         # No initial_weights beyond the empty array: the circuit is fixed, zero trainable weights.
         self.quantum = TorchConnector(qnn, initial_weights=np.zeros(qnn.num_weights, dtype=np.float32))

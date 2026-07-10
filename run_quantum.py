@@ -15,7 +15,7 @@ from src.config import L, TFIN as Tfin, NU, HX, HT, N_COLLOCATION, SEED, EPOCHS,
 
 if __name__ == "__main__":
     # ---- quantum architecture -----------------------------------------------
-    for N_QUBITS in range(1, 5):  # 2, 3, 4 qubits
+    for N_QUBITS in range(5, 8):  # 2, 3, 4 qubits
         ANGLE_SCALE = math.pi
         FIXED_LAYER = "reverse_linear_cnot"          # one of FIXED_LAYERS, see models.py
         FIXED_LAYER_REPEATS = 1
@@ -34,7 +34,7 @@ if __name__ == "__main__":
         # print("Trainable parameters:", sum(p.numel() for p in model.parameters()))
         # print("Trainable parameters inside the quantum circuit (should be 0):", n_quantum_params)
 
-        model.show_circuit().savefig(f"quantum_circuit_N_QUBITS{N_QUBITS}.png", dpi=150)
+       # model.show_circuit().savefig(f"quantum_circuit_N_QUBITS{N_QUBITS}_noise.png", dpi=150)
         #print("Saved circuit diagram to quantum_circuit.png")
 
         x_f, t_f = sample_collocation_points(N_COLLOCATION, L, Tfin, HT, seed=SEED)
@@ -44,11 +44,11 @@ if __name__ == "__main__":
             epochs=EPOCHS, lr=LR, print_every=50,
         )
 
-        model.save(f"data/quantum/quantum_pinn_N_QUBITS{N_QUBITS}.pt")
+        model.save(f"data/quantum/quantum_pinn_N_QUBITS{N_QUBITS}_noise.pt")
         #print("Saved model checkpoint to data/quantum/quantum_pinn.pt (config: data/quantum/quantum_pinn_config.json)")
 
         plot_loss({"Quantum HPINN": hist["loss"]}, title="Quantum HPINN training loss",
-                save_path=f"data/quantum/quantum_loss_N_QUBITS{N_QUBITS}.png")
+                save_path=f"data/quantum/quantum_loss_N_QUBITS{N_QUBITS}_noise.png")
 
         ############################### Numerico ###########################################
         x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=NU)
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         plot_solution(
             x_plot, {"Quantum HPINN": u_pred}, ref=u_ref,
             title=f"Quantum HPINN vs FDM reference at T={Tfin}",
-            save_path=f"data/quantum/quantum_solution_N_QUBITS{N_QUBITS}.png",
+            save_path=f"data/quantum/quantum_solution_N_QUBITS{N_QUBITS}_noise.png",
             show_cond=False
         )
 

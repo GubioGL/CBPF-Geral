@@ -81,6 +81,29 @@ def sample_collocation_points(n_points, L, T, ht, seed=None):
 
 
 # ----------------------------------------------------------------------
+# Non-uniform mesh finite differences
+#
+# Both formulas fall back exactly to the standard symmetric central
+# difference when h_L == h_R. They operate elementwise on tensors of
+# shape (n_points, 1), so a whole (possibly scattered/non-uniform)
+# collocation set is differentiated in one shot -- no Python loop over
+# the mesh is needed, uniform or not.
+# ----------------------------------------------------------------------
+def nonuniform_first_derivative(f_left, f_center, f_right, h_L, h_R):
+    """f'(x_i) via the 3-point asymmetric central difference on a non-uniform mesh."""
+    return (
+        (h_L / (h_R * (h_L + h_R))) * f_right
+        + ((h_R - h_L) / (h_L * h_R)) * f_center
+        - (h_R / (h_L * (h_L + h_R))) * f_left
+    )
+
+
+def nonuniform_second_derivative(f_left, f_center, f_right, h_L, h_R):
+    """f''(x_i) via the 3-point central difference on a non-uniform mesh."""
+    return (2.0 / (h_L + h_R)) * ((f_right - f_center) / h_R - (f_center - f_left) / h_L)
+
+
+# ----------------------------------------------------------------------
 # Training and evaluation
 # ----------------------------------------------------------------------
 def train(model, x_f, t_f, loss_kwargs, epochs=400, lr=2.0e-4, grad_clip=1.0,
@@ -131,6 +154,113 @@ def train(model, x_f, t_f, loss_kwargs, epochs=400, lr=2.0e-4, grad_clip=1.0,
         #if print_every and (ep == 0 or (ep + 1) % print_every == 0 or ep == epochs - 1):
         #    print(f"epoch {ep+1:5d}/{epochs} | loss={loss_value:.6e} | "
         #          f"r_rms={hist['residual_rms'][-1]:.3e} | time={time.time()-t0:.1f}s")
+
+    return model, hist
+
+
+def train_adaptive(model, x_f, t_f, loss_kwargs, epochs=400, lr=2.0e-4, grad_clip=1.0,
+                    weight_decay=1.0e-6, print_every=50, hx_min=None, hx_max=None,
+                    ht_min=None, ht_max=None, adapt_every=25, refine_strength=1.0,
+                    adapt_momentum=0.5, tol_t=1.0e-4, order_p=1.0 / 3.0,
+                    dt_factor_bounds=(0.5, 2.0)):
+    """
+    Same Burgers-residual training as `train`, but on a non-uniform,
+    self-adapting collocation stencil: every point keeps its own
+    (h_L, h_R) spatial half-widths and (h_L, h_R) temporal half-widths,
+    combined into derivatives via `nonuniform_first_derivative` /
+    `nonuniform_second_derivative`.
+
+    Every `adapt_every` epochs the stencil widths are updated with no
+    extra Python looping over points (all per-point, vectorized):
+      * Spatial: h shrinks where |u_xx| (curvature) is large and grows
+        towards hx_max where the solution is nearly linear (geometric
+        mesh refinement rule).
+      * Temporal: classical local-error step control. E_loc is a
+        Richardson-style estimate (u_t at the current width vs. u_t at
+        half that width); h is rescaled by (Tol/E_loc)**order_p, as in
+        adaptive Crank-Nicolson-type schemes.
+    """
+    L, nu, hx, ht = loss_kwargs["L"], loss_kwargs["nu"], loss_kwargs["hx"], loss_kwargs["ht"]
+    hx_min = hx / 5.0 if hx_min is None else hx_min
+    hx_max = hx * 2.0 if hx_max is None else hx_max
+    ht_min = ht / 5.0 if ht_min is None else ht_min
+    ht_max = ht * 2.0 if ht_max is None else ht_max
+
+    hx_L = tc.full_like(x_f, hx)
+    hx_R = tc.full_like(x_f, hx)
+    ht_L = tc.full_like(t_f, ht)
+    ht_R = tc.full_like(t_f, ht)
+
+    params = [p for p in model.parameters() if p.requires_grad]
+    opt = tc.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+    scheduler = tc.optim.lr_scheduler.ReduceLROnPlateau(
+        opt, mode="min", factor=0.5, patience=200, min_lr=1.0e-6
+    )
+
+    hist = {"loss": [], "residual_rms": [], "hx_mean": [], "ht_mean": []}
+    t0 = time.time()
+
+    for ep in tqdm(range(epochs)):
+        model.train()
+
+        x_p = tc.remainder(x_f + hx_R, L)
+        x_m = tc.remainder(x_f - hx_L, L)
+        t_p, t_m = t_f + ht_R, t_f - ht_L
+
+        u_0 = model(tc.cat([x_f, t_f], dim=1))
+        u_xp = model(tc.cat([x_p, t_f], dim=1))
+        u_xm = model(tc.cat([x_m, t_f], dim=1))
+        u_tp = model(tc.cat([x_f, t_p], dim=1))
+        u_tm = model(tc.cat([x_f, t_m], dim=1))
+
+        u_x = nonuniform_first_derivative(u_xm, u_0, u_xp, hx_L, hx_R)
+        u_xx = nonuniform_second_derivative(u_xm, u_0, u_xp, hx_L, hx_R)
+        u_t = nonuniform_first_derivative(u_tm, u_0, u_tp, ht_L, ht_R)
+
+        residual = u_t + u_0 * u_x - nu * u_xx
+        loss = tc.mean(residual**2)
+
+        opt.zero_grad()
+        loss.backward()
+        if grad_clip is not None:
+            tc.nn.utils.clip_grad_norm_(params, grad_clip)
+        opt.step()
+
+        loss_value = float(loss.detach())
+        scheduler.step(loss_value)
+
+        hist["loss"].append(loss_value)
+        hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
+        hist["hx_mean"].append(float(0.5 * (hx_L.mean() + hx_R.mean())))
+        hist["ht_mean"].append(float(0.5 * (ht_L.mean() + ht_R.mean())))
+
+        if (ep + 1) % adapt_every == 0:
+            with tc.no_grad():
+                # ---- spatial: refine mesh where curvature |u_xx| is large ----
+                kappa = u_xx.detach().abs()
+                kappa_n = tc.clamp(kappa / (kappa.mean() + 1.0e-12), 0.0, 5.0) / 5.0
+                h_target = hx_max - (hx_max - hx_min) * refine_strength * kappa_n
+                h_target = tc.clamp(h_target, hx_min, hx_max)
+                hx_L = tc.clamp((1.0 - adapt_momentum) * hx_L + adapt_momentum * h_target, hx_min, hx_max)
+                hx_R = tc.clamp((1.0 - adapt_momentum) * hx_R + adapt_momentum * h_target, hx_min, hx_max)
+
+                # ---- temporal: classical local-error step control ----
+                t_p_half, t_m_half = t_f + 0.5 * ht_R, t_f - 0.5 * ht_L
+                u_tp_half = model(tc.cat([x_f, t_p_half], dim=1))
+                u_tm_half = model(tc.cat([x_f, t_m_half], dim=1))
+                u_t_half = nonuniform_first_derivative(
+                    u_tm_half, u_0, u_tp_half, 0.5 * ht_L, 0.5 * ht_R
+                )
+                e_loc = (u_t.detach() - u_t_half).abs() + 1.0e-12
+                factor = (tol_t / e_loc).pow(order_p)
+                factor = tc.clamp(factor, dt_factor_bounds[0], dt_factor_bounds[1])
+                ht_L = tc.clamp(ht_L * factor, ht_min, ht_max)
+                ht_R = tc.clamp(ht_R * factor, ht_min, ht_max)
+
+        #if print_every and (ep == 0 or (ep + 1) % print_every == 0 or ep == epochs - 1):
+        #    print(f"epoch {ep+1:5d}/{epochs} | loss={loss_value:.6e} | "
+        #          f"r_rms={hist['residual_rms'][-1]:.3e} | hx={hist['hx_mean'][-1]:.3e} | "
+        #          f"ht={hist['ht_mean'][-1]:.3e} | time={time.time()-t0:.1f}s")
 
     return model, hist
 
