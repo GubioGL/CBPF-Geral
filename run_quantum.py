@@ -1,4 +1,6 @@
 import math
+import random
+
 import numpy as np
 from src.functions import (
     plot_loss,
@@ -8,20 +10,25 @@ from src.functions import (
     sample_collocation_points,
     set_seed,
     solve_burgers_fd,
+    relative_l2_error,
     train,)
 from src.models import QuantumPINN
-from src.config import L, TFIN as Tfin, NU, HX, HT, N_COLLOCATION, SEED, EPOCHS, LR, PRE_NEURONS, PRE_DEPTH, POST_NEURONS, POST_DEPTH
+from src.config import (
+    L, TFIN as Tfin, NU, HX, HT, N_COLLOCATION, SEED, EPOCHS, LR,
+    PRE_NEURONS, PRE_DEPTH, POST_NEURONS, POST_DEPTH, HIDDEN_NEURONS, HIDDEN_DEPTH,
+)
 
 
 if __name__ == "__main__":
     # ---- quantum architecture -----------------------------------------------
-    for N_QUBITS in range(5, 8):  # 2, 3, 4 qubits
+    for N_QUBITS in [1]:  # 2, 3, 4 qubits
         ANGLE_SCALE = math.pi
         FIXED_LAYER = "reverse_linear_cnot"          # one of FIXED_LAYERS, see models.py
         FIXED_LAYER_REPEATS = 1
         INPUT_ROTATION_AXIS = "rx"
 
         set_seed(SEED)
+        run_id = random.randint(0, 999999)
 
         model = QuantumPINN(
             n_qubits=N_QUBITS, pre_neurons=PRE_NEURONS, pre_depth=PRE_DEPTH,
@@ -41,14 +48,20 @@ if __name__ == "__main__":
         model, hist = train(
             model, x_f, t_f,
             loss_kwargs=dict(L=L, Tfin=Tfin, nu=NU, hx=HX, ht=HT),
-            epochs=EPOCHS, lr=LR, print_every=50,
+            epochs=EPOCHS, lr=LR
         )
 
-        model.save(f"data/quantum/quantum_pinn_N_QUBITS{N_QUBITS}_noise.pt")
+        model.save(
+            f"data/quantum/amostragem_{run_id}.pt",
+            training_params=dict(
+                NU=NU, HX=HX, HT=HT, N_COLLOCATION=N_COLLOCATION, SEED=SEED,
+                EPOCHS=EPOCHS, LR=LR, HIDDEN_NEURONS=HIDDEN_NEURONS, HIDDEN_DEPTH=HIDDEN_DEPTH,
+            ),
+        )
         #print("Saved model checkpoint to data/quantum/quantum_pinn.pt (config: data/quantum/quantum_pinn_config.json)")
 
         plot_loss({"Quantum HPINN": hist["loss"]}, title="Quantum HPINN training loss",
-                save_path=f"data/quantum/quantum_loss_N_QUBITS{N_QUBITS}_noise.png")
+                save_path=f"data/quantum/amostragem_{run_id}_loss.png")
 
         ############################### Numerico ###########################################
         x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=NU)
@@ -61,8 +74,8 @@ if __name__ == "__main__":
         plot_solution(
             x_plot, {"Quantum HPINN": u_pred}, ref=u_ref,
             title=f"Quantum HPINN vs FDM reference at T={Tfin}",
-            save_path=f"data/quantum/quantum_solution_N_QUBITS{N_QUBITS}_noise.png",
+            save_path=f"data/quantum/amostragem_{run_id}_solution.png",
             show_cond=False
         )
 
-        # print(f"Relative L2 error at T={Tfin}: {relative_l2_error(u_pred, u_ref):.6e}")
+        print(f"Relative L2 error at T={Tfin}: {relative_l2_error(u_pred, u_ref):.6e}")

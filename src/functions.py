@@ -3,21 +3,17 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import torch as tc
-
 from tqdm import tqdm
-
 
 def set_seed(seed=42):
     np.random.seed(seed)
     tc.manual_seed(seed)
-
 
 def initial_condition(x, L=1.0):
     """u0(x) = sin(2*pi*x/L). Accepts a NumPy array or a Torch tensor."""
     if isinstance(x, tc.Tensor):
         return tc.sin(2.0 * math.pi * x / L)
     return np.sin(2.0 * np.pi * x / L)
-
 
 # ----------------------------------------------------------------------
 # Reference solution (pure numerical baseline, no neural network involved)
@@ -63,22 +59,26 @@ def reference_at_time(t_eval, t_ref, x_ref, U_ref, x_query, L=1.0):
     u = np.interp(x_query.ravel(), xp, fp).reshape(-1, 1)
     return u, float(t_ref[idx])
 
-
 # ----------------------------------------------------------------------
 # Collocation points and physics-informed residual
 # ----------------------------------------------------------------------
 def sample_collocation_points(n_points, L, T, ht, seed=None):
-    """x in [0,L), t in [ht, T-ht] (interior points, needed for centered differences)."""
+    """x in [0,L), t in [ht, T-ht] (interior points, needed for centered differences).
+
+    Points are laid out on a uniform grid (not sampled randomly): n_side = round(sqrt(n_points))
+    values along each axis, combined via meshgrid, for n_side**2 total collocation points.
+    """
     if T <= 2.0 * ht:
         raise ValueError("T must satisfy T > 2*ht.")
-    gen = None
-    if seed is not None:
-        gen = tc.Generator(device="cpu")
-        gen.manual_seed(seed)
-    x = L * tc.rand((n_points, 1), generator=gen)
-    tt = ht + (T - 2.0 * ht) * tc.rand((n_points, 1), generator=gen)
-    return x, tt
 
+    n_side = max(1, round(math.sqrt(n_points)))
+    x_lin = tc.linspace(0.0, L, n_side + 1)[:-1]
+    t_lin = tc.linspace(ht, T - ht, n_side)
+
+    x_grid, t_grid = tc.meshgrid(x_lin, t_lin, indexing="ij")
+    x = x_grid.reshape(-1, 1)
+    t = t_grid.reshape(-1, 1)
+    return x, t
 
 # ----------------------------------------------------------------------
 # Non-uniform mesh finite differences
@@ -97,17 +97,15 @@ def nonuniform_first_derivative(f_left, f_center, f_right, h_L, h_R):
         - (h_R / (h_L * (h_L + h_R))) * f_left
     )
 
-
 def nonuniform_second_derivative(f_left, f_center, f_right, h_L, h_R):
     """f''(x_i) via the 3-point central difference on a non-uniform mesh."""
     return (2.0 / (h_L + h_R)) * ((f_right - f_center) / h_R - (f_center - f_left) / h_L)
 
-
 # ----------------------------------------------------------------------
 # Training and evaluation
 # ----------------------------------------------------------------------
-def train(model, x_f, t_f, loss_kwargs, epochs=400, lr=2.0e-4, grad_clip=1.0,
-          weight_decay=1.0e-6, print_every=50):
+def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
+          weight_decay=1.0e-6):
     """Minimizes the Burgers residual loss with AdamW + ReduceLROnPlateau."""
     L, nu, hx, ht = loss_kwargs["L"], loss_kwargs["nu"], loss_kwargs["hx"], loss_kwargs["ht"]
     x_p = tc.remainder(x_f + hx, L)
@@ -151,74 +149,38 @@ def train(model, x_f, t_f, loss_kwargs, epochs=400, lr=2.0e-4, grad_clip=1.0,
         hist["loss"].append(loss_value)
         hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
 
-        #if print_every and (ep == 0 or (ep + 1) % print_every == 0 or ep == epochs - 1):
-        #    print(f"epoch {ep+1:5d}/{epochs} | loss={loss_value:.6e} | "
-        #          f"r_rms={hist['residual_rms'][-1]:.3e} | time={time.time()-t0:.1f}s")
-
     return model, hist
 
+def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
+                    weight_decay=1.0e-6):
+    """Same Burgers-residual training as `train`, but u_t, u_x, u_xx come from
+    a single forward pass differentiated with autograd (torch.autograd.grad,
+    create_graph=True) instead of finite differences on shifted collocation
+    points. Only `nu` from `loss_kwargs` is used; hx/ht are not needed since
+    no stencil is built."""
+    nu = loss_kwargs["nu"]
 
-def train_adaptive(model, x_f, t_f, loss_kwargs, epochs=400, lr=2.0e-4, grad_clip=1.0,
-                    weight_decay=1.0e-6, print_every=50, hx_min=None, hx_max=None,
-                    ht_min=None, ht_max=None, adapt_every=25, refine_strength=1.0,
-                    adapt_momentum=0.5, tol_t=1.0e-4, order_p=1.0 / 3.0,
-                    dt_factor_bounds=(0.5, 2.0)):
-    """
-    Same Burgers-residual training as `train`, but on a non-uniform,
-    self-adapting collocation stencil: every point keeps its own
-    (h_L, h_R) spatial half-widths and (h_L, h_R) temporal half-widths,
-    combined into derivatives via `nonuniform_first_derivative` /
-    `nonuniform_second_derivative`.
-
-    Every `adapt_every` epochs the stencil widths are updated with no
-    extra Python looping over points (all per-point, vectorized):
-      * Spatial: h shrinks where |u_xx| (curvature) is large and grows
-        towards hx_max where the solution is nearly linear (geometric
-        mesh refinement rule).
-      * Temporal: classical local-error step control. E_loc is a
-        Richardson-style estimate (u_t at the current width vs. u_t at
-        half that width); h is rescaled by (Tol/E_loc)**order_p, as in
-        adaptive Crank-Nicolson-type schemes.
-    """
-    L, nu, hx, ht = loss_kwargs["L"], loss_kwargs["nu"], loss_kwargs["hx"], loss_kwargs["ht"]
-    hx_min = hx / 5.0 if hx_min is None else hx_min
-    hx_max = hx * 2.0 if hx_max is None else hx_max
-    ht_min = ht / 5.0 if ht_min is None else ht_min
-    ht_max = ht * 2.0 if ht_max is None else ht_max
-
-    hx_L = tc.full_like(x_f, hx)
-    hx_R = tc.full_like(x_f, hx)
-    ht_L = tc.full_like(t_f, ht)
-    ht_R = tc.full_like(t_f, ht)
+    x_f = x_f.clone().requires_grad_(True)
+    t_f = t_f.clone().requires_grad_(True)
 
     params = [p for p in model.parameters() if p.requires_grad]
     opt = tc.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
-    scheduler = tc.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=200, min_lr=1.0e-6
-    )
 
-    hist = {"loss": [], "residual_rms": [], "hx_mean": [], "ht_mean": []}
+
+    hist = {"loss": [], "residual_rms": []}
     t0 = time.time()
 
     for ep in tqdm(range(epochs)):
         model.train()
 
-        x_p = tc.remainder(x_f + hx_R, L)
-        x_m = tc.remainder(x_f - hx_L, L)
-        t_p, t_m = t_f + ht_R, t_f - ht_L
-
         u_0 = model(tc.cat([x_f, t_f], dim=1))
-        u_xp = model(tc.cat([x_p, t_f], dim=1))
-        u_xm = model(tc.cat([x_m, t_f], dim=1))
-        u_tp = model(tc.cat([x_f, t_p], dim=1))
-        u_tm = model(tc.cat([x_f, t_m], dim=1))
 
-        u_x = nonuniform_first_derivative(u_xm, u_0, u_xp, hx_L, hx_R)
-        u_xx = nonuniform_second_derivative(u_xm, u_0, u_xp, hx_L, hx_R)
-        u_t = nonuniform_first_derivative(u_tm, u_0, u_tp, ht_L, ht_R)
+        u_x = tc.autograd.grad(u_0, x_f, grad_outputs=tc.ones_like(u_0), create_graph=True)[0]
+        u_xx = tc.autograd.grad(u_x, x_f, grad_outputs=tc.ones_like(u_x), create_graph=True)[0]
+        u_t = tc.autograd.grad(u_0, t_f, grad_outputs=tc.ones_like(u_0), create_graph=True)[0]
 
         residual = u_t + u_0 * u_x - nu * u_xx
-        loss = tc.mean(residual**2)
+        loss = tc.mean(abs(residual))
 
         opt.zero_grad()
         loss.backward()
@@ -227,43 +189,12 @@ def train_adaptive(model, x_f, t_f, loss_kwargs, epochs=400, lr=2.0e-4, grad_cli
         opt.step()
 
         loss_value = float(loss.detach())
-        scheduler.step(loss_value)
+        #scheduler.step(loss_value)
 
         hist["loss"].append(loss_value)
         hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
-        hist["hx_mean"].append(float(0.5 * (hx_L.mean() + hx_R.mean())))
-        hist["ht_mean"].append(float(0.5 * (ht_L.mean() + ht_R.mean())))
-
-        if (ep + 1) % adapt_every == 0:
-            with tc.no_grad():
-                # ---- spatial: refine mesh where curvature |u_xx| is large ----
-                kappa = u_xx.detach().abs()
-                kappa_n = tc.clamp(kappa / (kappa.mean() + 1.0e-12), 0.0, 5.0) / 5.0
-                h_target = hx_max - (hx_max - hx_min) * refine_strength * kappa_n
-                h_target = tc.clamp(h_target, hx_min, hx_max)
-                hx_L = tc.clamp((1.0 - adapt_momentum) * hx_L + adapt_momentum * h_target, hx_min, hx_max)
-                hx_R = tc.clamp((1.0 - adapt_momentum) * hx_R + adapt_momentum * h_target, hx_min, hx_max)
-
-                # ---- temporal: classical local-error step control ----
-                t_p_half, t_m_half = t_f + 0.5 * ht_R, t_f - 0.5 * ht_L
-                u_tp_half = model(tc.cat([x_f, t_p_half], dim=1))
-                u_tm_half = model(tc.cat([x_f, t_m_half], dim=1))
-                u_t_half = nonuniform_first_derivative(
-                    u_tm_half, u_0, u_tp_half, 0.5 * ht_L, 0.5 * ht_R
-                )
-                e_loc = (u_t.detach() - u_t_half).abs() + 1.0e-12
-                factor = (tol_t / e_loc).pow(order_p)
-                factor = tc.clamp(factor, dt_factor_bounds[0], dt_factor_bounds[1])
-                ht_L = tc.clamp(ht_L * factor, ht_min, ht_max)
-                ht_R = tc.clamp(ht_R * factor, ht_min, ht_max)
-
-        #if print_every and (ep == 0 or (ep + 1) % print_every == 0 or ep == epochs - 1):
-        #    print(f"epoch {ep+1:5d}/{epochs} | loss={loss_value:.6e} | "
-        #          f"r_rms={hist['residual_rms'][-1]:.3e} | hx={hist['hx_mean'][-1]:.3e} | "
-        #          f"ht={hist['ht_mean'][-1]:.3e} | time={time.time()-t0:.1f}s")
 
     return model, hist
-
 
 def predict(model, x, t_val):
     """Evaluates the model on a spatial grid x at a fixed time t_val."""
@@ -277,7 +208,6 @@ def predict(model, x, t_val):
 def relative_l2_error(u_pred, u_ref):
     return float(np.linalg.norm(u_pred - u_ref) / np.linalg.norm(u_ref))
 
-
 # ----------------------------------------------------------------------
 # Plotting
 # ----------------------------------------------------------------------
@@ -285,9 +215,13 @@ def plot_loss(histories, title="Training loss", save_path=None, show_cond=False)
     """histories: dict of label -> list of loss values."""
     plt.figure(figsize=(9, 4.5))
     for label, values in histories.items():
-        plt.plot(np.log10(np.asarray(values) + 1.0e-16), linewidth=2.0, label=label)
+        #plt.plot(np.log10(np.asarray(values) + 1.0e-16), linewidth=2.0, label=label)
+        plt.plot(np.asarray(values), linewidth=2.0, label=label)
     plt.xlabel("Epochs", fontsize=14)
-    plt.ylabel(r"$\log_{10}(\mathrm{loss})$", fontsize=14)
+    #plt.ylabel(r"$\log_{10}(\mathrm{loss})$", fontsize=14)
+    plt.ylabel(r"$\mathrm{Loss}$", fontsize=14)
+    plt.yscale("log")
+    
     plt.title(title, fontsize=13)
     plt.grid(True, linestyle="--", alpha=0.6)
     plt.legend()
@@ -298,25 +232,39 @@ def plot_loss(histories, title="Training loss", save_path=None, show_cond=False)
         plt.show()
 
 
-def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="", save_path=None, show_cond=False):
+def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="", save_path=None,
+                   show_cond=False, collocation_x=None):
     """
     x: spatial grid, shape (N,1).
     curves: dict of label -> predicted u array, shape (N,1). Used both for a
         single model's solution and for multi-model / multi-time comparisons.
     ref: optional reference array plotted as a thick solid line.
+    collocation_x: optional array of the x-coordinates of the collocation
+        points used for training; drawn as a rug of ticks along the x-axis
+        (independent of the y-scale) so the point density is visible on top
+        of the solution curve.
     """
-    plt.figure(figsize=(9, 4.5))
+    fig = plt.figure(figsize=(9, 4.5))
+    ax = fig.gca()
     if ref is not None:
-        plt.plot(x.ravel(), ref.ravel(), linewidth=3.0, label=ref_label)
+        ax.plot(x.ravel(), ref.ravel(), linewidth=3.0, label=ref_label)
     for label, u in curves.items():
-        plt.plot(x.ravel(), u.ravel(), "--", linewidth=2.0, label=label)
-    plt.xlabel(r"$x$", fontsize=14)
-    plt.ylabel(r"$u(x,t)$", fontsize=14)
-    plt.title(title, fontsize=13)
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.legend()
-    plt.tight_layout()
+        ax.plot(x.ravel(), u.ravel(), "--", linewidth=2.0, label=label)
+    if collocation_x is not None:
+        collocation_x = np.asarray(collocation_x).ravel()
+        rug_trans = ax.get_xaxis_transform()  # x in data coords, y in axes fraction
+        ax.scatter(
+            collocation_x, np.full_like(collocation_x, 0.02), transform=rug_trans,
+            marker="|", s=200, linewidth=1.2, color="black", clip_on=False,
+            label=f"collocation points (N={collocation_x.size})",
+        )
+    ax.set_xlabel(r"$x$", fontsize=14)
+    ax.set_ylabel(r"$u(x,t)$", fontsize=14)
+    ax.set_title(title, fontsize=13)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=150)
+        fig.savefig(save_path, dpi=150)
     if show_cond==True:
         plt.show()

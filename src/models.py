@@ -7,13 +7,23 @@ import torch as tc
 import torch.nn as nn
 
 from .functions import initial_condition
-from qiskit.primitives import StatevectorEstimator
-from qiskit_machine_learning.neural_networks import EstimatorQNN
-from qiskit_machine_learning.connectors import TorchConnector
-from qiskit_algorithms.gradients import ParamShiftEstimatorGradient
-from qiskit import QuantumCircuit
-from qiskit.circuit import ParameterVector
-from qiskit.quantum_info import SparsePauliOp
+
+try:
+    from qiskit.primitives import StatevectorEstimator
+    from qiskit_machine_learning.neural_networks import EstimatorQNN
+    from qiskit_machine_learning.connectors import TorchConnector
+    from qiskit_algorithms.gradients import ParamShiftEstimatorGradient
+    from qiskit import QuantumCircuit
+    from qiskit.circuit import ParameterVector
+    from qiskit.quantum_info import SparsePauliOp
+except ModuleNotFoundError:
+    StatevectorEstimator = None
+    EstimatorQNN = None
+    TorchConnector = None
+    ParamShiftEstimatorGradient = None
+    QuantumCircuit = None
+    ParameterVector = None
+    SparsePauliOp = None
 
 class PINNBase(nn.Module):
     """
@@ -22,23 +32,31 @@ class PINNBase(nn.Module):
     the model (i.e. `cls(**config)` must work).
     """
 
-    def save(self, path):
+    def save(self, path, training_params=None):
         """Saves weights + config to `path` (state_dict + reconstruction
         kwargs), plus a human-readable `<path>_config.json` alongside it so
-        the run configuration can be inspected without loading torch."""
+        the run configuration can be inspected without loading torch.
+
+        `training_params` is optional extra metadata (e.g. NU, HX, HT,
+        N_COLLOCATION, SEED, EPOCHS, LR, HIDDEN_NEURONS, HIDDEN_DEPTH) recorded
+        for bookkeeping only -- it is not part of `config` and is never passed
+        to `cls(**config)` on load."""
         path = str(path)
-        tc.save(
-            {
-                "class_name": type(self).__name__,
-                "config": self.config,
-                "state_dict": self.state_dict(),
-            },
-            path,
-        )
+        payload = {
+            "class_name": type(self).__name__,
+            "config": self.config,
+            "state_dict": self.state_dict(),
+        }
+        if training_params is not None:
+            payload["training_params"] = training_params
+        tc.save(payload, path)
 
         config_path = os.path.splitext(path)[0] + "_config.json"
+        json_payload = {"class_name": type(self).__name__, "config": self.config}
+        if training_params is not None:
+            json_payload["training_params"] = training_params
         with open(config_path, "w") as f:
-            json.dump({"class_name": type(self).__name__, "config": self.config}, f, indent=2)
+            json.dump(json_payload, f, indent=2)
 
     @classmethod
     def load(cls, path, map_location="cpu"):
@@ -93,6 +111,9 @@ FIXED_LAYERS = (
 )
 
 def _apply_fixed_gate_layer(qc, layer_kind):
+    if QuantumCircuit is None:
+        raise ImportError("qiskit is required to instantiate QuantumPINN.")
+
     n = qc.num_qubits
     if n < 2:
         return
@@ -133,6 +154,8 @@ def _apply_fixed_gate_layer(qc, layer_kind):
         raise ValueError(f"Unknown fixed layer '{layer_kind}'. Options: {FIXED_LAYERS}.")
 
 def _build_fixed_circuit(n_qubits, layer_kind, repeats, axis):
+    if QuantumCircuit is None or ParameterVector is None:
+        raise ImportError("qiskit is required to instantiate QuantumPINN.")
 
     input_params = ParameterVector("inputs", n_qubits)
     qc = QuantumCircuit(n_qubits, name=f"fixed_{layer_kind}")
@@ -149,6 +172,9 @@ def _build_fixed_circuit(n_qubits, layer_kind, repeats, axis):
     return qc, list(input_params)
 
 def _z_observables(n_qubits):
+    if SparsePauliOp is None:
+        raise ImportError("qiskit is required to instantiate QuantumPINN.")
+
     return [
         SparsePauliOp.from_list([("I" * (n_qubits - q - 1) + "Z" + "I" * q, 1.0)])
         for q in range(n_qubits)
@@ -167,6 +193,17 @@ class QuantumPINN(PINNBase):
                  fixed_layer_repeats=1, input_rotation_axis="rx", seed=42,
                  L=1.0, Tfin=0.1):
         super().__init__()
+
+        if (
+            StatevectorEstimator is None
+            or EstimatorQNN is None
+            or TorchConnector is None
+            or ParamShiftEstimatorGradient is None
+            or QuantumCircuit is None
+            or ParameterVector is None
+            or SparsePauliOp is None
+        ):
+            raise ImportError("qiskit, qiskit-machine-learning e qiskit-algorithms sao necessarios para QuantumPINN.")
 
         self.config = dict(
             n_qubits=n_qubits, pre_neurons=pre_neurons, pre_depth=pre_depth,
