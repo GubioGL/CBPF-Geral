@@ -72,7 +72,7 @@ def sample_collocation_points(n_points, L, T, ht, seed=None):
         raise ValueError("T must satisfy T > 2*ht.")
 
     n_side = max(1, round(math.sqrt(n_points)))
-    x_lin = tc.linspace(0.0, L, n_side + 1)[:-1]
+    x_lin = tc.linspace(0.0, L, int(n_side/2) + 1)[:-1]
     t_lin = tc.linspace(ht, T - ht, n_side)
 
     x_grid, t_grid = tc.meshgrid(x_lin, t_lin, indexing="ij")

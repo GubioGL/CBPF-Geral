@@ -1,0 +1,20 @@
+{
+  "class_name": "ClassicalPINN",
+  "config": {
+    "hidden_neurons": 20,
+    "hidden_depth": 1,
+    "L": 1.0,
+    "Tfin": 0.1
+  },
+  "training_params": {
+    "NU": 0.01,
+    "HX": 0.001953125,
+    "HT": 0.001,
+    "N_COLLOCATION": 100,
+    "SEED": 4,
+    "EPOCHS": 10000,
+    "LR": 0.01,
+    "HIDDEN_NEURONS": 20,
+    "HIDDEN_DEPTH": 1
+  }
+}

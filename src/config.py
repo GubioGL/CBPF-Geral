@@ -1,5 +1,5 @@
 # ---- physical parameters ---------------------------------------------------
-L, TFIN, NU = 1.0 , 1 , 0.01
+L, TFIN, NU = 1.0 , .1 , 0.01
 
 # ---- discretization (used in the PDE residual loss and collocation sampling)
 HX, HT = L / 512, 1.0e-3

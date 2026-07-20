@@ -11,9 +11,9 @@
     "HX": 0.001953125,
     "HT": 0.001,
     "N_COLLOCATION": 100,
-    "SEED": 42,
+    "SEED": 0,
     "EPOCHS": 1000,
-    "LR": 0.001,
+    "LR": 0.01,
     "HIDDEN_NEURONS": 10,
     "HIDDEN_DEPTH": 1
   }
