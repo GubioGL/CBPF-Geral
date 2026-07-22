@@ -33,11 +33,14 @@ def find_models(t_dir):
 
 
 def compute_errors(t_dir):
-    """Loads every model in `t_dir`, evaluates it against the FDM reference at
-    t=Tfin, and returns (n_qubits, mse, mae, Tfin)."""
+    """Loads every model in `t_dir`, evaluates each against the FDM reference
+    at t=Tfin, and averages the MSE/MAE across all available samples (p_*)
+    for each number of qubits -- since the number of samples generally
+    differs per qubit count. Returns (n_qubits, mean_mse, mean_mae,
+    n_samples, Tfin), one point per qubit count."""
     models = find_models(t_dir)
     if not models:
-        return [], [], [], None
+        return [], [], [], [], None
 
     loaded = [(n, QuantumPINNPennyLane.load(path)) for n, path in models]
     L, Tfin = loaded[0][1].L, loaded[0][1].Tfin
@@ -46,13 +49,18 @@ def compute_errors(t_dir):
     x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
     u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
 
-    n_qubits, mse, mae = [], [], []
+    errors_by_n = {}
     for n, model in loaded:
         u_pred = predict(model, x_plot, Tfin)
-        n_qubits.append(n)
-        mse.append(float(np.mean((u_pred - u_ref) ** 2)))
-        mae.append(float(np.mean(np.abs(u_pred - u_ref))))
-    return n_qubits, mse, mae, Tfin
+        entry = errors_by_n.setdefault(n, {"mse": [], "mae": []})
+        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+
+    n_qubits = sorted(errors_by_n)
+    mse = [float(np.mean(errors_by_n[n]["mse"])) for n in n_qubits]
+    mae = [float(np.mean(errors_by_n[n]["mae"])) for n in n_qubits]
+    n_samples = [len(errors_by_n[n]["mse"]) for n in n_qubits]
+    return n_qubits, mse, mae, n_samples, Tfin
 
 
 def compute_classical_mean_errors(t_dir):
@@ -92,7 +100,7 @@ def plot_errors(n_qubits, mse, mae, Tfin, classical_mse, classical_mae, save_pat
     ax.set_ylabel("Error", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(n_qubits)
-    ax.set_title(f"Quantum PINN error vs number of qubits (T = {Tfin})", fontsize=13)
+    ax.set_title(f"Quantum PINN mean error vs number of qubits (T = {Tfin})", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()
@@ -102,7 +110,7 @@ def plot_errors(n_qubits, mse, mae, Tfin, classical_mse, classical_mae, save_pat
 
 if __name__ == "__main__":
     for t_dir in sorted(glob.glob(os.path.join(DATA_DIR, "T_*"))):
-        n_qubits, mse, mae, Tfin = compute_errors(t_dir)
+        n_qubits, mse, mae, n_samples, Tfin = compute_errors(t_dir)
         if not n_qubits:
             continue
 
@@ -115,6 +123,8 @@ if __name__ == "__main__":
         plot_errors(n_qubits, mse, mae, Tfin, classical_mse, classical_mae, save_path)
 
         print(f"T = {Tfin}")
-        for n, e_mse, e_mae in zip(n_qubits, mse, mae):
-            print(f"  n_qubits={n:2d}  MSE={e_mse:.6e}  MAE={e_mae:.6e}")
+        for n, e_mse, e_mae, n_s in zip(n_qubits, mse, mae, n_samples):
+            print(f"  n_qubits={n:2d}  MSE={e_mse:.6e}  MAE={e_mae:.6e}  (mean over {n_s} samples)")
+        if classical_mse is not None:
+            print(f"  classical  MSE={classical_mse:.6e}  MAE={classical_mae:.6e}")
         print(f"  -> saved {save_path}")
