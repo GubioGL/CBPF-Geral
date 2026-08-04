@@ -4,11 +4,11 @@ __pycache__/
 *.py[cod]
 
 # Images
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.svg
+# *.png
+# *.jpg
+# *.jpeg
+# *.gif
+# *.svg
 
 # Temp folder
 tmp/

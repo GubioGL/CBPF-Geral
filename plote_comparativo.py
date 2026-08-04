@@ -2,6 +2,7 @@
 qubits, comparing each model's prediction at t=Tfin to the FDM reference
 solution. One figure is produced per T_* directory in data/quantum."""
 import glob
+import json
 import os
 import re
 
@@ -11,7 +12,7 @@ import torch as tc
 
 from src.config import NU
 from src.functions import predict, reference_at_time, solve_burgers_fd
-from src.models import ClassicalPINN
+from src.models import ClassicalPINN, ClassicalPINN2
 from src.models_pennylane import QuantumPINNPennyLane
 
 DATA_DIR = "data/quantum_old"
@@ -19,6 +20,12 @@ CLASSICAL_DIR = "data/classical_old"
 COLOR_MSE = "#2a78d6"
 COLOR_MAE = "#1baf7a"
 COLOR_CLASSICAL = "#e34948"
+
+# Mid-layer (bottleneck) widths of the classical Cmodel_NEURO110{n}_* family,
+# i.e. ClassicalPINN2 checkpoints with intra_depth=1, intra_neurons=10 -- one
+# reference line per value, colored in the palette's fixed categorical order.
+MID_LAYER_NEURONS = [1, 5, 10]
+COLOR_MID_LAYER = {1: "#eb6834", 5: "#e87ba4", 10: "#4a3aa7"}
 
 MODEL_RE = re.compile(r"model_NQUBITS(\d+)_p_\d+\.pt$")
 
@@ -102,21 +109,60 @@ def compute_classical_mean_errors(t_dir):
     return float(np.mean(mse_vals)), float(np.mean(mae_vals))
 
 
-def plot_errors(n_qubits, mse, mae, Tfin, classical_mse, classical_mae, save_path):
+def compute_mid_layer_mean_errors(t_dir, mid_neurons=MID_LAYER_NEURONS):
+    """Loads the classical Cmodel_NEURO110{n}_* checkpoints in `t_dir` -- i.e.
+    ClassicalPINN2 models with intra_depth=1, intra_neurons=10 and bottleneck
+    width `intra_neuron` in `mid_neurons` -- and averages MSE/MAE across
+    run_id samples for each n. The bottleneck width is read from each model's
+    `_config.json` rather than parsed from the filename. Returns {n: (mean_mse,
+    mean_mae)}, one entry per n found."""
+    paths_by_n = {n: [] for n in mid_neurons}
+    for config_path in glob.glob(os.path.join(t_dir, "Cmodel_NEURO*_config.json")):
+        pt_path = config_path[: -len("_config.json")] + ".pt"
+        if not os.path.exists(pt_path):
+            continue
+        with open(config_path) as f:
+            model_cfg = json.load(f)["config"]
+        n = model_cfg.get("intra_neuron")
+        if n in paths_by_n and model_cfg.get("intra_neurons") == 10 and model_cfg.get("intra_depth") == 1:
+            paths_by_n[n].append(pt_path)
+
+    paths_by_n = {n: paths for n, paths in paths_by_n.items() if paths}
+    if not paths_by_n:
+        return {}
+
+    first_model = ClassicalPINN2.load(next(iter(paths_by_n.values()))[0])
+    L, Tfin = first_model.L, first_model.Tfin
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=NU)
+    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+
+    errors = {}
+    for n, paths in paths_by_n.items():
+        mse_vals, mae_vals = [], []
+        for pt_path in paths:
+            model = ClassicalPINN2.load(pt_path)
+            u_pred = predict(model, x_plot, Tfin)
+            mse_vals.append(float(np.mean((u_pred - u_ref) ** 2)))
+            mae_vals.append(float(np.mean(np.abs(u_pred - u_ref))))
+        errors[n] = (float(np.mean(mse_vals)), float(np.mean(mae_vals)))
+    return errors
+
+
+def plot_errors(n_qubits, mse, Tfin, classical_mse, mid_layer_mse, save_path):
     fig, ax = plt.subplots(figsize=(9, 4.5))
     ax.plot(n_qubits, mse, "o-", color=COLOR_MSE, linewidth=2.0, markersize=6, label="MSE")
-    ax.plot(n_qubits, mae, "o-", color=COLOR_MAE, linewidth=2.0, markersize=6, label="MAE")
     if classical_mse is not None:
         ax.axhline(classical_mse, color=COLOR_CLASSICAL, linestyle="--", linewidth=2.0,
-                    label="Classical mean MSE")
-    if classical_mae is not None:
-        ax.axhline(classical_mae, color=COLOR_CLASSICAL, linestyle=":", linewidth=2.0,
-                    label="Classical mean MAE")
+                    label="Classical mean MSE (20-20)")
+    for n in sorted(mid_layer_mse):
+        ax.axhline(mid_layer_mse[n], color=COLOR_MID_LAYER[n], linestyle=":", linewidth=2.0,
+                    label=f"Classical mean MSE (10-{n}-10)")
     ax.set_xlabel("Number of qubits", fontsize=14)
-    ax.set_ylabel("Error", fontsize=14)
+    ax.set_ylabel("MSE", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(n_qubits)
-    ax.set_title(f"Quantum PINN mean error vs number of qubits (T = {Tfin})", fontsize=13)
+    ax.set_title(f"Quantum PINN mean MSE vs number of qubits (T = {Tfin})", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()
@@ -134,13 +180,18 @@ if __name__ == "__main__":
 
         classical_t_dir = os.path.join(CLASSICAL_DIR, os.path.basename(t_dir))
         classical_mse, classical_mae = compute_classical_mean_errors(classical_t_dir)
+        mid_layer_errors = compute_mid_layer_mean_errors(classical_t_dir)
+        mid_layer_mse = {n: e_mse for n, (e_mse, _e_mae) in mid_layer_errors.items()}
 
-        save_path = os.path.join("data/quantum_old", f"Error_vs_Qubits_T_{t_label}.png")
-        plot_errors(n_qubits, mse, mae, Tfin, classical_mse, classical_mae, save_path)
+        save_path = os.path.join(f"Error_vs_Qubits_T_{t_label}.png")
+        plot_errors(n_qubits, mse, Tfin, classical_mse, mid_layer_mse, save_path)
 
         print(f"T = {Tfin}")
         for n, e_mse, e_mae, n_s in zip(n_qubits, mse, mae, n_samples):
             print(f"  n_qubits={n:2d}  MSE={e_mse:.6e}  MAE={e_mae:.6e}  (mean over {n_s} samples)")
         if classical_mse is not None:
             print(f"  classical  MSE={classical_mse:.6e}  MAE={classical_mae:.6e}")
+        for n in sorted(mid_layer_errors):
+            e_mse, e_mae = mid_layer_errors[n]
+            print(f"  mid layer={n:2d}  MSE={e_mse:.6e}  MAE={e_mae:.6e}")
         print(f"  -> saved {save_path}")
