@@ -1,12 +1,9 @@
 numpy
 torch
 matplotlib
+tqdm
+pennylane
 qiskit
 qiskit-machine-learning
 qiskit-algorithms
 pylatexenc
-torch
-matplotlib
-qiskit
-qiskit-machine-learning
-qiskit-algorithms

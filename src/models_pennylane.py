@@ -50,7 +50,6 @@ def _apply_fixed_gate_layer(n_qubits, layer_kind):
     else:
         raise ValueError(f"Unknown fixed layer '{layer_kind}'. Options: {FIXED_LAYERS}.")
 
-
 class PennyLaneFixedQuantumLayer(nn.Module):
     """
     Parameter-free quantum feature layer built on PennyLane's `default.qubit`
@@ -93,7 +92,6 @@ class PennyLaneFixedQuantumLayer(nn.Module):
         dummy = tc.zeros(1, self.n_qubits)
         return qml.draw_mpl(self.circuit)(dummy)
 
-
 class QuantumPINNPennyLane(PINNBase):
     """Hybrid HPINN identical in structure to `models.QuantumPINN` (classical
     pre-net -> bounded rotation angles -> fixed quantum layer -> classical
@@ -104,7 +102,7 @@ class QuantumPINNPennyLane(PINNBase):
     def __init__(self, n_qubits=5, pre_neurons=10, pre_depth=1, post_neurons=10,
                  post_depth=1, angle_scale=math.pi, fixed_layer="linear_cnot",
                  fixed_layer_repeats=1, input_rotation_axis="rx", seed=42,
-                 L=1.0, Tfin=0.1):
+                 L=1.0, Tfin=0.1, estrutura=0):
         super().__init__()
 
         self.config = dict(
@@ -112,34 +110,112 @@ class QuantumPINNPennyLane(PINNBase):
             post_neurons=post_neurons, post_depth=post_depth, angle_scale=angle_scale,
             fixed_layer=fixed_layer, fixed_layer_repeats=fixed_layer_repeats,
             input_rotation_axis=input_rotation_axis, seed=seed, L=L, Tfin=Tfin,
+            estrutura=estrutura
         )
+        self.estrutura = int(estrutura)
         self.L, self.Tfin = float(L), float(Tfin)
         self.angle_scale = float(angle_scale)
+        
+        if self.estrutura == 0:
+            # quantum -> pre -> post
+            # O quantum recebe o input bruto (sin, cos, tau) direto como angulos,
+            # entao n_qubits precisa ser 3 para casar com as 3 features de entrada.
+            if n_qubits != 3:
+                raise ValueError(
+                    "estrutura=0 alimenta o quantum diretamente com o input bruto "
+                    "(sin, cos, tau), logo n_qubits deve ser 3."
+                )
 
-        pre_layers = [nn.Linear(3, pre_neurons), nn.Tanh()]
-        for _ in range(pre_depth - 1):
-            pre_layers += [nn.Linear(pre_neurons, pre_neurons), nn.Tanh()]
-        pre_layers += [nn.Linear(pre_neurons, n_qubits)]
-        self.pre = nn.Sequential(*pre_layers)
+            self.quantum = PennyLaneFixedQuantumLayer(
+                n_qubits=n_qubits, fixed_layer=fixed_layer,
+                fixed_layer_repeats=fixed_layer_repeats,
+                input_rotation_axis=input_rotation_axis,
+            )
 
-        self.quantum = PennyLaneFixedQuantumLayer(
-            n_qubits=n_qubits, fixed_layer=fixed_layer,
-            fixed_layer_repeats=fixed_layer_repeats,
-            input_rotation_axis=input_rotation_axis,
-        )
+            pre_layers = [nn.Linear(n_qubits, pre_neurons), nn.Tanh()]
+            for _ in range(pre_depth - 1):
+                pre_layers += [nn.Linear(pre_neurons, pre_neurons), nn.Tanh()]
+            pre_layers += [nn.Linear(pre_neurons, n_qubits)]
+            self.pre = nn.Sequential(*pre_layers)
 
-        post_layers = [nn.Linear(n_qubits, post_neurons), nn.Tanh()]
-        for _ in range(post_depth - 1):
-            post_layers += [nn.Linear(post_neurons, post_neurons), nn.Tanh()]
-        post_layers += [nn.Linear(post_neurons, 1)]
-        self.post = nn.Sequential(*post_layers)
+            post_layers = [nn.Linear(n_qubits, post_neurons), nn.Tanh()]
+            for _ in range(post_depth - 1):
+                post_layers += [nn.Linear(post_neurons, post_neurons), nn.Tanh()]
+            post_layers += [nn.Linear(post_neurons, 1)]
+            self.post = nn.Sequential(*post_layers)
+
+        elif self.estrutura == 1:
+            pre_layers = [nn.Linear(3, pre_neurons), nn.Tanh()]
+            for _ in range(pre_depth - 1):
+                pre_layers += [nn.Linear(pre_neurons, pre_neurons), nn.Tanh()]
+            pre_layers += [nn.Linear(pre_neurons, n_qubits)]
+            self.pre = nn.Sequential(*pre_layers)
+
+            self.quantum = PennyLaneFixedQuantumLayer(
+                n_qubits=n_qubits, fixed_layer=fixed_layer,
+                fixed_layer_repeats=fixed_layer_repeats,
+                input_rotation_axis=input_rotation_axis,
+            )
+
+            post_layers = [nn.Linear(n_qubits, post_neurons), nn.Tanh()]
+            for _ in range(post_depth - 1):
+                post_layers += [nn.Linear(post_neurons, post_neurons), nn.Tanh()]
+            post_layers += [nn.Linear(post_neurons, 1)]
+            self.post = nn.Sequential(*post_layers)
+
+        elif self.estrutura == 2:
+            # pre -> post -> quantum
+            # post agora devolve n_qubits valores (em vez de 1), que viram os
+            # angulos do quantum; a saida do quantum e reduzida a um escalar
+            # pela media dos n_qubits expvals.
+            pre_layers = [nn.Linear(3, pre_neurons), nn.Tanh()]
+            for _ in range(pre_depth - 1):
+                pre_layers += [nn.Linear(pre_neurons, pre_neurons), nn.Tanh()]
+            pre_layers += [nn.Linear(pre_neurons, n_qubits)]
+            self.pre = nn.Sequential(*pre_layers)
+
+            post_layers = [nn.Linear(n_qubits, post_neurons), nn.Tanh()]
+            for _ in range(post_depth - 1):
+                post_layers += [nn.Linear(post_neurons, post_neurons), nn.Tanh()]
+            post_layers += [nn.Linear(post_neurons, n_qubits)]
+            self.post = nn.Sequential(*post_layers)
+
+            self.quantum = PennyLaneFixedQuantumLayer(
+                n_qubits=n_qubits, fixed_layer=fixed_layer,
+                fixed_layer_repeats=fixed_layer_repeats,
+                input_rotation_axis=input_rotation_axis,
+            )
 
     def forward(self, xt):
         input, x = self.Input_angular(xt)
-        angles = self.angle_scale * tc.tanh(self.pre(input))
-        q = self.quantum(angles).to(dtype=self.post[0].weight.dtype)
-        output = self.post(q)
-        return self.Hard_constrain(x, input[:, 2:3], output)
+        
+        if self.estrutura == 0:
+            # Quantum
+            angles = self.angle_scale * tc.tanh(input)
+            q = self.quantum(angles).to(dtype=self.pre[0].weight.dtype)
+            # Classical
+            pre_out = self.pre(q)
+            # Classical
+            output = self.post(pre_out)
+            return self.Hard_constrain(x, input[:, 2:3], output)
+        elif self.estrutura == 1:
+            # Classical
+            angles = self.angle_scale * tc.tanh(self.pre(input))
+            # Quantum
+            q = self.quantum(angles).to(dtype=self.post[0].weight.dtype)
+            # Classical
+            output = self.post(q)
+            return self.Hard_constrain(x, input[:, 2:3], output)
+        elif self.estrutura == 2:
+            # Classical
+            pre_out = self.pre(input)
+            # Classical
+            post_out = self.post(pre_out)
+            # Quantum
+            angles = self.angle_scale * tc.tanh(post_out)
+            q = self.quantum(angles)
+            output = q.mean(dim=1, keepdim=True)
+            return self.Hard_constrain(x, input[:, 2:3], output)
 
     def Input_angular(self, xt):
         """Maps (x, t) to periodic (sin, cos, tau) features so the network sees x through its L-periodic image."""

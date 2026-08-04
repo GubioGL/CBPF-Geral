@@ -119,9 +119,9 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     )
 
     hist = {"loss": [], "residual_rms": []}
-    t0 = time.time()
+    #t0 = time.time()
 
-    for ep in tqdm(range(epochs)):
+    for _ in tqdm(range(epochs)):
         model.train()
 
         u_0 = model(tc.cat([x_f, t_f], dim=1))
@@ -152,12 +152,28 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     return model, hist
 
 def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
-                    weight_decay=1.0e-6):
+                    weight_decay=1.0e-6, lbfgs_epochs=None, lbfgs_lr=1.0):
     """Same Burgers-residual training as `train`, but u_t, u_x, u_xx come from
     a single forward pass differentiated with autograd (torch.autograd.grad,
     create_graph=True) instead of finite differences on shifted collocation
     points. Only `nu` from `loss_kwargs` is used; hx/ht are not needed since
-    no stencil is built."""
+    no stencil is built.
+
+    Training runs in two phases: `epochs` iterations of AdamW doing a broad,
+    global search of parameter space (its lr decays via ReduceLROnPlateau as
+    the loss stalls, so it actually settles instead of still bouncing around
+    at a high lr when L-BFGS takes over), followed by `lbfgs_epochs`
+    iterations of L-BFGS refining that region into a low-loss local minimum
+    (defaults to `epochs` when not given). Set `lbfgs_epochs=0` to skip the
+    second phase.
+
+    The lowest-loss parameter snapshot seen across *both* phases is what
+    gets loaded into `model` before returning -- not simply whichever
+    iterate training happened to end on. This is what makes L-BFGS strictly
+    help: even if a step lands somewhere much worse (a bad quasi-Newton
+    step, or a noisy hand-off point from Adam), the snapshot rollback means
+    the returned model can never be worse than the best point already
+    found."""
     nu = loss_kwargs["nu"]
 
     x_f = x_f.clone().requires_grad_(True)
@@ -165,22 +181,37 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
 
     params = [p for p in model.parameters() if p.requires_grad]
     opt = tc.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
-
+    # Decays lr as the loss plateaus: a larger lr early on drives the broad
+    # global search, but without decay Adam is still bouncing around at that
+    # same high lr on its last iteration, so L-BFGS would build its local
+    # quadratic model from a noisy, badly-conditioned point instead of a
+    # settled basin.
+    scheduler = tc.optim.lr_scheduler.ReduceLROnPlateau(
+        opt, mode="min", factor=0.5, patience=max(10, epochs // 10), min_lr=1.0e-4
+    )
 
     hist = {"loss": [], "residual_rms": []}
-    t0 = time.time()
 
-    for ep in tqdm(range(epochs)):
-        model.train()
-
+    def compute_residual():
         u_0 = model(tc.cat([x_f, t_f], dim=1))
 
         u_x = tc.autograd.grad(u_0, x_f, grad_outputs=tc.ones_like(u_0), create_graph=True)[0]
         u_xx = tc.autograd.grad(u_x, x_f, grad_outputs=tc.ones_like(u_x), create_graph=True)[0]
         u_t = tc.autograd.grad(u_0, t_f, grad_outputs=tc.ones_like(u_0), create_graph=True)[0]
 
-        residual = u_t + u_0 * u_x - nu * u_xx
-        loss = tc.mean(abs(residual))
+        return u_t + u_0 * u_x - nu * u_xx
+
+    def snapshot():
+        return {k: v.detach().clone() for k, v in model.state_dict().items()}
+
+    best_state = snapshot()
+    best_loss = float("inf")
+
+    for _ in tqdm(range(epochs), desc="Adam"):
+        model.train()
+
+        residual = compute_residual()
+        loss = tc.mean(residual**2)
 
         opt.zero_grad()
         loss.backward()
@@ -189,11 +220,69 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
         opt.step()
 
         loss_value = float(loss.detach())
-        #scheduler.step(loss_value)
+        scheduler.step(loss_value)
+
+        if loss_value < best_loss:
+            best_loss = loss_value
+            best_state = snapshot()
 
         hist["loss"].append(loss_value)
         hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
 
+    if lbfgs_epochs is None:
+        lbfgs_epochs = epochs
+
+    if lbfgs_epochs > 0:
+        # Hand L-BFGS the best basin Adam actually found, not whatever point
+        # its last (possibly still-noisy) iterate landed on.
+        model.load_state_dict(best_state)
+
+        lbfgs_opt = tc.optim.LBFGS(
+            params, lr=lbfgs_lr, max_iter=10, history_size=50,
+            line_search_fn="strong_wolfe",
+        )
+
+        # Squared (not abs) residual: L-BFGS builds its Hessian approximation
+        # from consecutive gradients, and the kink of |residual| at 0 makes
+        # that curvature estimate unreliable, which is what drives loss
+        # instability. Gradient clipping is skipped here for the same reason
+        # -- it would distort the (s, y) pairs L-BFGS relies on. `strong_wolfe`
+        # rejects any candidate step that doesn't give sufficient decrease,
+        # but its bracketing/zoom search can still fall back to a non-improving
+        # step if it can't find one inside its own iteration budget -- the
+        # best-snapshot tracking below is what actually guarantees the final
+        # model is never worse than the best point found.
+        last = {}
+
+        def closure():
+            lbfgs_opt.zero_grad()
+            residual = compute_residual()
+            loss = tc.mean(residual**2)
+            loss.backward()
+
+            last["loss"] = float(loss.detach())
+            last["residual_rms"] = float(tc.sqrt(tc.mean(residual.detach() ** 2)))
+            return loss
+
+        for _ in tqdm(range(lbfgs_epochs), desc="L-BFGS"):
+            model.train()
+            lbfgs_opt.step(closure)
+            # Only the point the line search actually accepted this step is
+            # logged -- `closure` is called several times per step to test
+            # candidate step sizes, and logging every trial would make
+            # rejected, never-applied candidates show up as fake spikes.
+            loss_value = last["loss"]
+
+            if math.isfinite(loss_value) and loss_value < best_loss:
+                best_loss = loss_value
+                best_state = snapshot()
+
+            hist["loss"].append(loss_value)
+            hist["residual_rms"].append(last["residual_rms"])
+
+    # Always return the lowest-loss point seen across both phases, never
+    # just whichever iterate the last epoch happened to land on.
+    model.load_state_dict(best_state)
     return model, hist
 
 def predict(model, x, t_val):

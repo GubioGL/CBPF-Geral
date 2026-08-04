@@ -15,7 +15,7 @@ EPOCHS, LR = 1000, 1.0e-2
 
 
 # ---- architecture and training -------------------plot_solution-----------------------
-HIDDEN_NEURONS, HIDDEN_DEPTH = 10, 1
+HIDDEN_NEURONS, HIDDEN_DEPTH = 50, 1
 
 PRE_NEURONS, PRE_DEPTH = HIDDEN_NEURONS,HIDDEN_DEPTH
 POST_NEURONS, POST_DEPTH =  HIDDEN_NEURONS,HIDDEN_DEPTH

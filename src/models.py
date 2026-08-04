@@ -68,37 +68,37 @@ class PINNBase(nn.Module):
         return model
 
 
-# class ClassicalPINN(PINNBase):
-#     """Fully classical MLP ansatz for the 1D viscous Burgers equation."""
+class ClassicalPINN(PINNBase):
+    """Fully classical MLP ansatz for the 1D viscous Burgers equation."""
 
-#     def __init__(self, hidden_neurons=20, hidden_depth=2, L=1.0, Tfin=0.1):
-#         super().__init__()
-#         self.config = dict(hidden_neurons=hidden_neurons, hidden_depth=hidden_depth, L=L, Tfin=Tfin)
-#         self.L, self.Tfin = float(L), float(Tfin)
+    def __init__(self, hidden_neurons=20, hidden_depth=2, L=1.0, Tfin=0.1):
+        super().__init__()
+        self.config = dict(hidden_neurons=hidden_neurons, hidden_depth=hidden_depth, L=L, Tfin=Tfin)
+        self.L, self.Tfin = float(L), float(Tfin)
 
-#         layers = [nn.Linear(3, hidden_neurons), nn.Tanh()]
-#         for _ in range(hidden_depth - 1):
-#             layers += [nn.Linear(hidden_neurons, hidden_neurons), nn.Tanh()]
-#         layers += [nn.Linear(hidden_neurons, 1)]
-#         self.net = nn.Sequential(*layers)
+        layers = [nn.Linear(3, hidden_neurons), nn.Tanh()]
+        for _ in range(hidden_depth - 1):
+            layers += [nn.Linear(hidden_neurons, hidden_neurons), nn.Tanh()]
+        layers += [nn.Linear(hidden_neurons, 1)]
+        self.net = nn.Sequential(*layers)
 
-#     def forward(self, xt):
-#         input, x = self.Input_angular(xt)
-#         output = self.net(input)
-#         return self.Hard_constrain(x, input[:, 2:3], output)
+    def forward(self, xt):
+        input, x = self.Input_angular(xt)
+        output = self.net(input)
+        return self.Hard_constrain(x, input[:, 2:3], output)
 
-#     def Input_angular(self, xt):
-#         """Maps (x, t) to periodic (sin, cos, tau) features so the network sees x through its L-periodic image."""
-#         x, tt = xt[:, 0:1], xt[:, 1:2]
-#         input = tc.cat(
-#             [tc.sin(2.0 * math.pi * x / self.L), tc.cos(2.0 * math.pi * x / self.L), tt / self.Tfin],
-#             dim=1,
-#         )
-#         return input, x
+    def Input_angular(self, xt):
+        """Maps (x, t) to periodic (sin, cos, tau) features so the network sees x through its L-periodic image."""
+        x, tt = xt[:, 0:1], xt[:, 1:2]
+        input = tc.cat(
+            [tc.sin(2.0 * math.pi * x / self.L), tc.cos(2.0 * math.pi * x / self.L), tt / self.Tfin],
+            dim=1,
+        )
+        return input, x
 
-#     def Hard_constrain(self, x, tau, output_nn):
-#         """Hard-imposes the initial condition at tau=0 by construction."""
-#         return initial_condition(x, L=self.L) + tau * output_nn
+    def Hard_constrain(self, x, tau, output_nn):
+        """Hard-imposes the initial condition at tau=0 by construction."""
+        return initial_condition(x, L=self.L) + tau * output_nn
 
 class ClassicalPINN2(PINNBase):
 

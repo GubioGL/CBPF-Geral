@@ -7,14 +7,15 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch as tc
 
 from src.config import NU
 from src.functions import predict, reference_at_time, solve_burgers_fd
 from src.models import ClassicalPINN
 from src.models_pennylane import QuantumPINNPennyLane
 
-DATA_DIR = "data/quantum"
-CLASSICAL_DIR = "data/classical"
+DATA_DIR = "data/quantum_old"
+CLASSICAL_DIR = "data/classical_old"
 COLOR_MSE = "#2a78d6"
 COLOR_MAE = "#1baf7a"
 COLOR_CLASSICAL = "#e34948"
@@ -32,6 +33,21 @@ def find_models(t_dir):
     return sorted(models)
 
 
+def load_legacy_quantum(path):
+    """Loads a QuantumPINNPennyLane checkpoint from `data/quantum_old`. Those
+    checkpoints predate the `estrutura` config field and were all trained
+    with the pre -> quantum -> post architecture, i.e. `estrutura=1` --
+    `QuantumPINNPennyLane.load` would otherwise fall back to the current
+    default `estrutura=0`, which requires n_qubits=3 and breaks on every
+    other qubit count."""
+    checkpoint = tc.load(path, map_location="cpu", weights_only=False)
+    config = dict(checkpoint["config"])
+    config.setdefault("estrutura", 1)
+    model = QuantumPINNPennyLane(**config)
+    model.load_state_dict(checkpoint["state_dict"])
+    return model
+
+
 def compute_errors(t_dir):
     """Loads every model in `t_dir`, evaluates each against the FDM reference
     at t=Tfin, and averages the MSE/MAE across all available samples (p_*)
@@ -42,7 +58,7 @@ def compute_errors(t_dir):
     if not models:
         return [], [], [], [], None
 
-    loaded = [(n, QuantumPINNPennyLane.load(path)) for n, path in models]
+    loaded = [(n, load_legacy_quantum(path)) for n, path in models]
     L, Tfin = loaded[0][1].L, loaded[0][1].Tfin
 
     x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=NU)
@@ -119,7 +135,7 @@ if __name__ == "__main__":
         classical_t_dir = os.path.join(CLASSICAL_DIR, os.path.basename(t_dir))
         classical_mse, classical_mae = compute_classical_mean_errors(classical_t_dir)
 
-        save_path = os.path.join("data/quantum", f"Error_vs_Qubits_T_{t_label}.png")
+        save_path = os.path.join("data/quantum_old", f"Error_vs_Qubits_T_{t_label}.png")
         plot_errors(n_qubits, mse, mae, Tfin, classical_mse, classical_mae, save_path)
 
         print(f"T = {Tfin}")

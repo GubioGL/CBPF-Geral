@@ -1,0 +1,25 @@
+{
+  "class_name": "ClassicalPINN2",
+  "config": {
+    "pre_neurons": 50,
+    "pre_depth": 1,
+    "intra_neuron": 3,
+    "intra_neurons": 50,
+    "intra_depth": 1,
+    "post_neurons": 50,
+    "post_depth": 1,
+    "L": 1.0,
+    "Tfin": 0.1
+  },
+  "training_params": {
+    "NU": 0.01,
+    "HX": 0.001953125,
+    "HT": 0.001,
+    "N_COLLOCATION": 100,
+    "SEED": 3,
+    "EPOCHS": 5000,
+    "LR": 0.01,
+    "HIDDEN_NEURONS": 50,
+    "HIDDEN_DEPTH": 1
+  }
+}
