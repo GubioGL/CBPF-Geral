@@ -20,10 +20,12 @@ L,  NU = 1.0 , 0.01
 HX, HT = L / 512, 1.0e-3
 # ---- collocation sampling --------------------------------------------------
 N_COLLOCATION = 100
+COLLOCATION_DISTRIBUTION = "random"
 # ---- training -------------------------------------------------------------
-EPOCHS, LR = 5000, 1.0e-2
+EPOCHS, LR = 10000, 1.0e-2
+LBFGS_EPOCHS, LBFGS_LR = 5000, 1
 # ---- architecture and training -------------------plot_solution-----------------------
-HIDDEN_NEURONS, HIDDEN_DEPTH = 50, 1
+HIDDEN_NEURONS, HIDDEN_DEPTH = 10, 1
 PRE_NEURONS, PRE_DEPTH = HIDDEN_NEURONS,HIDDEN_DEPTH
 POST_NEURONS, POST_DEPTH =  HIDDEN_NEURONS,HIDDEN_DEPTH
 
@@ -34,7 +36,7 @@ INTRA_NEUROS = HIDDEN_NEURONS
 SAVE_EXTRAS = True  # set True to also save the model checkpoint and loss plot
 
 if __name__ == "__main__":
-    for INTRA_NEURO in [3,10]:
+    for INTRA_NEURO in [1,5,10]:
         for Tfin in [0.1,1]:
             for run_id in range(1, 6):       
                 SEED = run_id
@@ -55,24 +57,33 @@ if __name__ == "__main__":
                     L = L,
                     Tfin = Tfin)
                 x_f, t_f = sample_collocation_points(
-                    N_COLLOCATION, L, Tfin, HT, 
-                    seed = SEED)
+                    N_COLLOCATION, L, Tfin, HT,
+                    seed = SEED, distribution = COLLOCATION_DISTRIBUTION)
+
+                resample_fn = None
+                if COLLOCATION_DISTRIBUTION == "random":
+                    resample_fn = lambda: sample_collocation_points(
+                        N_COLLOCATION, L, Tfin, HT, distribution="random")
+
                 model, hist = train(
                     model, x_f, t_f,
                     loss_kwargs = dict(L=L, Tfin=Tfin, nu=NU, hx=HX, ht=HT),
-                    epochs = EPOCHS, lr = LR)
+                    epochs = EPOCHS, lr = LR, resample_fn = resample_fn,
+                    lbfgs_epochs = LBFGS_EPOCHS, lbfgs_lr = LBFGS_LR)
 
                 if SAVE_EXTRAS:
                     model.save(
-                        f"data/classical/T_{Tfin}/Cmodel_NEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.pt",
+                        f"data/classical/T_{Tfin}/Cmodel_random_NEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.pt",
                         training_params=dict(
                             NU = NU, HX = HX, HT = HT, N_COLLOCATION = N_COLLOCATION, SEED = SEED,
-                            EPOCHS = EPOCHS, LR = LR, HIDDEN_NEURONS = HIDDEN_NEURONS, HIDDEN_DEPTH = HIDDEN_DEPTH,
+                            COLLOCATION_DISTRIBUTION = COLLOCATION_DISTRIBUTION,
+                            EPOCHS = EPOCHS, LR = LR, LBFGS_EPOCHS = LBFGS_EPOCHS, LBFGS_LR = LBFGS_LR,
+                            HIDDEN_NEURONS = HIDDEN_NEURONS, HIDDEN_DEPTH = HIDDEN_DEPTH,
                         ),
                     )
 
                 plot_loss({"Classical PINN": hist["loss"]}, title="Classical PINN training loss",
-                            save_path=f"data/classical/T_{Tfin}/loss_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.png"
+                            save_path=f"data/classical/T_{Tfin}/loss_random_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.png"
                             )
 
                 u_pred = predict(model, x_plot, Tfin)
@@ -80,9 +91,9 @@ if __name__ == "__main__":
                 plot_solution(
                     x_plot, {"Classical PINN": u_pred}, ref=u_ref,
                     title= f"Classical PINN vs FDM reference at T={Tfin}",
-                    save_path = f"data/classical/T_{Tfin}/model_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.png",
+                    save_path = f"data/classical/T_{Tfin}/model_random_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.png",
                     show_cond = False,
                     collocation_x = x_f.numpy(),
                 )
 
-                print(f"Relative L2 error at T={Tfin}: {relative_l2_error(u_pred, u_ref):.6e}")
+                # print(f"Relative L2 error at T={Tfin}: {relative_l2_error(u_pred, u_ref):.6e}")

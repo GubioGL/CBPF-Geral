@@ -62,22 +62,41 @@ def reference_at_time(t_eval, t_ref, x_ref, U_ref, x_query, L=1.0):
 # ----------------------------------------------------------------------
 # Collocation points and physics-informed residual
 # ----------------------------------------------------------------------
-def sample_collocation_points(n_points, L, T, ht, seed=None):
+def sample_collocation_points(n_points, L, T, ht, seed=None, distribution="uniform"):
     """x in [0,L), t in [ht, T-ht] (interior points, needed for centered differences).
 
-    Points are laid out on a uniform grid (not sampled randomly): n_side = round(sqrt(n_points))
-    values along each axis, combined via meshgrid, for n_side**2 total collocation points.
+    distribution="uniform" (default): points are laid out on a uniform grid
+    (not sampled randomly): n_side = round(sqrt(n_points)) values along each
+    axis, combined via meshgrid, for n_side**2 total collocation points.
+
+    distribution="random": n_points points drawn independently from a
+    uniform distribution over the domain, x ~ U[0, L) and t ~ U[ht, T-ht].
+    Pass `seed` for a reproducible draw. Leave `seed=None` to draw from the
+    current (global) torch RNG state instead of a fresh local generator --
+    that state advances on every call, so calling this repeatedly with
+    seed=None (e.g. once per epoch via `train`'s `resample_fn`) yields a
+    different set of random collocation points each time.
     """
     if T <= 2.0 * ht:
         raise ValueError("T must satisfy T > 2*ht.")
 
-    n_side = max(1, round(math.sqrt(n_points)))
-    x_lin = tc.linspace(0.0, L, int(n_side/2) + 1)[:-1]
-    t_lin = tc.linspace(ht, T - ht, n_side)
+    if distribution == "uniform":
+        n_side = max(1, round(math.sqrt(n_points)))
+        x_lin = tc.linspace(0.0, L, int(n_side/2) + 1)[:-1]
+        t_lin = tc.linspace(ht, T - ht, n_side)
 
-    x_grid, t_grid = tc.meshgrid(x_lin, t_lin, indexing="ij")
-    x = x_grid.reshape(-1, 1)
-    t = t_grid.reshape(-1, 1)
+        x_grid, t_grid = tc.meshgrid(x_lin, t_lin, indexing="ij")
+        x = x_grid.reshape(-1, 1)
+        t = t_grid.reshape(-1, 1)
+    elif distribution == "random":
+        generator = None
+        if seed is not None:
+            generator = tc.Generator().manual_seed(seed)
+        x = tc.rand((n_points, 1), generator=generator) * L
+        t = ht + tc.rand((n_points, 1), generator=generator) * (T - 2.0 * ht)
+    else:
+        raise ValueError("distribution must be 'uniform' or 'random'.")
+
     return x, t
 
 # ----------------------------------------------------------------------
@@ -105,25 +124,51 @@ def nonuniform_second_derivative(f_left, f_center, f_right, h_L, h_R):
 # Training and evaluation
 # ----------------------------------------------------------------------
 def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
-          weight_decay=1.0e-6):
-    """Minimizes the Burgers residual loss with AdamW + ReduceLROnPlateau."""
+          weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0):
+    """Minimizes the Burgers residual loss with AdamW + ReduceLROnPlateau,
+    followed by an L-BFGS refinement phase -- the same two-phase schedule as
+    `train_autograd` (see its docstring for the rationale). The only
+    difference from `train_autograd` is how u_t, u_x, u_xx are obtained:
+    here they come from finite differences on shifted collocation points
+    instead of autograd.
+
+    resample_fn: optional zero-argument callable returning a fresh (x_f, t_f)
+    pair, called at the start of every epoch during the AdamW phase to
+    replace the collocation points used that epoch. Pass a closure over
+    `sample_collocation_points(..., distribution="random")` (with seed left
+    as None) to train on different random collocation points each epoch;
+    leave as None to keep training on the fixed x_f, t_f passed in (e.g. a
+    uniform grid). The L-BFGS phase always trains on a fixed set of points
+    (whatever x_f, t_f ended up being after the last AdamW epoch), since its
+    line search needs consistent objective evaluations across calls.
+
+    lbfgs_epochs: number of L-BFGS iterations for the second phase (defaults
+    to `epochs` when not given). Set lbfgs_epochs=0 to skip it and recover
+    the old AdamW-only behavior.
+    """
     L, nu, hx, ht = loss_kwargs["L"], loss_kwargs["nu"], loss_kwargs["hx"], loss_kwargs["ht"]
-    x_p = tc.remainder(x_f + hx, L)
-    x_m = tc.remainder(x_f - hx, L)
-    t_p, t_m = t_f + ht, t_f - ht
+
+    def stencil_points(x_f, t_f):
+        x_p = tc.remainder(x_f + hx, L)
+        x_m = tc.remainder(x_f - hx, L)
+        return x_p, x_m, t_f + ht, t_f - ht
+
+    x_p, x_m, t_p, t_m = stencil_points(x_f, t_f)
 
     params = [p for p in model.parameters() if p.requires_grad]
     opt = tc.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+    # Decays lr as the loss plateaus: a larger lr early on drives the broad
+    # global search, but without decay Adam is still bouncing around at that
+    # same high lr on its last iteration, so L-BFGS would build its local
+    # quadratic model from a noisy, badly-conditioned point instead of a
+    # settled basin.
     scheduler = tc.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=200, min_lr=1.0e-6
+        opt, mode="min", factor=0.5, patience=max(10, epochs // 10), min_lr=1.0e-4
     )
 
     hist = {"loss": [], "residual_rms": []}
-    #t0 = time.time()
 
-    for _ in tqdm(range(epochs)):
-        model.train()
-
+    def compute_residual(x_f, x_p, x_m, t_f, t_p, t_m):
         u_0 = model(tc.cat([x_f, t_f], dim=1))
         u_xp = model(tc.cat([x_p, t_f], dim=1))
         u_xm = model(tc.cat([x_m, t_f], dim=1))
@@ -134,7 +179,22 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
         u_x = (u_xp - u_xm) / (2.0 * hx)
         u_xx = (u_xp - 2.0 * u_0 + u_xm) / (hx**2)
 
-        residual = u_t + u_0 * u_x - nu * u_xx
+        return u_t + u_0 * u_x - nu * u_xx
+
+    def snapshot():
+        return {k: v.detach().clone() for k, v in model.state_dict().items()}
+
+    best_state = snapshot()
+    best_loss = float("inf")
+
+    for _ in tqdm(range(epochs), desc="AdamW"):
+        model.train()
+
+        if resample_fn is not None:
+            x_f, t_f = resample_fn()
+            x_p, x_m, t_p, t_m = stencil_points(x_f, t_f)
+
+        residual = compute_residual(x_f, x_p, x_m, t_f, t_p, t_m)
         loss = tc.mean(residual**2)
 
         opt.zero_grad()
@@ -146,9 +206,67 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
         loss_value = float(loss.detach())
         scheduler.step(loss_value)
 
+        if loss_value < best_loss:
+            best_loss = loss_value
+            best_state = snapshot()
+
         hist["loss"].append(loss_value)
         hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
 
+    if lbfgs_epochs is None:
+        lbfgs_epochs = epochs
+
+    if lbfgs_epochs > 0:
+        # Hand L-BFGS the best basin Adam actually found, not whatever point
+        # its last (possibly still-noisy) iterate landed on.
+        model.load_state_dict(best_state)
+
+        lbfgs_opt = tc.optim.LBFGS(
+            params, lr=lbfgs_lr, max_iter=10, history_size=50,
+            line_search_fn="strong_wolfe",
+        )
+
+        # Squared (not abs) residual: L-BFGS builds its Hessian approximation
+        # from consecutive gradients, and the kink of |residual| at 0 makes
+        # that curvature estimate unreliable, which is what drives loss
+        # instability. Gradient clipping is skipped here for the same reason
+        # -- it would distort the (s, y) pairs L-BFGS relies on. `strong_wolfe`
+        # rejects any candidate step that doesn't give sufficient decrease,
+        # but its bracketing/zoom search can still fall back to a non-improving
+        # step if it can't find one inside its own iteration budget -- the
+        # best-snapshot tracking below is what actually guarantees the final
+        # model is never worse than the best point found.
+        last = {}
+
+        def closure():
+            lbfgs_opt.zero_grad()
+            residual = compute_residual(x_f, x_p, x_m, t_f, t_p, t_m)
+            loss = tc.mean(residual**2)
+            loss.backward()
+
+            last["loss"] = float(loss.detach())
+            last["residual_rms"] = float(tc.sqrt(tc.mean(residual.detach() ** 2)))
+            return loss
+
+        for _ in tqdm(range(lbfgs_epochs), desc="L-BFGS"):
+            model.train()
+            lbfgs_opt.step(closure)
+            # Only the point the line search actually accepted this step is
+            # logged -- `closure` is called several times per step to test
+            # candidate step sizes, and logging every trial would make
+            # rejected, never-applied candidates show up as fake spikes.
+            loss_value = last["loss"]
+
+            if math.isfinite(loss_value) and loss_value < best_loss:
+                best_loss = loss_value
+                best_state = snapshot()
+
+            hist["loss"].append(loss_value)
+            hist["residual_rms"].append(last["residual_rms"])
+
+    # Always return the lowest-loss point seen across both phases, never
+    # just whichever iterate the last epoch happened to land on.
+    model.load_state_dict(best_state)
     return model, hist
 
 def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
