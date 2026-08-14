@@ -20,7 +20,7 @@ def find_classical_configs(t_dir):
     companion `_config.json` (the run_id/sample index comes from the
     trailing `_<run_id>` in the filename)."""
     entries = []
-    for config_path in glob.glob(os.path.join(t_dir, "Cmodel_NEURO*_config.json")):
+    for config_path in glob.glob(os.path.join(t_dir, "Cmodel_random_NEURO*_config.json")):
         pt_path = config_path[: -len("_config.json")] + ".pt"
         if not os.path.exists(pt_path):
             continue

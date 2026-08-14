@@ -1,5 +1,4 @@
 import numpy as np
-
 from src.functions import (
     plot_loss,
     plot_solution,
@@ -19,11 +18,11 @@ L,  NU = 1.0 , 0.01
 # ---- discretization (used in the PDE residual loss and collocation sampling)
 HX, HT = L / 512, 1.0e-3
 # ---- collocation sampling --------------------------------------------------
-N_COLLOCATION = 100
+N_COLLOCATION = 10
 COLLOCATION_DISTRIBUTION = "random"
 # ---- training -------------------------------------------------------------
 EPOCHS, LR = 10000, 1.0e-2
-LBFGS_EPOCHS, LBFGS_LR = 5000, 1
+LBFGS_EPOCHS, LBFGS_LR = 1000, .5
 # ---- architecture and training -------------------plot_solution-----------------------
 HIDDEN_NEURONS, HIDDEN_DEPTH = 10, 1
 PRE_NEURONS, PRE_DEPTH = HIDDEN_NEURONS,HIDDEN_DEPTH
@@ -36,9 +35,9 @@ INTRA_NEUROS = HIDDEN_NEURONS
 SAVE_EXTRAS = True  # set True to also save the model checkpoint and loss plot
 
 if __name__ == "__main__":
-    for INTRA_NEURO in [1,5,10]:
+    for INTRA_NEURO in [1,2,3,4,5,6,7,8,9,10]:
         for Tfin in [0.1,1]:
-            for run_id in range(1, 6):       
+            for run_id in range(1,6):       
                 SEED = run_id
                 set_seed(SEED)
 
