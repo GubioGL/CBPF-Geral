@@ -1,6 +1,15 @@
-"""Plots mean +/- std MSE/MAE of the trained classical PINN models against
-INTRA_NEURO, with the standard deviation across the 5 run_id samples shown as
-error bars. One figure is produced for T_0.1 and one for T_1."""
+"""Plots mean MSE/MAE of the trained classical PINN models against
+INTRA_NEURO, with the [min, max] range across the run_id samples shown as
+error bars. One figure is produced for T_0.1 and one for T_1.
+
+Error bars show [min, max] across run_ids rather than mean +/- std:
+MSE/MAE are always positive and, with only a handful of run_ids, their std
+is frequently larger than their mean, which would push a symmetric mean +/-
+std bar below zero -- something the log-scale y-axis below cannot render, so
+matplotlib clips that whisker all the way to the bottom of the plot.
+[min, max] is built from samples that were actually observed, so it is
+always positive and never overruns the axis. mean +/- std is still printed
+to the console for reference."""
 import os
 
 import matplotlib.pyplot as plt
@@ -8,7 +17,7 @@ import numpy as np
 
 from old.plote_classico import find_classical_configs
 from src.config import NU
-from src.functions import predict, reference_at_time, solve_burgers_fd
+from src.functions import asymmetric_yerr, predict, reference_at_time, solve_burgers_fd
 from src.models import ClassicalPINN2
 
 CLASSICAL_DIR = "data/classical"
@@ -19,12 +28,16 @@ COLOR_MAE = "#1baf7a"
 
 def compute_error_stats(t_dir):
     """Loads every classical model in `t_dir`, evaluates each against the FDM
-    reference at t=Tfin, and returns per-INTRA_NEURO mean/std MSE and MAE
-    across the run_id samples. Returns (intra_neurons, mse_mean, mse_std,
-    mae_mean, mae_std, n_samples, Tfin), one point per INTRA_NEURO."""
+    reference at t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MSE and
+    MAE across the run_id samples. Returns (intra_neurons, mse_mean, mse_std,
+    mse_min, mse_max, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin),
+    one point per INTRA_NEURO. The _min/_max values (the extremes actually
+    observed across run_ids) are what the plot uses for its error bars --
+    unlike mean +/- std, they can never go negative on the plot's log-scale
+    y-axis."""
     entries = find_classical_configs(t_dir)
     if not entries:
-        return [], [], [], [], [], [], None
+        return [], [], [], [], [], [], [], [], [], [], None
 
     first_model = ClassicalPINN2.load(entries[0][2])
     L, Tfin = first_model.L, first_model.Tfin
@@ -44,18 +57,26 @@ def compute_error_stats(t_dir):
     intra_neurons = sorted(errors_by_neuron)
     mse_mean = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
     mse_std = [float(np.std(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_min = [float(np.min(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_max = [float(np.max(errors_by_neuron[n]["mse"])) for n in intra_neurons]
     mae_mean = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
     mae_std = [float(np.std(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    mae_min = [float(np.min(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    mae_max = [float(np.max(errors_by_neuron[n]["mae"])) for n in intra_neurons]
     n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
-    return intra_neurons, mse_mean, mse_std, mae_mean, mae_std, n_samples, Tfin
+    return (intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
+            mae_max, n_samples, Tfin)
 
 
-def plot_errors_std(intra_neurons, mse_mean, mse_std, mae_mean, mae_std, Tfin, save_path):
+def plot_errors_std(intra_neurons, mse_mean, mse_min, mse_max, mae_mean, mae_min, mae_max,
+                     Tfin, save_path):
     fig, ax = plt.subplots(figsize=(9, 4.5))
-    ax.errorbar(intra_neurons, mse_mean, yerr=mse_std, fmt="o-", color=COLOR_MSE,
-                linewidth=2.0, markersize=6, capsize=4, label="MSE (mean ± std)")
-    ax.errorbar(intra_neurons, mae_mean, yerr=mae_std, fmt="o-", color=COLOR_MAE,
-                linewidth=2.0, markersize=6, capsize=4, label="MAE (mean ± std)")
+    mse_yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
+    mae_yerr = asymmetric_yerr(mae_mean, mae_min, mae_max)
+    ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt="o-", color=COLOR_MSE,
+                linewidth=2.0, markersize=6, capsize=4, label="MSE (mean, [min,max])")
+    ax.errorbar(intra_neurons, mae_mean, yerr=mae_yerr, fmt="o-", color=COLOR_MAE,
+                linewidth=2.0, markersize=6, capsize=4, label="MAE (mean, [min,max])")
     ax.set_xlabel("INTRA_NEURO", fontsize=14)
     ax.set_ylabel("Error", fontsize=14)
     ax.set_yscale("log")
@@ -71,17 +92,23 @@ def plot_errors_std(intra_neurons, mse_mean, mse_std, mae_mean, mae_std, Tfin, s
 if __name__ == "__main__":
     for t_label in T_LABELS:
         t_dir = os.path.join(CLASSICAL_DIR, f"T_{t_label}")
-        intra_neurons, mse_mean, mse_std, mae_mean, mae_std, n_samples, Tfin = compute_error_stats(t_dir)
+        (intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
+         mae_max, n_samples, Tfin) = compute_error_stats(t_dir)
         if not intra_neurons:
             print(f"No classical models found in {t_dir}, skipping.")
             continue
 
         save_path = f"Error_std_vs_IntraNeuro_T_{t_label}.png"
-        plot_errors_std(intra_neurons, mse_mean, mse_std, mae_mean, mae_std, Tfin, save_path)
+        plot_errors_std(intra_neurons, mse_mean, mse_min, mse_max, mae_mean, mae_min, mae_max,
+                         Tfin, save_path)
 
         print(f"T = {Tfin}")
-        for n, m_mean, m_std, a_mean, a_std, n_s in zip(
-            intra_neurons, mse_mean, mse_std, mae_mean, mae_std, n_samples
+        for n, m_mean, m_std, m_min, m_max, a_mean, a_std, a_min, a_max, n_s in zip(
+            intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
+            mae_max, n_samples
         ):
-            print(f"  INTRA_NEURO={n:2d}  MSE={m_mean:.6e}+/-{m_std:.6e}  MAE={a_mean:.6e}+/-{a_std:.6e}  (n={n_s})")
+            flag = "  <<< mean-std<0, plot uses [min,max] instead" if (
+                m_mean - m_std < 0 or a_mean - a_std < 0) else ""
+            print(f"  INTRA_NEURO={n:2d}  MSE={m_mean:.6e}+/-{m_std:.6e} range=[{m_min:.6e}, {m_max:.6e}]  "
+                  f"MAE={a_mean:.6e}+/-{a_std:.6e} range=[{a_min:.6e}, {a_max:.6e}]  (n={n_s}){flag}")
         print(f"  -> saved {save_path}")

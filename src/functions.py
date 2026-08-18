@@ -124,7 +124,8 @@ def nonuniform_second_derivative(f_left, f_center, f_right, h_L, h_R):
 # Training and evaluation
 # ----------------------------------------------------------------------
 def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
-          weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0):
+          weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0,
+          lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9):
     """Minimizes the Burgers residual loss with AdamW + ReduceLROnPlateau,
     followed by an L-BFGS refinement phase -- the same two-phase schedule as
     `train_autograd` (see its docstring for the rationale). The only
@@ -138,13 +139,39 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     `sample_collocation_points(..., distribution="random")` (with seed left
     as None) to train on different random collocation points each epoch;
     leave as None to keep training on the fixed x_f, t_f passed in (e.g. a
-    uniform grid). The L-BFGS phase always trains on a fixed set of points
-    (whatever x_f, t_f ended up being after the last AdamW epoch), since its
-    line search needs consistent objective evaluations across calls.
+    uniform grid).
 
     lbfgs_epochs: number of L-BFGS iterations for the second phase (defaults
     to `epochs` when not given). Set lbfgs_epochs=0 to skip it and recover
     the old AdamW-only behavior.
+
+    lbfgs_resample_fn: optional zero-argument callable, same shape as
+    resample_fn, called once per L-BFGS *outer* iteration (before that
+    iteration's `lbfgs_opt.step(closure)`) to replace the collocation
+    points used from then on. A single step() call still evaluates
+    `closure` several times internally (the strong_wolfe bracketing/zoom
+    search) and every one of those internal calls sees the same, just
+    -resampled point set -- only the set changes *between* outer steps, so
+    the line search itself is never fed a moving target. What does shift
+    across outer steps is the (s, y) curvature pairs L-BFGS accumulates in
+    its history, since they're now measured on slightly different
+    objectives; this is a real tradeoff against a fully fixed point set,
+    so prefer a lbfgs_resample_fn that draws a reasonably large batch (a
+    handful of points relative to the model's parameter count lets L-BFGS
+    drive the residual to ~0 by pure interpolation in one step, which is
+    what produces a long flat tail on the loss curve rather than genuine
+    convergence). Leave as None (default) to keep the old behavior: a
+    single fixed point set for the whole L-BFGS phase (whatever x_f, t_f
+    ended up being after the last AdamW epoch).
+
+    lbfgs_patience, lbfgs_tol: early-stopping controls for the L-BFGS loop.
+    If `best_loss` fails to improve by more than `lbfgs_tol` for
+    `lbfgs_patience` consecutive outer iterations, the loop stops instead
+    of burning through the rest of `lbfgs_epochs` -- this is what a flat
+    loss tail actually means (L-BFGS has nothing left to descend) and there
+    is no point paying for more iterations once it happens. Set
+    lbfgs_patience=None to disable early stopping and always run the full
+    lbfgs_epochs.
     """
     L, nu, hx, ht = loss_kwargs["L"], loss_kwargs["nu"], loss_kwargs["hx"], loss_kwargs["ht"]
 
@@ -248,8 +275,14 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
             last["residual_rms"] = float(tc.sqrt(tc.mean(residual.detach() ** 2)))
             return loss
 
+        stall_count = 0
         for _ in tqdm(range(lbfgs_epochs), desc="L-BFGS"):
             model.train()
+
+            if lbfgs_resample_fn is not None:
+                x_f, t_f = lbfgs_resample_fn()
+                x_p, x_m, t_p, t_m = stencil_points(x_f, t_f)
+
             lbfgs_opt.step(closure)
             # Only the point the line search actually accepted this step is
             # logged -- `closure` is called several times per step to test
@@ -257,12 +290,18 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
             # rejected, never-applied candidates show up as fake spikes.
             loss_value = last["loss"]
 
-            if math.isfinite(loss_value) and loss_value < best_loss:
+            if math.isfinite(loss_value) and loss_value < best_loss - lbfgs_tol:
                 best_loss = loss_value
                 best_state = snapshot()
+                stall_count = 0
+            else:
+                stall_count += 1
 
             hist["loss"].append(loss_value)
             hist["residual_rms"].append(last["residual_rms"])
+
+            if lbfgs_patience is not None and stall_count >= lbfgs_patience:
+                break
 
     # Always return the lowest-loss point seen across both phases, never
     # just whichever iterate the last epoch happened to land on.
@@ -270,7 +309,8 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     return model, hist
 
 def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
-                    weight_decay=1.0e-6, lbfgs_epochs=None, lbfgs_lr=1.0):
+                    weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0,
+                    lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9):
     """Same Burgers-residual training as `train`, but u_t, u_x, u_xx come from
     a single forward pass differentiated with autograd (torch.autograd.grad,
     create_graph=True) instead of finite differences on shifted collocation
@@ -284,6 +324,42 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     iterations of L-BFGS refining that region into a low-loss local minimum
     (defaults to `epochs` when not given). Set `lbfgs_epochs=0` to skip the
     second phase.
+
+    resample_fn: optional zero-argument callable returning a fresh (x_f, t_f)
+    pair, called at the start of every epoch during the AdamW phase to
+    replace the collocation points used that epoch. Pass a closure over
+    `sample_collocation_points(..., distribution="random")` (with seed left
+    as None) to train on different random collocation points each epoch;
+    leave as None to keep training on the fixed x_f, t_f passed in (e.g. a
+    uniform grid).
+
+    lbfgs_resample_fn: optional zero-argument callable, same shape as
+    resample_fn, called once per L-BFGS *outer* iteration (before that
+    iteration's `lbfgs_opt.step(closure)`) to replace the collocation
+    points used from then on. A single step() call still evaluates
+    `closure` several times internally (the strong_wolfe bracketing/zoom
+    search) and every one of those internal calls sees the same, just
+    -resampled point set -- only the set changes *between* outer steps, so
+    the line search itself is never fed a moving target. What does shift
+    across outer steps is the (s, y) curvature pairs L-BFGS accumulates in
+    its history, since they're now measured on slightly different
+    objectives; this is a real tradeoff against a fully fixed point set,
+    so prefer a lbfgs_resample_fn that draws a reasonably large batch (a
+    handful of points relative to the model's parameter count lets L-BFGS
+    drive the residual to ~0 by pure interpolation in one step, which is
+    what produces a long flat tail on the loss curve rather than genuine
+    convergence). Leave as None (default) to keep the old behavior: a
+    single fixed point set for the whole L-BFGS phase (whatever x_f, t_f
+    ended up being after the last AdamW epoch).
+
+    lbfgs_patience, lbfgs_tol: early-stopping controls for the L-BFGS loop.
+    If `best_loss` fails to improve by more than `lbfgs_tol` for
+    `lbfgs_patience` consecutive outer iterations, the loop stops instead
+    of burning through the rest of `lbfgs_epochs` -- this is what a flat
+    loss tail actually means (L-BFGS has nothing left to descend) and there
+    is no point paying for more iterations once it happens. Set
+    lbfgs_patience=None to disable early stopping and always run the full
+    lbfgs_epochs.
 
     The lowest-loss parameter snapshot seen across *both* phases is what
     gets loaded into `model` before returning -- not simply whichever
@@ -327,6 +403,11 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
 
     for _ in tqdm(range(epochs), desc="Adam"):
         model.train()
+
+        if resample_fn is not None and _ % 10 == 0:  # Resample every 10 iterations
+            x_f, t_f = resample_fn()
+            x_f = x_f.clone().requires_grad_(True)
+            t_f = t_f.clone().requires_grad_(True)
 
         residual = compute_residual()
         loss = tc.mean(residual**2)
@@ -382,8 +463,15 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
             last["residual_rms"] = float(tc.sqrt(tc.mean(residual.detach() ** 2)))
             return loss
 
+        stall_count = 0
         for _ in tqdm(range(lbfgs_epochs), desc="L-BFGS"):
             model.train()
+
+            if lbfgs_resample_fn is not None:
+                x_f, t_f = lbfgs_resample_fn()
+                x_f = x_f.clone().requires_grad_(True)
+                t_f = t_f.clone().requires_grad_(True)
+
             lbfgs_opt.step(closure)
             # Only the point the line search actually accepted this step is
             # logged -- `closure` is called several times per step to test
@@ -391,12 +479,18 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
             # rejected, never-applied candidates show up as fake spikes.
             loss_value = last["loss"]
 
-            if math.isfinite(loss_value) and loss_value < best_loss:
+            if math.isfinite(loss_value) and loss_value < best_loss - lbfgs_tol:
                 best_loss = loss_value
                 best_state = snapshot()
+                stall_count = 0
+            else:
+                stall_count += 1
 
             hist["loss"].append(loss_value)
             hist["residual_rms"].append(last["residual_rms"])
+
+            if lbfgs_patience is not None and stall_count >= lbfgs_patience:
+                break
 
     # Always return the lowest-loss point seen across both phases, never
     # just whichever iterate the last epoch happened to land on.
@@ -418,6 +512,27 @@ def relative_l2_error(u_pred, u_ref):
 # ----------------------------------------------------------------------
 # Plotting
 # ----------------------------------------------------------------------
+def asymmetric_yerr(mean, vmin, vmax):
+    """Builds the (2, N) `yerr` array matplotlib's `errorbar()` expects for
+    asymmetric error bars that reach down to `vmin` and up to `vmax` at each
+    point, instead of a symmetric +/-std whisker.
+
+    Use this (with `vmin`/`vmax` taken from the actual per-seed samples)
+    instead of `yerr=std` whenever the error bars are drawn on a log-scale
+    axis: mean +/- std routinely goes negative when std > mean, which is
+    common with only a handful of seeds and a skewed, positive-only metric
+    like MSE/MAE -- and a log axis cannot render that, so matplotlib clips
+    the lower whisker all the way to the bottom of the plot instead of
+    stopping below the mean. Because `vmin`/`vmax` come from samples that
+    were actually observed (always > 0 for MSE/MAE), the lower whisker can
+    never go negative or below the smallest point actually measured.
+    """
+    mean = np.asarray(mean, dtype=float)
+    vmin = np.asarray(vmin, dtype=float)
+    vmax = np.asarray(vmax, dtype=float)
+    return np.vstack([mean - vmin, vmax - mean])
+
+
 def plot_loss(histories, title="Training loss", save_path=None, show_cond=False):
     """histories: dict of label -> list of loss values."""
     plt.figure(figsize=(9, 4.5))

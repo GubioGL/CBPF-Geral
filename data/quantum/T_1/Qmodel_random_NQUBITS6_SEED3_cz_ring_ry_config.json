@@ -1,0 +1,18 @@
+{
+  "class_name": "QuantumPINNPennyLane",
+  "config": {
+    "n_qubits": 6,
+    "pre_neurons": 10,
+    "pre_depth": 1,
+    "post_neurons": 10,
+    "post_depth": 1,
+    "angle_scale": 3.141592653589793,
+    "fixed_layer": "cz_ring",
+    "fixed_layer_repeats": 1,
+    "input_rotation_axis": "ry",
+    "seed": 3,
+    "L": 1.0,
+    "Tfin": 1,
+    "estrutura": 1
+  }
+}
