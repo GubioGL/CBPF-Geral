@@ -1,20 +1,3 @@
-"""Plots mean MSE (error bars show the [min, max] range across SEED/run_id
-samples) of the trained quantum PINN models (one line per FIXED_LAYER,
-averaged across SEED) against N_QUBITS, overlaid with the mean MSE of the
-trained classical PINN models (one line, averaged across run_id) against
-INTRA_NEURO on the same "bottleneck width" axis, comparing each model's
-prediction at t=Tfin to the FDM reference solution. One figure is produced
-per T_* directory present in data/quantum (skipped if there is no matching
-T_* directory in data/classical).
-
-Error bars show [min, max] across seeds rather than mean +/- std: MSE is
-always positive and, with only a handful of seeds, its std is frequently
-larger than its mean, which would push a symmetric mean +/- std bar below
-zero -- something the log-scale y-axis below cannot render, so matplotlib
-clips that whisker all the way to the bottom of the plot. [min, max] is
-built from samples that were actually observed, so it is always positive
-and never overruns the axis. mean +/- std is still printed to the console
-for reference."""
 import glob
 import os
 
@@ -31,21 +14,28 @@ from src.models_pennylane import QuantumPINNPennyLane
 QUANTUM_DIR = "data/quantum"
 CLASSICAL_DIR = "data/classical"
 INPUT_ROTATION_AXIS = "ry"
-COLOR_CLASSICAL = "#e34948"
+COLLOCATION_DISTRIBUTION = "random"  # "uniform" ou "random" -- filtra os checkpoints de ambos os lados
+if COLLOCATION_DISTRIBUTION not in ("uniform", "random"):
+    raise ValueError(
+        f"COLLOCATION_DISTRIBUTION must be 'uniform' or 'random', got {COLLOCATION_DISTRIBUTION!r}."
+    )
+COLOR_CLASSICAL = "black"
 COLORS_QUANTUM = {"cz_ring": "#2a78d6", "ring_cnot": "#1baf7a"}
 FALLBACK_COLORS = ["#eb6834", "#4a3aa7", "#e87ba4"]
 
 
-def compute_quantum_errors(t_dir, x_plot, u_ref, Tfin):
-    """Loads every Qmodel_random_NQUBITS* checkpoint in `t_dir` matching
-    INPUT_ROTATION_AXIS, evaluates each against `u_ref`, and averages
-    MSE/MAE across the SEED samples for each (fixed_layer, n_qubits).
-    Returns {fixed_layer: (n_qubits_list, mse_mean, mse_std, mse_min,
-    mse_max, mae_mean, mae_std, n_samples)}. mse_min/mse_max (the extremes
-    actually observed across seeds) are what the plot uses for its error
-    bars -- unlike mean +/- std, they can never go negative on the plot's
-    log-scale y-axis."""
-    entries = find_quantum_configs(t_dir, input_rotation_axis=INPUT_ROTATION_AXIS)
+def compute_quantum_errors(t_dir, x_plot, u_ref, Tfin, collocation_distribution=COLLOCATION_DISTRIBUTION):
+    """Loads every Qmodel_<collocation_distribution>_NQUBITS* checkpoint in
+    `t_dir` matching INPUT_ROTATION_AXIS, evaluates each against `u_ref`,
+    and averages MSE/MAE across the SEED samples for each (fixed_layer,
+    n_qubits). Returns {fixed_layer: (n_qubits_list, mse_mean, mse_std,
+    mse_min, mse_max, mae_mean, mae_std, n_samples)}. mse_min/mse_max (the
+    extremes actually observed across seeds) are what the plot uses for its
+    error bars -- unlike mean +/- std, they can never go negative on the
+    plot's log-scale y-axis."""
+    entries = find_quantum_configs(
+        t_dir, input_rotation_axis=INPUT_ROTATION_AXIS, collocation_distribution=collocation_distribution
+    )
 
     errors_by_layer = {}
     for fixed_layer, n_qubits, _seed, pt_path in entries:
@@ -70,15 +60,19 @@ def compute_quantum_errors(t_dir, x_plot, u_ref, Tfin):
     return stats
 
 
-def compute_classical_errors(t_dir, x_plot, u_ref, Tfin):
-    """Loads every Cmodel_random_NEURO* checkpoint in `t_dir`, evaluates each
-    against `u_ref`, and averages MSE/MAE across the run_id samples for each
-    INTRA_NEURO. Returns (intra_neurons, mse_mean, mse_std, mse_min, mse_max,
-    mae_mean, mae_std, n_samples), or None if `t_dir` has no classical
-    checkpoints. mse_min/mse_max (the extremes actually observed across
-    run_ids) are what the plot uses for its error bars -- unlike mean +/-
-    std, they can never go negative on the plot's log-scale y-axis."""
-    entries = find_classical_configs(t_dir)
+def compute_classical_errors(t_dir, x_plot, u_ref, Tfin, collocation_distribution=COLLOCATION_DISTRIBUTION):
+    """Loads every Cmodel_*_NEURO* checkpoint in `t_dir` whose
+    COLLOCATION_DISTRIBUTION (read from its companion `_config.json`)
+    matches `collocation_distribution`, matching whichever distribution was
+    requested for the quantum side too so the two curves stay comparable,
+    evaluates each against `u_ref`, and averages MSE/MAE across the run_id
+    samples for each INTRA_NEURO. Returns (intra_neurons, mse_mean,
+    mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples), or None if
+    `t_dir` has no matching classical checkpoints. mse_min/mse_max (the
+    extremes actually observed across run_ids) are what the plot uses for
+    its error bars -- unlike mean +/- std, they can never go negative on
+    the plot's log-scale y-axis."""
+    entries = find_classical_configs(t_dir, collocation_distribution=collocation_distribution)
     if not entries:
         return None
 
@@ -126,17 +120,19 @@ def plot_comparison(quantum_stats, classical_data, Tfin, save_path):
     ax.set_ylabel("MSE", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(sorted(all_widths))
-    ax.set_title(f"Quantum vs classical PINN mean MSE vs width (T = {Tfin})", fontsize=13)
+    #ax.set_title(f"Quantum vs classical PINN mean MSE vs width (T = {Tfin})", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(save_path, dpi=150)
+    fig.savefig(save_path, dpi=250)
     plt.close(fig)
 
 
 if __name__ == "__main__":
     for t_dir in sorted(glob.glob(os.path.join(QUANTUM_DIR, "T_*"))):
-        entries = find_quantum_configs(t_dir, input_rotation_axis=INPUT_ROTATION_AXIS)
+        entries = find_quantum_configs(
+            t_dir, input_rotation_axis=INPUT_ROTATION_AXIS, collocation_distribution=COLLOCATION_DISTRIBUTION
+        )
         if not entries:
             continue
 
@@ -147,35 +143,36 @@ if __name__ == "__main__":
         x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
         u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
 
-        quantum_stats = compute_quantum_errors(t_dir, x_plot, u_ref, Tfin)
+        quantum_stats = compute_quantum_errors(t_dir, x_plot, u_ref, Tfin, collocation_distribution=COLLOCATION_DISTRIBUTION)
 
         classical_t_dir = os.path.join(CLASSICAL_DIR, os.path.basename(t_dir))
-        classical_data = compute_classical_errors(classical_t_dir, x_plot, u_ref, Tfin)
+        classical_data = compute_classical_errors(
+            classical_t_dir, x_plot, u_ref, Tfin, collocation_distribution=COLLOCATION_DISTRIBUTION
+        )
 
         t_label = os.path.basename(t_dir).replace("T_", "")
-        save_path = f"Error_vs_Width_T_{t_label}.png"
+        save_path = f"Error_vs_Width_{COLLOCATION_DISTRIBUTION}_T_{t_label}.png"
         plot_comparison(quantum_stats, classical_data, Tfin, save_path)
 
-        print(f"T = {Tfin}")
-        for fixed_layer, (n_qubits, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples) in sorted(
-            quantum_stats.items()
-        ):
-            print(f"  quantum fixed_layer={fixed_layer}")
-            for n, e_mse, s_mse, lo_mse, hi_mse, e_mae, s_mae, n_s in zip(
-                n_qubits, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples
-            ):
-                flag = "  <<< mean-std<0, plot uses [min,max] instead" if e_mse - s_mse < 0 else ""
-                print(f"    N_QUBITS={n:2d}  MSE={e_mse:.6e}+/-{s_mse:.6e}  range=[{lo_mse:.6e}, {hi_mse:.6e}]  "
-                      f"MAE={e_mae:.6e}+/-{s_mae:.6e}  (mean over {n_s} seeds){flag}")
-        if classical_data is not None:
-            intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples = classical_data
-            print("  classical")
-            for n, e_mse, s_mse, lo_mse, hi_mse, e_mae, s_mae, n_s in zip(
-                intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples
-            ):
-                flag = "  <<< mean-std<0, plot uses [min,max] instead" if e_mse - s_mse < 0 else ""
-                print(f"    INTRA_NEURO={n:2d}  MSE={e_mse:.6e}+/-{s_mse:.6e}  range=[{lo_mse:.6e}, {hi_mse:.6e}]  "
-                      f"MAE={e_mae:.6e}+/-{s_mae:.6e}  (mean over {n_s} runs){flag}")
-        else:
-            print(f"  no classical models found in {classical_t_dir}")
+        # for fixed_layer, (n_qubits, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples) in sorted(
+        #     quantum_stats.items()
+        # ):
+        #     print(f"  quantum fixed_layer={fixed_layer}")
+        #     for n, e_mse, s_mse, lo_mse, hi_mse, e_mae, s_mae, n_s in zip(
+        #         n_qubits, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples
+        #     ):
+        #         flag = "  <<< mean-std<0, plot uses [min,max] instead" if e_mse - s_mse < 0 else ""
+        #         print(f"    N_QUBITS={n:2d}  MSE={e_mse:.6e}+/-{s_mse:.6e}  range=[{lo_mse:.6e}, {hi_mse:.6e}]  "
+        #               f"MAE={e_mae:.6e}+/-{s_mae:.6e}  (mean over {n_s} seeds){flag}")
+        # if classical_data is not None:
+        #     intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples = classical_data
+        #     print("  classical")
+        #     for n, e_mse, s_mse, lo_mse, hi_mse, e_mae, s_mae, n_s in zip(
+        #         intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples
+        #     ):
+        #         flag = "  <<< mean-std<0, plot uses [min,max] instead" if e_mse - s_mse < 0 else ""
+        #         print(f"    INTRA_NEURO={n:2d}  MSE={e_mse:.6e}+/-{s_mse:.6e}  range=[{lo_mse:.6e}, {hi_mse:.6e}]  "
+        #               f"MAE={e_mae:.6e}+/-{s_mae:.6e}  (mean over {n_s} runs){flag}")
+        # else:
+        #     print(f"  no classical models found in {classical_t_dir}")
         print(f"  -> saved {save_path}")

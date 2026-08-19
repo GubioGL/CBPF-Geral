@@ -20,9 +20,13 @@ L,  NU = 1.0 , 0.01
 # ---- discretization (used in the PDE residual loss and collocation sampling)
 HX, HT = L / 512, 1.0e-3
 # ---- collocation sampling --------------------------------------------------
-N_COLLOCATION = 10
+N_COLLOCATION = 100
 N_COLLOCATION_LBFGS = 50
-COLLOCATION_DISTRIBUTION = "random"
+COLLOCATION_DISTRIBUTION = "uniform"  # "uniform" ou "random"
+if COLLOCATION_DISTRIBUTION not in ("uniform", "random"):
+    raise ValueError(
+        f"COLLOCATION_DISTRIBUTION must be 'uniform' or 'random', got {COLLOCATION_DISTRIBUTION!r}."
+    )
 # ---- training -------------------------------------------------------------
 EPOCHS, LR = 10000, 1.0e-3
 LBFGS_EPOCHS, LBFGS_LR = 1000, 1
@@ -45,7 +49,7 @@ Tfin = 1
 
 if __name__ == "__main__":
     for FIXED_LAYER in ["cz_ring", "ring_cnot"]:
-        for N_QUBITS in [6,8,10]:
+        for N_QUBITS in [2,4,6,8,10]:
             
             for SEED in [1,2,3,4,5]:
                 out_dir = f"data/quantum/T_{Tfin}"
@@ -105,19 +109,27 @@ if __name__ == "__main__":
                 errors[label] = relative_l2_error(u_pred, u_ref)
 
                 if SAVE_EXTRAS:
-                    model.save(f"{out_dir}/Qmodel_random_NQUBITS{N_QUBITS}_SEED{SEED}_{FIXED_LAYER}_{INPUT_ROTATION_AXIS}.pt")
+                    model.save(
+                        f"{out_dir}/Qmodel_{COLLOCATION_DISTRIBUTION}_NQUBITS{N_QUBITS}_SEED{SEED}_{FIXED_LAYER}_{INPUT_ROTATION_AXIS}.pt",
+                        training_params=dict(
+                            NU=NU, HX=HX, HT=HT, N_COLLOCATION=N_COLLOCATION, SEED=SEED,
+                            COLLOCATION_DISTRIBUTION=COLLOCATION_DISTRIBUTION,
+                            EPOCHS=EPOCHS, LR=LR, LBFGS_EPOCHS=LBFGS_EPOCHS, LBFGS_LR=LBFGS_LR,
+                            HIDDEN_NEURONS=HIDDEN_NEURONS, HIDDEN_DEPTH=HIDDEN_DEPTH,
+                        ),
+                    )
 
                 ######################### PLOTS ###################################
                 plot_loss(
                     loss_histories,
                     title=f"Quantum HPINN training loss por estrutura (PennyLane autograd, T={Tfin})",
-                    save_path=f"{out_dir}/Loss_random_NQUBITS{N_QUBITS}_SEED{SEED}_{FIXED_LAYER}_{INPUT_ROTATION_AXIS}.png",
+                    save_path=f"{out_dir}/Loss_{COLLOCATION_DISTRIBUTION}_NQUBITS{N_QUBITS}_SEED{SEED}_{FIXED_LAYER}_{INPUT_ROTATION_AXIS}.png",
                 )
 
                 plot_solution(
                     x_plot, predictions, ref=u_ref,
                     title=f"Quantum HPINN por estrutura vs FDM reference at T={Tfin}",
-                    save_path=f"{out_dir}/Solution_random_NQUBITS{N_QUBITS}_SEED{SEED}_{FIXED_LAYER}_{INPUT_ROTATION_AXIS}.png",
+                    save_path=f"{out_dir}/Solution_{COLLOCATION_DISTRIBUTION}_NQUBITS{N_QUBITS}_SEED{SEED}_{FIXED_LAYER}_{INPUT_ROTATION_AXIS}.png",
                     show_cond=False,
                 )
 

@@ -1,15 +1,4 @@
-"""Plots mean MSE/MAE of the trained classical PINN models against
-INTRA_NEURO, with the [min, max] range across the run_id samples shown as
-error bars. One figure is produced for T_0.1 and one for T_1.
 
-Error bars show [min, max] across run_ids rather than mean +/- std:
-MSE/MAE are always positive and, with only a handful of run_ids, their std
-is frequently larger than their mean, which would push a symmetric mean +/-
-std bar below zero -- something the log-scale y-axis below cannot render, so
-matplotlib clips that whisker all the way to the bottom of the plot.
-[min, max] is built from samples that were actually observed, so it is
-always positive and never overruns the axis. mean +/- std is still printed
-to the console for reference."""
 import os
 
 import matplotlib.pyplot as plt
@@ -22,12 +11,20 @@ from src.models import ClassicalPINN2
 
 CLASSICAL_DIR = "data/classical"
 T_LABELS = ["0.1", "1"]
+COLLOCATION_DISTRIBUTIONS = ["uniform", "random"]
 COLOR_MSE = "#2a78d6"
-COLOR_MAE = "#1baf7a"
+# Line style / marker per COLLOCATION_DISTRIBUTION, so both variants can share
+# one set of axes: solid filled markers for "uniform", dashed hollow markers
+# for "random".
+DIST_STYLES = {
+    "uniform": dict(fmt="o-", markerfacecolor=None),
+    "random": dict(fmt="s--", markerfacecolor="none"),
+}
 
 
-def compute_error_stats(t_dir):
-    """Loads every classical model in `t_dir`, evaluates each against the FDM
+def compute_error_stats(t_dir, collocation_distribution):
+    """Loads every classical model in `t_dir` whose COLLOCATION_DISTRIBUTION
+    matches `collocation_distribution`, evaluates each against the FDM
     reference at t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MSE and
     MAE across the run_id samples. Returns (intra_neurons, mse_mean, mse_std,
     mse_min, mse_max, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin),
@@ -35,7 +32,7 @@ def compute_error_stats(t_dir):
     observed across run_ids) are what the plot uses for its error bars --
     unlike mean +/- std, they can never go negative on the plot's log-scale
     y-axis."""
-    entries = find_classical_configs(t_dir)
+    entries = find_classical_configs(t_dir, collocation_distribution=collocation_distribution)
     if not entries:
         return [], [], [], [], [], [], [], [], [], [], None
 
@@ -68,19 +65,24 @@ def compute_error_stats(t_dir):
             mae_max, n_samples, Tfin)
 
 
-def plot_errors_std(intra_neurons, mse_mean, mse_min, mse_max, mae_mean, mae_min, mae_max,
-                     Tfin, save_path):
+def plot_errors_std(stats_by_distribution, Tfin, save_path):
+    """`stats_by_distribution` maps COLLOCATION_DISTRIBUTION -> (intra_neurons,
+    mse_mean, mse_min, mse_max) for that distribution; distributions with no
+    models are omitted by the caller."""
     fig, ax = plt.subplots(figsize=(9, 4.5))
-    mse_yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
-    mae_yerr = asymmetric_yerr(mae_mean, mae_min, mae_max)
-    ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt="o-", color=COLOR_MSE,
-                linewidth=2.0, markersize=6, capsize=4, label="MSE (mean, [min,max])")
-    ax.errorbar(intra_neurons, mae_mean, yerr=mae_yerr, fmt="o-", color=COLOR_MAE,
-                linewidth=2.0, markersize=6, capsize=4, label="MAE (mean, [min,max])")
+    all_neurons = set()
+    for distribution, (intra_neurons, mse_mean, mse_min,
+                        mse_max) in stats_by_distribution.items():
+        all_neurons.update(intra_neurons)
+        style = DIST_STYLES.get(distribution, dict(fmt="o-", markerfacecolor=None))
+        mse_yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
+        ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"], color=COLOR_MSE,
+                    markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
+                    capsize=4, label=f"MSE ({distribution})")
     ax.set_xlabel("INTRA_NEURO", fontsize=14)
-    ax.set_ylabel("Error", fontsize=14)
+    ax.set_ylabel("MSE", fontsize=14)
     ax.set_yscale("log")
-    ax.set_xticks(intra_neurons)
+    ax.set_xticks(sorted(all_neurons))
     ax.set_title(f"Classical PINN error vs INTRA_NEURO (T = {Tfin})", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
@@ -92,23 +94,22 @@ def plot_errors_std(intra_neurons, mse_mean, mse_min, mse_max, mae_mean, mae_min
 if __name__ == "__main__":
     for t_label in T_LABELS:
         t_dir = os.path.join(CLASSICAL_DIR, f"T_{t_label}")
-        (intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
-         mae_max, n_samples, Tfin) = compute_error_stats(t_dir)
-        if not intra_neurons:
+
+        stats_by_distribution = {}
+        Tfin = None
+        for distribution in COLLOCATION_DISTRIBUTIONS:
+            (intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
+             mae_max, n_samples, dist_Tfin) = compute_error_stats(t_dir, distribution)
+            if not intra_neurons:
+                continue
+            Tfin = dist_Tfin
+            stats_by_distribution[distribution] = (intra_neurons, mse_mean, mse_min, mse_max)
+
+
+        if not stats_by_distribution:
             print(f"No classical models found in {t_dir}, skipping.")
             continue
 
         save_path = f"Error_std_vs_IntraNeuro_T_{t_label}.png"
-        plot_errors_std(intra_neurons, mse_mean, mse_min, mse_max, mae_mean, mae_min, mae_max,
-                         Tfin, save_path)
-
-        print(f"T = {Tfin}")
-        for n, m_mean, m_std, m_min, m_max, a_mean, a_std, a_min, a_max, n_s in zip(
-            intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
-            mae_max, n_samples
-        ):
-            flag = "  <<< mean-std<0, plot uses [min,max] instead" if (
-                m_mean - m_std < 0 or a_mean - a_std < 0) else ""
-            print(f"  INTRA_NEURO={n:2d}  MSE={m_mean:.6e}+/-{m_std:.6e} range=[{m_min:.6e}, {m_max:.6e}]  "
-                  f"MAE={a_mean:.6e}+/-{a_std:.6e} range=[{a_min:.6e}, {a_max:.6e}]  (n={n_s}){flag}")
+        plot_errors_std(stats_by_distribution, Tfin, save_path)
         print(f"  -> saved {save_path}")

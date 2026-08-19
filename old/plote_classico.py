@@ -14,18 +14,23 @@ COLOR_MSE = "#2a78d6"
 COLOR_MAE = "#1baf7a"
 
 
-def find_classical_configs(t_dir):
+def find_classical_configs(t_dir, collocation_distribution=None):
     """Returns [(intra_neuron, run_id, pt_path), ...] for every classical
-    Cmodel_NEURO* checkpoint in `t_dir`, reading intra_neuron from its
-    companion `_config.json` (the run_id/sample index comes from the
+    Cmodel_NEURO* checkpoint in `t_dir` whose COLLOCATION_DISTRIBUTION
+    matches `collocation_distribution` ("uniform" or "random"; leave as
+    None to include every distribution found), reading intra_neuron from
+    its companion `_config.json` (the run_id/sample index comes from the
     trailing `_<run_id>` in the filename)."""
     entries = []
-    for config_path in glob.glob(os.path.join(t_dir, "Cmodel_random_NEURO*_config.json")):
+    for config_path in glob.glob(os.path.join(t_dir, "Cmodel_*_NEURO*_config.json")):
         pt_path = config_path[: -len("_config.json")] + ".pt"
         if not os.path.exists(pt_path):
             continue
         with open(config_path) as f:
             cfg = json.load(f)
+        distribution = cfg["training_params"].get("COLLOCATION_DISTRIBUTION")
+        if collocation_distribution is not None and distribution != collocation_distribution:
+            continue
         intra_neuron = cfg["config"]["intra_neuron"]
         run_id = int(os.path.basename(pt_path)[: -len(".pt")].rsplit("_", 1)[1])
         entries.append((intra_neuron, run_id, pt_path))

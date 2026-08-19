@@ -18,8 +18,8 @@ L,  NU = 1.0 , 0.01
 # ---- discretization (used in the PDE residual loss and collocation sampling)
 HX, HT = L / 512, 1.0e-3
 # ---- collocation sampling --------------------------------------------------
-N_COLLOCATION = 10
-COLLOCATION_DISTRIBUTION = "random"
+N_COLLOCATION = 100
+COLLOCATION_DISTRIBUTION = "uniform"
 # ---- training -------------------------------------------------------------
 EPOCHS, LR = 10000, 1.0e-2
 LBFGS_EPOCHS, LBFGS_LR = 1000, .5
@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
                 if SAVE_EXTRAS:
                     model.save(
-                        f"data/classical/T_{Tfin}/Cmodel_random_NEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.pt",
+                        f"data/classical/T_{Tfin}/Cmodel_{COLLOCATION_DISTRIBUTION}_NEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.pt",
                         training_params=dict(
                             NU = NU, HX = HX, HT = HT, N_COLLOCATION = N_COLLOCATION, SEED = SEED,
                             COLLOCATION_DISTRIBUTION = COLLOCATION_DISTRIBUTION,
@@ -82,7 +82,7 @@ if __name__ == "__main__":
                     )
 
                 plot_loss({"Classical PINN": hist["loss"]}, title="Classical PINN training loss",
-                            save_path=f"data/classical/T_{Tfin}/loss_random_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.png"
+                            save_path=f"data/classical/T_{Tfin}/loss_{COLLOCATION_DISTRIBUTION}_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.png"
                             )
 
                 u_pred = predict(model, x_plot, Tfin)
@@ -90,7 +90,7 @@ if __name__ == "__main__":
                 plot_solution(
                     x_plot, {"Classical PINN": u_pred}, ref=u_ref,
                     title= f"Classical PINN vs FDM reference at T={Tfin}",
-                    save_path = f"data/classical/T_{Tfin}/model_random_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.png",
+                    save_path = f"data/classical/T_{Tfin}/model_{COLLOCATION_DISTRIBUTION}_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{INTRA_NEURO}_{run_id}.png",
                     show_cond = False,
                     collocation_x = x_f.numpy(),
                 )

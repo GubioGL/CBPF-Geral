@@ -28,15 +28,19 @@ INPUT_ROTATION_AXIS = "ry"
 COLORS = ["#2a78d6", "#e34948", "#eb6834", "#4a3aa7", "#1baf7a", "#e87ba4"]
 
 
-def find_quantum_configs(t_dir, input_rotation_axis=INPUT_ROTATION_AXIS):
+def find_quantum_configs(t_dir, input_rotation_axis=INPUT_ROTATION_AXIS, collocation_distribution="random"):
     """Returns [(fixed_layer, n_qubits, seed, pt_path), ...] for every
-    Qmodel_random_NQUBITS* checkpoint in `t_dir` whose input_rotation_axis
-    matches `input_rotation_axis`, reading fixed_layer/n_qubits/seed from
-    each checkpoint's companion `_config.json` rather than parsing the
-    filename (fixed_layer names like "cz_ring" and "ring_cnot" contain
-    underscores themselves, which makes filename parsing ambiguous)."""
+    Qmodel_<collocation_distribution>_NQUBITS* checkpoint in `t_dir` whose
+    input_rotation_axis matches `input_rotation_axis`
+    (`collocation_distribution` is "uniform" or "random", matching how
+    run_quantum_autograd_pennylane.py names its checkpoints), reading
+    fixed_layer/n_qubits/seed from each checkpoint's companion
+    `_config.json` rather than parsing the filename (fixed_layer names like
+    "cz_ring" and "ring_cnot" contain underscores themselves, which makes
+    filename parsing ambiguous)."""
     entries = []
-    for config_path in glob.glob(os.path.join(t_dir, "Qmodel_random_NQUBITS*_config.json")):
+    pattern = f"Qmodel_{collocation_distribution}_NQUBITS*_config.json"
+    for config_path in glob.glob(os.path.join(t_dir, pattern)):
         pt_path = config_path[: -len("_config.json")] + ".pt"
         if not os.path.exists(pt_path):
             continue
