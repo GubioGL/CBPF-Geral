@@ -14,7 +14,7 @@ from src.models_pennylane import QuantumPINNPennyLane
 QUANTUM_DIR = "data/quantum"
 CLASSICAL_DIR = "data/classical"
 INPUT_ROTATION_AXIS = "ry"
-COLLOCATION_DISTRIBUTION = "random"  # "uniform" ou "random" -- filtra os checkpoints de ambos os lados
+COLLOCATION_DISTRIBUTION = "uniform"  # "uniform" ou "random" -- filtra os checkpoints de ambos os lados
 if COLLOCATION_DISTRIBUTION not in ("uniform", "random"):
     raise ValueError(
         f"COLLOCATION_DISTRIBUTION must be 'uniform' or 'random', got {COLLOCATION_DISTRIBUTION!r}."

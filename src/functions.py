@@ -586,7 +586,7 @@ def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="", save
         )
     ax.set_xlabel(r"$x$", fontsize=14)
     ax.set_ylabel(r"$u(x,t)$", fontsize=14)
-    ax.set_title(title, fontsize=13)
+    #ax.set_title(title, fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()
