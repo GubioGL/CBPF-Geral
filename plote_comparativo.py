@@ -25,14 +25,7 @@ FALLBACK_COLORS = ["#eb6834", "#4a3aa7", "#e87ba4"]
 
 
 def compute_quantum_errors(t_dir, x_plot, u_ref, Tfin, collocation_distribution=COLLOCATION_DISTRIBUTION):
-    """Loads every Qmodel_<collocation_distribution>_NQUBITS* checkpoint in
-    `t_dir` matching INPUT_ROTATION_AXIS, evaluates each against `u_ref`,
-    and averages MSE/MAE across the SEED samples for each (fixed_layer,
-    n_qubits). Returns {fixed_layer: (n_qubits_list, mse_mean, mse_std,
-    mse_min, mse_max, mae_mean, mae_std, n_samples)}. mse_min/mse_max (the
-    extremes actually observed across seeds) are what the plot uses for its
-    error bars -- unlike mean +/- std, they can never go negative on the
-    plot's log-scale y-axis."""
+
     entries = find_quantum_configs(
         t_dir, input_rotation_axis=INPUT_ROTATION_AXIS, collocation_distribution=collocation_distribution
     )
@@ -61,17 +54,6 @@ def compute_quantum_errors(t_dir, x_plot, u_ref, Tfin, collocation_distribution=
 
 
 def compute_classical_errors(t_dir, x_plot, u_ref, Tfin, collocation_distribution=COLLOCATION_DISTRIBUTION):
-    """Loads every Cmodel_*_NEURO* checkpoint in `t_dir` whose
-    COLLOCATION_DISTRIBUTION (read from its companion `_config.json`)
-    matches `collocation_distribution`, matching whichever distribution was
-    requested for the quantum side too so the two curves stay comparable,
-    evaluates each against `u_ref`, and averages MSE/MAE across the run_id
-    samples for each INTRA_NEURO. Returns (intra_neurons, mse_mean,
-    mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples), or None if
-    `t_dir` has no matching classical checkpoints. mse_min/mse_max (the
-    extremes actually observed across run_ids) are what the plot uses for
-    its error bars -- unlike mean +/- std, they can never go negative on
-    the plot's log-scale y-axis."""
     entries = find_classical_configs(t_dir, collocation_distribution=collocation_distribution)
     if not entries:
         return None

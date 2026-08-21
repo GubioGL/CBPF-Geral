@@ -1,16 +1,3 @@
-"""Plots mean MAE of the trained classical PINN models against INTRA_NEURO,
-with the [min, max] range across the run_id samples shown as error bars. One
-figure is produced for T_0.1 and one for T_1, using the legacy checkpoints in
-data/classical_old.
-
-Error bars show [min, max] across run_ids rather than mean +/- std: MAE is
-always positive and, with only a handful of run_ids, its std is frequently
-larger than its mean, which would push a symmetric mean +/- std bar below
-zero -- something the log-scale y-axis below cannot render, so matplotlib
-clips that whisker all the way to the bottom of the plot. [min, max] is
-built from samples that were actually observed, so it is always positive
-and never overruns the axis. mean +/- std is still printed to the console
-for reference."""
 import os
 
 import matplotlib.pyplot as plt

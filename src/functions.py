@@ -555,7 +555,7 @@ def plot_loss(histories, title="Training loss", save_path=None, show_cond=False)
 
 
 def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="", save_path=None,
-                   show_cond=False, collocation_x=None, colors=None):
+                   show_cond=False, collocation_x=None, colors=None, ref_color=None):
     """
     x: spatial grid, shape (N,1).
     curves: dict of label -> predicted u array, shape (N,1). Used both for a
@@ -568,11 +568,13 @@ def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="", save
     colors: optional dict of label -> matplotlib color, for curves that need
         a fixed color (e.g. a classical baseline drawn in black) instead of
         the default color cycle.
+    ref_color: optional matplotlib color for the reference curve; defaults to
+        None (matplotlib's default color cycle) when not given.
     """
     fig = plt.figure(figsize=(9, 4.5))
     ax = fig.gca()
     if ref is not None:
-        ax.plot(x.ravel(), ref.ravel(), linewidth=3.0, label=ref_label)
+        ax.plot(x.ravel(), ref.ravel(), linewidth=3.0, label=ref_label, color=ref_color)
     for label, u in curves.items():
         color = None if colors is None else colors.get(label)
         ax.plot(x.ravel(), u.ravel(), "--", linewidth=2.0, label=label, color=color)

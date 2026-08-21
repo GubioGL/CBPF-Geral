@@ -1,17 +1,3 @@
-"""Plots mean MAE of the trained quantum PINN models against N_QUBITS, one
-curve per FIXED_LAYER, with the [min, max] range across the SEED samples
-shown as error bars -- the quantum counterpart of
-`plote_classico_std copy.py`. One figure is produced per T_* directory in
-data/quantum.
-
-Error bars show [min, max] across seeds rather than mean +/- std: MAE is
-always positive and, with only a handful of seeds, its std is frequently
-larger than its mean, which would push a symmetric mean +/- std bar below
-zero -- something the log-scale y-axis below cannot render, so matplotlib
-clips that whisker all the way to the bottom of the plot. [min, max] is
-built from samples that were actually observed, so it is always positive
-and never overruns the axis. mean +/- std is still printed to the console
-for reference."""
 import glob
 import json
 import os
@@ -29,15 +15,6 @@ COLORS = ["#2a78d6", "#e34948", "#eb6834", "#4a3aa7", "#1baf7a", "#e87ba4"]
 
 
 def find_quantum_configs(t_dir, input_rotation_axis=INPUT_ROTATION_AXIS, collocation_distribution="random"):
-    """Returns [(fixed_layer, n_qubits, seed, pt_path), ...] for every
-    Qmodel_<collocation_distribution>_NQUBITS* checkpoint in `t_dir` whose
-    input_rotation_axis matches `input_rotation_axis`
-    (`collocation_distribution` is "uniform" or "random", matching how
-    run_quantum_autograd_pennylane.py names its checkpoints), reading
-    fixed_layer/n_qubits/seed from each checkpoint's companion
-    `_config.json` rather than parsing the filename (fixed_layer names like
-    "cz_ring" and "ring_cnot" contain underscores themselves, which makes
-    filename parsing ambiguous)."""
     entries = []
     pattern = f"Qmodel_{collocation_distribution}_NQUBITS*_config.json"
     for config_path in glob.glob(os.path.join(t_dir, pattern)):
@@ -104,7 +81,7 @@ def plot_errors_std(stats, Tfin, save_path):
     ax.set_ylabel("Error", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(sorted(all_n_qubits))
-    ax.set_title(f"Quantum PINN MAE vs number of qubits (T = {Tfin})", fontsize=13)
+    #ax.set_title(f"Quantum PINN MAE vs number of qubits (T = {Tfin})", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()
