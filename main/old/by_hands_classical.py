@@ -4,13 +4,13 @@ import torch as tc
 import torch.nn as nn
 
 from tqdm import tqdm
-from src.functions import (
+from main.functions import (
     sample_collocation_points,
     predict,reference_at_time,
     plot_solution,
     solve_burgers_fd
     )
-from src.functions import set_seed
+from main.functions import set_seed
 
 class ClassicalPINN(nn.Module):
     """Fully classical MLP ansatz for the 1D viscous Burgers equation."""

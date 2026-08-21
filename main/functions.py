@@ -1,4 +1,7 @@
+import glob
+import json
 import math
+import os
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -596,3 +599,394 @@ def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="", save
         fig.savefig(save_path, dpi=150)
     if show_cond==True:
         plt.show()
+
+# ----------------------------------------------------------------------
+# plote_*.py helpers -- checkpoint discovery, error-vs-width statistics,
+# and their companion plots. Every plote_*.py script imports these and
+# keeps only its own parameters (paths, labels, colors) plus the call.
+# `model_cls` (ClassicalPINN2 / QuantumPINNPennyLane) is passed in by the
+# caller rather than imported here, since models.py/models_pennylane.py
+# both import from this module -- importing them back would be circular.
+# ----------------------------------------------------------------------
+def find_classical_configs(t_dir, collocation_distribution=None):
+    """Returns [(intra_neuron, run_id, pt_path), ...] for every classical
+    Cmodel_NEURO* checkpoint in `t_dir` whose COLLOCATION_DISTRIBUTION
+    matches `collocation_distribution` ("uniform" or "random"; leave as
+    None to include every distribution found), reading intra_neuron from
+    its companion `_config.json` (the run_id/sample index comes from the
+    trailing `_<run_id>` in the filename)."""
+    entries = []
+    for config_path in glob.glob(os.path.join(t_dir, "Cmodel_*_NEURO*_config.json")):
+        pt_path = config_path[: -len("_config.json")] + ".pt"
+        if not os.path.exists(pt_path):
+            continue
+        with open(config_path) as f:
+            cfg = json.load(f)
+        distribution = cfg["training_params"].get("COLLOCATION_DISTRIBUTION")
+        if collocation_distribution is not None and distribution != collocation_distribution:
+            continue
+        intra_neuron = cfg["config"]["intra_neuron"]
+        run_id = int(os.path.basename(pt_path)[: -len(".pt")].rsplit("_", 1)[1])
+        entries.append((intra_neuron, run_id, pt_path))
+    return sorted(entries)
+
+
+def find_quantum_configs(t_dir, input_rotation_axis="ry", collocation_distribution="random"):
+    """Returns [(fixed_layer, n_qubits, seed, pt_path), ...] for every
+    Qmodel_<collocation_distribution>_NQUBITS* checkpoint in `t_dir` whose
+    input_rotation_axis matches, reading fixed_layer/n_qubits/seed from its
+    companion `_config.json`."""
+    entries = []
+    pattern = f"Qmodel_{collocation_distribution}_NQUBITS*_config.json"
+    for config_path in glob.glob(os.path.join(t_dir, pattern)):
+        pt_path = config_path[: -len("_config.json")] + ".pt"
+        if not os.path.exists(pt_path):
+            continue
+        with open(config_path) as f:
+            cfg = json.load(f)["config"]
+        if cfg.get("input_rotation_axis") != input_rotation_axis:
+            continue
+        entries.append((cfg["fixed_layer"], cfg["n_qubits"], cfg["seed"], pt_path))
+    return sorted(entries)
+
+
+def compute_classical_mean_errors(t_dir, model_cls, nu):
+    """Loads every classical model in `t_dir`, evaluates each against the FDM
+    reference at t=Tfin, and averages the MSE/MAE across the run_id samples
+    (one per amostragem) for each INTRA_NEURO value. Returns (intra_neurons,
+    mean_mse, mean_mae, n_samples, Tfin), one point per INTRA_NEURO. Used by
+    the legacy `old/plote_classico.py`."""
+    entries = find_classical_configs(t_dir)
+    if not entries:
+        return [], [], [], [], None
+
+    first_model = model_cls.load(entries[0][2])
+    L, Tfin = first_model.L, first_model.Tfin
+
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+
+    errors_by_neuron = {}
+    for intra_neuron, _run_id, pt_path in entries:
+        model = model_cls.load(pt_path)
+        u_pred = predict(model, x_plot, Tfin)
+        entry = errors_by_neuron.setdefault(intra_neuron, {"mse": [], "mae": []})
+        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+
+    intra_neurons = sorted(errors_by_neuron)
+    mse = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mae = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
+    return intra_neurons, mse, mae, n_samples, Tfin
+
+
+def plot_classical_mean_errors(intra_neurons, mse, mae, Tfin, save_path,
+                                color_mse="#2a78d6", color_mae="#1baf7a"):
+    """Companion plot for `compute_classical_mean_errors` (legacy, mean-only)."""
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    ax.plot(intra_neurons, mse, "o-", color=color_mse, linewidth=2.0, markersize=6, label="MSE")
+    ax.plot(intra_neurons, mae, "o-", color=color_mae, linewidth=2.0, markersize=6, label="MAE")
+    ax.set_xlabel("INTRA_NEURO", fontsize=14)
+    ax.set_ylabel("Error", fontsize=14)
+    ax.set_yscale("log")
+    ax.set_xticks(intra_neurons)
+    ax.set_title(f"Classical PINN mean error vs INTRA_NEURO (T = {Tfin})", fontsize=13)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def compute_classical_mae_stats(t_dir, model_cls, nu):
+    """Loads every classical model in `t_dir`, evaluates each against the FDM
+    reference at t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MAE
+    across the run_id samples. Returns (intra_neurons, mae_mean, mae_std,
+    mae_min, mae_max, n_samples, Tfin), one point per INTRA_NEURO.
+    mae_min/mae_max (the extremes actually observed across run_ids) are what
+    the plot uses for its error bars -- unlike mean +/- std, they can never
+    go negative on the plot's log-scale y-axis. Used by the legacy
+    `plote_classico_std copy.py` (MAE-only, ignores COLLOCATION_DISTRIBUTION)."""
+    entries = find_classical_configs(t_dir)
+    if not entries:
+        return [], [], [], [], [], [], None
+
+    first_model = model_cls.load(entries[0][2])
+    L, Tfin = first_model.L, first_model.Tfin
+
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+
+    errors_by_neuron = {}
+    for intra_neuron, _run_id, pt_path in entries:
+        model = model_cls.load(pt_path)
+        u_pred = predict(model, x_plot, Tfin)
+        entry = errors_by_neuron.setdefault(intra_neuron, [])
+        entry.append(float(np.mean(np.abs(u_pred - u_ref))))
+
+    intra_neurons = sorted(errors_by_neuron)
+    mae_mean = [float(np.mean(errors_by_neuron[n])) for n in intra_neurons]
+    mae_std = [float(np.std(errors_by_neuron[n])) for n in intra_neurons]
+    mae_min = [float(np.min(errors_by_neuron[n])) for n in intra_neurons]
+    mae_max = [float(np.max(errors_by_neuron[n])) for n in intra_neurons]
+    n_samples = [len(errors_by_neuron[n]) for n in intra_neurons]
+    return intra_neurons, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin
+
+
+def plot_classical_mae_std(intra_neurons, mae_mean, mae_min, mae_max, Tfin, save_path,
+                            color_mae="#1baf7a"):
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    yerr = asymmetric_yerr(mae_mean, mae_min, mae_max)
+    ax.errorbar(intra_neurons, mae_mean, yerr=yerr, fmt="o-", color=color_mae,
+                linewidth=2.0, markersize=6, capsize=4, label="MAE (mean, [min,max])")
+    ax.set_xlabel("INTRA_NEURO", fontsize=14)
+    ax.set_ylabel("Error", fontsize=14)
+    ax.set_yscale("log")
+    ax.set_xticks(intra_neurons)
+    ax.set_title(f"Classical PINN MAE vs INTRA_NEURO (T = {Tfin}, legacy data)", fontsize=13)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def compute_classical_error_stats_std(t_dir, model_cls, nu, collocation_distribution):
+    """Loads every classical model in `t_dir` whose COLLOCATION_DISTRIBUTION
+    matches `collocation_distribution`, evaluates each against the FDM
+    reference at t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MSE and
+    MAE across the run_id samples. Returns (intra_neurons, mse_mean, mse_std,
+    mse_min, mse_max, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin),
+    one point per INTRA_NEURO. The _min/_max values (the extremes actually
+    observed across run_ids) are what the plot uses for its error bars --
+    unlike mean +/- std, they can never go negative on the plot's log-scale
+    y-axis. Used by `plote_classico_std.py`."""
+    entries = find_classical_configs(t_dir, collocation_distribution=collocation_distribution)
+    if not entries:
+        return [], [], [], [], [], [], [], [], [], [], None
+
+    first_model = model_cls.load(entries[0][2])
+    L, Tfin = first_model.L, first_model.Tfin
+
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+
+    errors_by_neuron = {}
+    for intra_neuron, _run_id, pt_path in entries:
+        model = model_cls.load(pt_path)
+        u_pred = predict(model, x_plot, Tfin)
+        entry = errors_by_neuron.setdefault(intra_neuron, {"mse": [], "mae": []})
+        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+
+    intra_neurons = sorted(errors_by_neuron)
+    mse_mean = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_std = [float(np.std(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_min = [float(np.min(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_max = [float(np.max(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mae_mean = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    mae_std = [float(np.std(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    mae_min = [float(np.min(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    mae_max = [float(np.max(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
+    return (intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
+            mae_max, n_samples, Tfin)
+
+
+def plot_classical_errors_std(stats_by_distribution, Tfin, save_path,
+                               color_mse="#2a78d6", dist_styles=None):
+    """`stats_by_distribution` maps COLLOCATION_DISTRIBUTION -> (intra_neurons,
+    mse_mean, mse_min, mse_max) for that distribution; distributions with no
+    models are omitted by the caller. `dist_styles` maps distribution name ->
+    dict(fmt=..., markerfacecolor=...); defaults to solid filled markers for
+    "uniform" and dashed hollow markers for "random", so both variants can
+    share one set of axes."""
+    if dist_styles is None:
+        dist_styles = {
+            "uniform": dict(fmt="o-", markerfacecolor=None),
+            "random": dict(fmt="s--", markerfacecolor="none"),
+        }
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    all_neurons = set()
+    for distribution, (intra_neurons, mse_mean, mse_min,
+                        mse_max) in stats_by_distribution.items():
+        all_neurons.update(intra_neurons)
+        style = dist_styles.get(distribution, dict(fmt="o-", markerfacecolor=None))
+        mse_yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
+        ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"], color=color_mse,
+                    markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
+                    capsize=4, label=f"MSE ({distribution})")
+    ax.set_xlabel("INTRA_NEURO", fontsize=14)
+    ax.set_ylabel("MSE", fontsize=14)
+    ax.set_yscale("log")
+    ax.set_xticks(sorted(all_neurons))
+    ax.set_title(f"Classical PINN error vs INTRA_NEURO (T = {Tfin})", fontsize=13)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def compute_quantum_error_stats_std(t_dir, model_cls, nu, input_rotation_axis="ry"):
+    """Loads every quantum model in `t_dir`, evaluates each against the FDM
+    reference at t=Tfin, and returns per-(FIXED_LAYER, N_QUBITS) mean/std/
+    min/max MAE across the SEED samples. Returns (stats, Tfin), where stats
+    is {fixed_layer: (n_qubits, mae_mean, mae_std, mae_min, mae_max,
+    n_samples)}, one entry per FIXED_LAYER found. mae_min/mae_max (the
+    extremes actually observed across seeds) are what the plot uses for its
+    error bars -- unlike mean +/- std, they can never go negative on the
+    plot's log-scale y-axis. Used by `plote_quantico_std.py`."""
+    entries = find_quantum_configs(t_dir, input_rotation_axis=input_rotation_axis)
+    if not entries:
+        return {}, None
+
+    first_model = model_cls.load(entries[0][3])
+    L, Tfin = first_model.L, first_model.Tfin
+
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+
+    errors_by_layer = {}
+    for fixed_layer, n_qubits, _seed, pt_path in entries:
+        model = model_cls.load(pt_path)
+        u_pred = predict(model, x_plot, Tfin)
+        by_n_qubits = errors_by_layer.setdefault(fixed_layer, {})
+        by_n_qubits.setdefault(n_qubits, []).append(float(np.mean(np.abs(u_pred - u_ref))))
+
+    stats = {}
+    for fixed_layer, by_n_qubits in errors_by_layer.items():
+        n_qubits_list = sorted(by_n_qubits)
+        mae_mean = [float(np.mean(by_n_qubits[n])) for n in n_qubits_list]
+        mae_std = [float(np.std(by_n_qubits[n])) for n in n_qubits_list]
+        mae_min = [float(np.min(by_n_qubits[n])) for n in n_qubits_list]
+        mae_max = [float(np.max(by_n_qubits[n])) for n in n_qubits_list]
+        n_samples = [len(by_n_qubits[n]) for n in n_qubits_list]
+        stats[fixed_layer] = (n_qubits_list, mae_mean, mae_std, mae_min, mae_max, n_samples)
+    return stats, Tfin
+
+
+def plot_quantum_errors_std(stats, Tfin, save_path, colors=None):
+    if colors is None:
+        colors = ["#2a78d6", "#e34948", "#eb6834", "#4a3aa7", "#1baf7a", "#e87ba4"]
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    all_n_qubits = set()
+    for (fixed_layer, (n_qubits, mae_mean, _mae_std, mae_min, mae_max, _n_samples)), color in zip(
+            sorted(stats.items()), colors):
+        all_n_qubits.update(n_qubits)
+        yerr = asymmetric_yerr(mae_mean, mae_min, mae_max)
+        ax.errorbar(n_qubits, mae_mean, yerr=yerr, fmt="o-", color=color,
+                    linewidth=2.0, markersize=6, capsize=4, label=fixed_layer)
+    ax.set_xlabel("Number of qubits", fontsize=14)
+    ax.set_ylabel("Error", fontsize=14)
+    ax.set_yscale("log")
+    ax.set_xticks(sorted(all_n_qubits))
+    #ax.set_title(f"Quantum PINN MAE vs number of qubits (T = {Tfin})", fontsize=13)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def compute_quantum_errors_comparativo(t_dir, model_cls, x_plot, u_ref, Tfin,
+                                        input_rotation_axis, collocation_distribution):
+    """Per-(FIXED_LAYER, N_QUBITS) MSE/MAE stats against a caller-supplied
+    `u_ref` grid, used by `plote_comparativo.py` to compare quantum models
+    against the classical baseline on the same x_plot/u_ref/Tfin."""
+    entries = find_quantum_configs(
+        t_dir, input_rotation_axis=input_rotation_axis, collocation_distribution=collocation_distribution
+    )
+
+    errors_by_layer = {}
+    for fixed_layer, n_qubits, _seed, pt_path in entries:
+        model = model_cls.load(pt_path)
+        u_pred = predict(model, x_plot, Tfin)
+        by_n = errors_by_layer.setdefault(fixed_layer, {})
+        entry = by_n.setdefault(n_qubits, {"mse": [], "mae": []})
+        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+
+    stats = {}
+    for fixed_layer, by_n in errors_by_layer.items():
+        n_list = sorted(by_n)
+        mse_mean = [float(np.mean(by_n[n]["mse"])) for n in n_list]
+        mse_std = [float(np.std(by_n[n]["mse"])) for n in n_list]
+        mse_min = [float(np.min(by_n[n]["mse"])) for n in n_list]
+        mse_max = [float(np.max(by_n[n]["mse"])) for n in n_list]
+        mae_mean = [float(np.mean(by_n[n]["mae"])) for n in n_list]
+        mae_std = [float(np.std(by_n[n]["mae"])) for n in n_list]
+        n_samples = [len(by_n[n]["mse"]) for n in n_list]
+        stats[fixed_layer] = (n_list, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples)
+    return stats
+
+
+def compute_classical_errors_comparativo(t_dir, model_cls, x_plot, u_ref, Tfin, collocation_distribution):
+    """Per-INTRA_NEURO MSE/MAE stats against a caller-supplied `u_ref` grid,
+    used by `plote_comparativo.py` to compare classical models against the
+    quantum ones on the same x_plot/u_ref/Tfin."""
+    entries = find_classical_configs(t_dir, collocation_distribution=collocation_distribution)
+    if not entries:
+        return None
+
+    errors_by_neuron = {}
+    for intra_neuron, _run_id, pt_path in entries:
+        model = model_cls.load(pt_path)
+        u_pred = predict(model, x_plot, Tfin)
+        entry = errors_by_neuron.setdefault(intra_neuron, {"mse": [], "mae": []})
+        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+
+    intra_neurons = sorted(errors_by_neuron)
+    mse_mean = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_std = [float(np.std(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_min = [float(np.min(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_max = [float(np.max(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mae_mean = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    mae_std = [float(np.std(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
+    return intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples
+
+
+def plot_comparison(quantum_stats, classical_data, Tfin, save_path,
+                     color_classical="black", colors_quantum=None, fallback_colors=None):
+    if colors_quantum is None:
+        colors_quantum = {"cz_ring": "#2a78d6", "ring_cnot": "#1baf7a"}
+    if fallback_colors is None:
+        fallback_colors = ["#eb6834", "#4a3aa7", "#e87ba4"]
+
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    all_widths = set()
+
+    fallback = iter(fallback_colors)
+    for fixed_layer, (n_qubits, mse_mean, _mse_std, mse_min, mse_max, _mae_mean, _mae_std, _n_samples) in sorted(
+        quantum_stats.items()
+    ):
+        color = colors_quantum.get(fixed_layer, next(fallback, None))
+        all_widths.update(n_qubits)
+        yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
+        ax.errorbar(n_qubits, mse_mean, yerr=yerr, fmt="o-", color=color, linewidth=2.0,
+                    markersize=6, capsize=4, label=f"Quantum PINN ({fixed_layer})")
+
+    if classical_data is not None:
+        intra_neurons, mse_mean, _mse_std, mse_min, mse_max, _mae_mean, _mae_std, _n_samples = classical_data
+        all_widths.update(intra_neurons)
+        yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
+        ax.errorbar(intra_neurons, mse_mean, yerr=yerr, fmt="s--", color=color_classical,
+                    linewidth=2.0, markersize=6, capsize=4, label="Classical PINN")
+
+    ax.set_xlabel("Width (N_QUBITS / INTRA_NEURO)", fontsize=14)
+    ax.set_ylabel("MSE", fontsize=14)
+    ax.set_yscale("log")
+    ax.set_xticks(sorted(all_widths))
+    #ax.set_title(f"Quantum vs classical PINN mean MSE vs width (T = {Tfin})", fontsize=13)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=250)
+    plt.close(fig)

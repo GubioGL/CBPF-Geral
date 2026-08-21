@@ -2,7 +2,7 @@ import math
 import random
 
 import numpy as np
-from src.functions import (
+from main.functions import (
     plot_loss,
     plot_solution,
     predict,
@@ -12,8 +12,8 @@ from src.functions import (
     solve_burgers_fd,
     relative_l2_error,
     train,)
-from src.models import QuantumPINN
-from src.config import (
+from main.models import QuantumPINN
+from main.config import (
     L, TFIN as Tfin, NU, HX, HT, N_COLLOCATION, SEED, EPOCHS, LR,
     PRE_NEURONS, PRE_DEPTH, POST_NEURONS, POST_DEPTH, HIDDEN_NEURONS, HIDDEN_DEPTH,
 )

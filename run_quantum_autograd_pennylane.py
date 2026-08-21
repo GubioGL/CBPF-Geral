@@ -1,6 +1,6 @@
 import math,os
 import numpy as np
-from src.functions import (
+from main.functions import (
     plot_loss,
     plot_solution,
     predict,
@@ -11,8 +11,8 @@ from src.functions import (
     relative_l2_error,
     train_autograd,)
 
-from src.models_pennylane import QuantumPINNPennyLane
-#from src.config import L, TFIN as Tfin, NU, HX, HT, N_COLLOCATION, SEED, EPOCHS, LR, PRE_NEURONS, PRE_DEPTH, POST_NEURONS, POST_DEPTH,SAVE_EXTRAS
+from main.models_pennylane import QuantumPINNPennyLane
+#from main.config import L, TFIN as Tfin, NU, HX, HT, N_COLLOCATION, SEED, EPOCHS, LR, PRE_NEURONS, PRE_DEPTH, POST_NEURONS, POST_DEPTH,SAVE_EXTRAS
 
 
 # ---- physical parameters ---------------------------------------------------

@@ -1,5 +1,5 @@
 import numpy as np
-from src.functions import (
+from main.functions import (
     plot_loss,
     plot_solution,
     predict,
@@ -9,8 +9,8 @@ from src.functions import (
     set_seed,
     solve_burgers_fd,
     train,)
-from src.models import ClassicalPINN2
-#from src.config import L, TFIN as Tfin, NU as nu, HX, HT, N_COLLOCATION, SEED, EPOCHS, LR, HIDDEN_NEURONS, HIDDEN_DEPTH,SAVE_EXTRAS
+from main.models import ClassicalPINN2
+#from main.config import L, TFIN as Tfin, NU as nu, HX, HT, N_COLLOCATION, SEED, EPOCHS, LR, HIDDEN_NEURONS, HIDDEN_DEPTH,SAVE_EXTRAS
 
 
 # ---- physical parameters ---------------------------------------------------

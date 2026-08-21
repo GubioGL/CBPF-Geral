@@ -13,9 +13,9 @@ from matplotlib import cm
 from matplotlib.colors import Normalize
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-from src.config import L, TFIN, NU
-from src.functions import solve_burgers_fd
-from src.models import load_model
+from main.config import L, TFIN, NU
+from main.functions import solve_burgers_fd
+from main.models import load_model
 from matplotlib.patches import Patch
 
 CAMINHO_DOS_DADOS = f"data/classical/T_0.1/amostragem_1.pt"

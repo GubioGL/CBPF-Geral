@@ -1,8 +1,8 @@
 import numpy as np
-from src.functions import (
+from main.functions import (
     sample_collocation_points,
     set_seed,)
-#from src.config import L, TFIN as Tfin, HT, N_COLLOCATION, SEED
+#from main.config import L, TFIN as Tfin, HT, N_COLLOCATION, SEED
 
 
 if __name__ == "__main__":
