@@ -11,7 +11,7 @@ N_COLLOCATION = 100
 SEED = 42
 
 # ---- training -------------------------------------------------------------
-EPOCHS, LR = 1000, 1.0e-2
+EPOCHS, LR = 10000, 1.0e-2
 
 
 # ---- architecture and training -------------------plot_solution-----------------------

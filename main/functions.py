@@ -62,6 +62,65 @@ def reference_at_time(t_eval, t_ref, x_ref, U_ref, x_query, L=1.0):
     u = np.interp(x_query.ravel(), xp, fp).reshape(-1, 1)
     return u, float(t_ref[idx])
 
+def reference_pde_residual(x_f, t_f, x_ref, t_ref, U_ref, L, nu, hx, ht):
+    """MSE of the PDE residual (u_t + u*u_x - nu*u_xx) evaluated on the FDM
+    reference solution itself, at the same collocation points (x_f, t_f) and
+    with the exact same finite-difference stencil (hx, ht) used by `train`'s
+    loss. U_ref is bilinearly interpolated (periodic in x, linear in t) onto
+    x_f, t_f and their +-hx/+-ht neighbors to build that residual.
+
+    Used as a target/stopping value for the PINN training loss: since U_ref
+    is itself only an approximate solution (its own FD scheme has nonzero
+    truncation error), this residual is never exactly 0. It is the precision
+    ceiling of the reference at this (hx, ht, N_COLLOCATION) -- once the
+    PINN's residual loss reaches it, the PINN matches the reference's own
+    discretization error at these points, and driving the loss lower is
+    chasing noise in the baseline rather than the true PDE solution.
+    """
+    x_f = np.asarray(x_f, dtype=np.float64).reshape(-1)
+    t_f = np.asarray(t_f, dtype=np.float64).reshape(-1)
+    x_ref = np.asarray(x_ref, dtype=np.float64)
+    t_ref = np.asarray(t_ref, dtype=np.float64)
+
+    dx = x_ref[1] - x_ref[0]
+    dt_ref = t_ref[1] - t_ref[0]
+    nx = len(x_ref)
+    nt = len(t_ref)
+
+    def u_ref_interp(x, t):
+        # Periodic bilinear interpolation of U_ref over its (x_ref, t_ref) grid.
+        x = np.mod(x, L)
+        t = np.clip(t, t_ref[0], t_ref[-1])
+
+        fx = x / dx
+        ix0 = np.floor(fx).astype(int) % nx
+        ix1 = (ix0 + 1) % nx
+        wx = fx - np.floor(fx)
+
+        ft = (t - t_ref[0]) / dt_ref
+        it0 = np.clip(np.floor(ft).astype(int), 0, nt - 2)
+        it1 = it0 + 1
+        wt = ft - it0
+
+        u00, u01 = U_ref[it0, ix0], U_ref[it0, ix1]
+        u10, u11 = U_ref[it1, ix0], U_ref[it1, ix1]
+        u0 = u00 * (1.0 - wx) + u01 * wx
+        u1 = u10 * (1.0 - wx) + u11 * wx
+        return u0 * (1.0 - wt) + u1 * wt
+
+    u_0 = u_ref_interp(x_f, t_f)
+    u_xp = u_ref_interp(x_f + hx, t_f)
+    u_xm = u_ref_interp(x_f - hx, t_f)
+    u_tp = u_ref_interp(x_f, t_f + ht)
+    u_tm = u_ref_interp(x_f, t_f - ht)
+
+    u_t = (u_tp - u_tm) / (2.0 * ht)
+    u_x = (u_xp - u_xm) / (2.0 * hx)
+    u_xx = (u_xp - 2.0 * u_0 + u_xm) / (hx**2)
+
+    residual = u_t + u_0 * u_x - nu * u_xx
+    return float(np.mean(residual**2))
+
 # ----------------------------------------------------------------------
 # Collocation points and physics-informed residual
 # ----------------------------------------------------------------------
@@ -128,7 +187,8 @@ def nonuniform_second_derivative(f_left, f_center, f_right, h_L, h_R):
 # ----------------------------------------------------------------------
 def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
           weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0,
-          lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9):
+          lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9,
+          target_loss=None):
     """Minimizes the Burgers residual loss with AdamW + ReduceLROnPlateau,
     followed by an L-BFGS refinement phase -- the same two-phase schedule as
     `train_autograd` (see its docstring for the rationale). The only
@@ -175,6 +235,16 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     is no point paying for more iterations once it happens. Set
     lbfgs_patience=None to disable early stopping and always run the full
     lbfgs_epochs.
+
+    target_loss: optional stopping target for the residual loss (e.g. from
+    `reference_pde_residual`, the reference FDM solution's own discretization
+    error at these collocation points). Training stops as soon as an
+    iterate's loss reaches `<= target_loss` -- in the AdamW phase this also
+    skips the L-BFGS phase entirely, since there is nothing left to refine
+    once the PINN already matches the reference's own precision. This is the
+    *first* stopping condition; whenever it is never reached, `epochs` (plus
+    `lbfgs_epochs`) is what stops training, exactly as when target_loss is
+    left at its default None.
     """
     L, nu, hx, ht = loss_kwargs["L"], loss_kwargs["nu"], loss_kwargs["hx"], loss_kwargs["ht"]
 
@@ -216,6 +286,7 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
 
     best_state = snapshot()
     best_loss = float("inf")
+    target_reached = False
 
     for _ in tqdm(range(epochs), desc="AdamW"):
         model.train()
@@ -243,10 +314,17 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
         hist["loss"].append(loss_value)
         hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
 
+        # First stopping condition: the residual loss has already reached the
+        # reference's own precision at these points -- no need for L-BFGS to
+        # refine further, or to burn through the rest of `epochs`.
+        if target_loss is not None and loss_value <= target_loss:
+            target_reached = True
+            break
+
     if lbfgs_epochs is None:
         lbfgs_epochs = epochs
 
-    if lbfgs_epochs > 0:
+    if lbfgs_epochs > 0 and not target_reached:
         # Hand L-BFGS the best basin Adam actually found, not whatever point
         # its last (possibly still-noisy) iterate landed on.
         model.load_state_dict(best_state)
@@ -303,8 +381,15 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
             hist["loss"].append(loss_value)
             hist["residual_rms"].append(last["residual_rms"])
 
+            if target_loss is not None and loss_value <= target_loss:
+                target_reached = True
+                break
+
             if lbfgs_patience is not None and stall_count >= lbfgs_patience:
                 break
+
+    hist["target_loss"] = target_loss
+    hist["target_reached"] = target_reached
 
     # Always return the lowest-loss point seen across both phases, never
     # just whichever iterate the last epoch happened to land on.
@@ -827,6 +912,185 @@ def plot_classical_errors_std(stats_by_distribution, Tfin, save_path,
     ax.set_title(f"Classical PINN error vs INTRA_NEURO (T = {Tfin})", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def find_classical_configs_by_n_collocation(t_dir, collocation_distribution=None, intra_neuron=None):
+    """Returns [(n_collocation, run_id, pt_path), ...] for every classical
+    Cmodel_NEURO* checkpoint in `t_dir` whose COLLOCATION_DISTRIBUTION
+    matches `collocation_distribution` ("uniform" or "random"; leave as None
+    to include every distribution found) and whose INTRA_NEURO architecture
+    matches `intra_neuron` (leave as None to include every width found),
+    reading N_COLLOCATION from each checkpoint's training_params. Mirrors
+    `find_classical_configs`, but keyed by N_COLLOCATION (the collocation
+    -sampling sweep in `run_classical.py`) instead of by INTRA_NEURO (the
+    width sweep)."""
+    entries = []
+    for config_path in glob.glob(os.path.join(t_dir, "Cmodel_*_NEURO*_config.json")):
+        pt_path = config_path[: -len("_config.json")] + ".pt"
+        if not os.path.exists(pt_path):
+            continue
+        with open(config_path) as f:
+            cfg = json.load(f)
+        training_params = cfg.get("training_params", {})
+        distribution = training_params.get("COLLOCATION_DISTRIBUTION")
+        if collocation_distribution is not None and distribution != collocation_distribution:
+            continue
+        if intra_neuron is not None and cfg["config"].get("intra_neuron") != intra_neuron:
+            continue
+        n_collocation = training_params.get("N_COLLOCATION")
+        if n_collocation is None:
+            continue
+        run_id = int(os.path.basename(pt_path)[: -len(".pt")].rsplit("_", 1)[1])
+        entries.append((n_collocation, run_id, pt_path))
+    return sorted(entries)
+
+
+def compute_classical_error_stats_vs_collocation(t_dir, model_cls, nu, collocation_distribution,
+                                                   intra_neuron=None):
+    """Loads every classical model in `t_dir` matching `collocation_distribution`
+    (and, when given, a fixed `intra_neuron` architecture width), evaluates
+    each against the FDM reference at t=Tfin, and returns per-N_COLLOCATION
+    mean/std/variance MSE and MAE across the run_id seeds. Returns
+    (n_collocation, mse_mean, mse_std, mse_var, mae_mean, mae_std, mae_var,
+    n_samples, Tfin), one point per N_COLLOCATION value actually found.
+    Companion to `plot_classical_error_vs_collocation`; mirrors
+    `compute_classical_error_stats_std`, but grouped by N_COLLOCATION
+    instead of by INTRA_NEURO."""
+    entries = find_classical_configs_by_n_collocation(
+        t_dir, collocation_distribution=collocation_distribution, intra_neuron=intra_neuron)
+    if not entries:
+        return [], [], [], [], [], [], [], [], None
+
+    first_model = model_cls.load(entries[0][2])
+    L, Tfin = first_model.L, first_model.Tfin
+
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+
+    errors_by_n = {}
+    for n_collocation, _run_id, pt_path in entries:
+        model = model_cls.load(pt_path)
+        u_pred = predict(model, x_plot, Tfin)
+        entry = errors_by_n.setdefault(n_collocation, {"mse": [], "mae": []})
+        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+
+    n_collocation_list = sorted(errors_by_n)
+    mse_mean = [float(np.mean(errors_by_n[n]["mse"])) for n in n_collocation_list]
+    mse_std = [float(np.std(errors_by_n[n]["mse"])) for n in n_collocation_list]
+    mse_var = [float(np.var(errors_by_n[n]["mse"])) for n in n_collocation_list]
+    mae_mean = [float(np.mean(errors_by_n[n]["mae"])) for n in n_collocation_list]
+    mae_std = [float(np.std(errors_by_n[n]["mae"])) for n in n_collocation_list]
+    mae_var = [float(np.var(errors_by_n[n]["mae"])) for n in n_collocation_list]
+    n_samples = [len(errors_by_n[n]["mse"]) for n in n_collocation_list]
+    return (n_collocation_list, mse_mean, mse_std, mse_var, mae_mean, mae_std, mae_var,
+            n_samples, Tfin)
+
+
+def plot_classical_error_vs_collocation(n_collocation, mse_mean, mse_var, Tfin, save_path,
+                                         color_mse="#2a78d6"):
+    """MSE (mean +/- variance across seeds) between the classical PINN and
+    the FDM reference, plotted against N_COLLOCATION. Points sit at equally
+    spaced positions on the x-axis regardless of the actual gap between
+    consecutive N_COLLOCATION values (e.g. 100 -> 250 -> 500) -- only the
+    tick label at each position shows the real value -- so the sampling
+    density along the sweep doesn't visually distort the curve. Companion
+    plot for `compute_classical_error_stats_vs_collocation`."""
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    positions = np.arange(len(n_collocation))
+    ax.errorbar(positions, mse_mean, yerr=mse_var, fmt="o-", color=color_mse,
+                linewidth=2.0, markersize=6, capsize=4, label="MSE (mean +/- variance)")
+    ax.set_xlabel("N_COLLOCATION", fontsize=14)
+    ax.set_ylabel("MSE", fontsize=14)
+    ax.set_yscale("log")
+    ax.set_xticks(positions)
+    ax.set_xticklabels([str(n) for n in n_collocation])
+    ax.set_title(f"Classical PINN: MSE vs N_COLLOCATION (T = {Tfin})", fontsize=13)
+    ax.grid(True, which="both", linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def compute_classical_stopping_stats_vs_collocation(t_dir, collocation_distribution, intra_neuron=None):
+    """Reads STOPPED_AT_STEP and TARGET_REACHED from every classical
+    checkpoint's training_params in `t_dir` (no model loading needed --
+    config json only), grouped by N_COLLOCATION. Returns (n_collocation,
+    steps_mean, steps_std, steps_var, target_reached_frac, n_samples, Tfin),
+    one point per N_COLLOCATION value found: how many AdamW+L-BFGS
+    iterations training actually ran before hitting `target_loss` (or the
+    EPOCHS+LBFGS_EPOCHS fallback), averaged over the run_id seeds, plus the
+    fraction of seeds that reached `target_loss` rather than exhausting the
+    epoch budget. Companion stat to `compute_classical_error_stats_vs_collocation`,
+    read from the same checkpoints but reporting training cost instead of
+    accuracy."""
+    steps_by_n = {}
+    Tfin = None
+    for config_path in glob.glob(os.path.join(t_dir, "Cmodel_*_NEURO*_config.json")):
+        with open(config_path) as f:
+            cfg = json.load(f)
+        training_params = cfg.get("training_params", {})
+        distribution = training_params.get("COLLOCATION_DISTRIBUTION")
+        if collocation_distribution is not None and distribution != collocation_distribution:
+            continue
+        if intra_neuron is not None and cfg["config"].get("intra_neuron") != intra_neuron:
+            continue
+        n_collocation = training_params.get("N_COLLOCATION")
+        stopped_at_step = training_params.get("STOPPED_AT_STEP")
+        if n_collocation is None or stopped_at_step is None:
+            continue
+        Tfin = cfg["config"].get("Tfin", Tfin)
+        entry = steps_by_n.setdefault(n_collocation, {"steps": [], "reached": []})
+        entry["steps"].append(stopped_at_step)
+        entry["reached"].append(bool(training_params.get("TARGET_REACHED")))
+
+    n_collocation_list = sorted(steps_by_n)
+    steps_mean = [float(np.mean(steps_by_n[n]["steps"])) for n in n_collocation_list]
+    steps_std = [float(np.std(steps_by_n[n]["steps"])) for n in n_collocation_list]
+    steps_var = [float(np.var(steps_by_n[n]["steps"])) for n in n_collocation_list]
+    target_reached_frac = [float(np.mean(steps_by_n[n]["reached"])) for n in n_collocation_list]
+    n_samples = [len(steps_by_n[n]["steps"]) for n in n_collocation_list]
+    return n_collocation_list, steps_mean, steps_std, steps_var, target_reached_frac, n_samples, Tfin
+
+
+def plot_classical_stopping_steps_vs_collocation(n_collocation, steps_mean, steps_var, Tfin, save_path,
+                                                   color_mean="#2a78d6", color_var="#e34948"):
+    """Number of training steps (AdamW + L-BFGS) until the stopping
+    criterion was hit, vs N_COLLOCATION -- mean on the left axis, variance
+    across the run_id seeds on the right axis (plotted separately, not as an
+    error bar: mean and variance of a step *count* live on very different
+    scales -- steps vs steps^2 -- so overlaying them as mean +/- variance
+    would put the whisker far outside the visible range). Points sit at
+    equally spaced x positions, same convention as
+    `plot_classical_error_vs_collocation`. Companion plot for
+    `compute_classical_stopping_stats_vs_collocation`."""
+    fig, ax1 = plt.subplots(figsize=(9, 4.5))
+    positions = np.arange(len(n_collocation))
+
+    line_mean = ax1.plot(positions, steps_mean, "o-", color=color_mean, linewidth=2.0,
+                          markersize=6, label="Média de passos")
+    ax1.set_xlabel("N_COLLOCATION", fontsize=14)
+    ax1.set_ylabel("Passos até a parada (média)", fontsize=14, color=color_mean)
+    ax1.tick_params(axis="y", labelcolor=color_mean)
+    ax1.set_xticks(positions)
+    ax1.set_xticklabels([str(n) for n in n_collocation])
+    ax1.grid(True, linestyle="--", alpha=0.6)
+
+    ax2 = ax1.twinx()
+    line_var = ax2.plot(positions, steps_var, "s--", color=color_var, linewidth=2.0,
+                         markersize=6, label="Variância de passos")
+    ax2.set_ylabel("Variância dos passos", fontsize=14, color=color_var)
+    ax2.tick_params(axis="y", labelcolor=color_var)
+
+    lines = line_mean + line_var
+    ax1.legend(lines, [l.get_label() for l in lines], loc="best")
+    #ax1.set_yscale("log")
+    #ax1.set_title(f"Classical PINN: passos até a parada vs N_COLLOCATION (T = {Tfin})", fontsize=13)
     fig.tight_layout()
     fig.savefig(save_path, dpi=150)
     plt.close(fig)
