@@ -18,7 +18,7 @@
     "N_COLLOCATION": 100,
     "SEED": 4,
     "COLLOCATION_DISTRIBUTION": "random",
-    "EPOCHS": 20000,
+    "EPOCHS": 30000,
     "LR": 0.001,
     "LBFGS_EPOCHS": 1000,
     "LBFGS_LR": 0.5,
@@ -26,6 +26,6 @@
     "HIDDEN_DEPTH": 1,
     "TARGET_LOSS": 0.004926438175170299,
     "TARGET_REACHED": true,
-    "STOPPED_AT_STEP": 17109
+    "STOPPED_AT_STEP": 14323
   }
 }

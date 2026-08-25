@@ -13,16 +13,15 @@ from main.functions import (
 from main.models import ClassicalPINN2
 #from main.config import L, TFIN as Tfin, NU as nu, HX, HT, N_COLLOCATION, SEED, EPOCHS, LR, HIDDEN_NEURONS, HIDDEN_DEPTH,SAVE_EXTRAS
 
-
 # ---- physical parameters ---------------------------------------------------
 L,  NU = 1.0 , 0.01
 # ---- discretization (used in the PDE residual loss and collocation sampling)
 HX, HT = L / 512, 1.0e-3
 # ---- collocation sampling --------------------------------------------------
-#N_COLLOCATION = 100
-COLLOCATION_DISTRIBUTION = "uniform"  # "uniform" or "random"
+N_COLLOCATION = 100
+COLLOCATION_DISTRIBUTION = "random"  # "uniform" or "random"
 # ---- training -------------------------------------------------------------
-EPOCHS, LR = 20000, 1.0e-3
+EPOCHS, LR = 30000, 1.0e-3
 LBFGS_EPOCHS, LBFGS_LR = 1000, .5
 # ---- architecture and training -------------------plot_solution-----------------------
 HIDDEN_NEURONS, HIDDEN_DEPTH = 10, 1
@@ -31,15 +30,14 @@ POST_NEURONS, POST_DEPTH =  HIDDEN_NEURONS,HIDDEN_DEPTH
 
 INTRA_DEPTH = 1
 INTRA_NEUROS = HIDDEN_NEURONS
-INTRA_NEURO = 10
+#INTRA_NEURO = 10
 
 SAVE_EXTRAS = True  # set True to also save the model checkpoint and loss plot
 
 if __name__ == "__main__":
-    #for INTRA_NEURO in [1,2,3,4,5,6,7,8,9,10]:
-    for N_COLLOCATION in [10,20,30,40,50,60,70,80,90,100, 250, 500]:
+    for INTRA_NEURO in [1,2,3,4,5,6,7,8,9,10]:
         for Tfin in [0.1,1]:
-            for run_id in range(0,5):       
+            for run_id in range(0,10):       
                 SEED = run_id
                 set_seed(SEED)
 
