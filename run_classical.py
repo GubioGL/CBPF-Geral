@@ -18,10 +18,10 @@ L,  NU = 1.0 , 0.01
 # ---- discretization (used in the PDE residual loss and collocation sampling)
 HX, HT = L / 512, 1.0e-3
 # ---- collocation sampling --------------------------------------------------
-N_COLLOCATION = 100
+#N_COLLOCATION = 100
 COLLOCATION_DISTRIBUTION = "random"  # "uniform" or "random"
 # ---- training -------------------------------------------------------------
-EPOCHS, LR = 30000, 1.0e-3
+EPOCHS, LR = 20000, 1.0e-3
 LBFGS_EPOCHS, LBFGS_LR = 1000, .5
 # ---- architecture and training -------------------plot_solution-----------------------
 HIDDEN_NEURONS, HIDDEN_DEPTH = 10, 1
@@ -30,14 +30,15 @@ POST_NEURONS, POST_DEPTH =  HIDDEN_NEURONS,HIDDEN_DEPTH
 
 INTRA_DEPTH = 1
 INTRA_NEUROS = HIDDEN_NEURONS
-#INTRA_NEURO = 10
+INTRA_NEURO = 3
 
 SAVE_EXTRAS = True  # set True to also save the model checkpoint and loss plot
 
 if __name__ == "__main__":
-    for INTRA_NEURO in [1,2,3,4,5,6,7,8,9,10]:
+    #for INTRA_NEURO in [1,2,3,4,5,6,7,8,9,10]:
+    for N_COLLOCATION in [10,20,30,40, 50,60,70,80,90,100, 250,500]:
         for Tfin in [0.1,1]:
-            for run_id in range(0,10):       
+            for run_id in range(0,4):       
                 SEED = run_id
                 set_seed(SEED)
 
