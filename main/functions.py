@@ -184,12 +184,246 @@ def nonuniform_second_derivative(f_left, f_center, f_right, h_L, h_R):
     return (2.0 / (h_L + h_R)) * ((f_right - f_center) / h_R - (f_center - f_left) / h_L)
 
 # ----------------------------------------------------------------------
+# Exact fixed-CNOT feature maps through binary algebra
+# ----------------------------------------------------------------------
+# These are the five CNOT topologies shared by the simulated QuantumPINN and
+# its exact cosine-product counterpart. The alias "inverse_linear_cnot" is
+# accepted by `fixed_cnot_layer_matrix` for compatibility with older scripts.
+EXACT_CNOT_NETWORKS = (
+    "linear_cnot",
+    "reverse_linear_cnot",
+    "ring_cnot",
+    "brickwork_cnot",
+    "symmetric_cnot_ladder",
+)
+
+
+def _validate_positive_integer(value, name):
+    """Return `value` as int after rejecting booleans and non-positive values."""
+    if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+        raise TypeError(f"{name} must be an integer.")
+    value = int(value)
+    if value < 1:
+        raise ValueError(f"{name} must be positive.")
+    return value
+
+
+def gf2_matmul(left, right):
+    """Multiply two compatible matrices over the binary field GF(2)."""
+    left = np.asarray(left, dtype=np.int64)
+    right = np.asarray(right, dtype=np.int64)
+
+    if left.ndim != 2 or right.ndim != 2:
+        raise ValueError("GF(2) operands must be two-dimensional matrices.")
+    if left.shape[1] != right.shape[0]:
+        raise ValueError(
+            f"Incompatible matrix shapes for multiplication: {left.shape} and {right.shape}."
+        )
+
+    return ((left @ right) % 2).astype(np.uint8)
+
+
+def gf2_matrix_power(matrix, exponent):
+    """Compute a non-negative integer matrix power over GF(2)."""
+    matrix = np.asarray(matrix, dtype=np.int64) % 2
+
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("matrix must be square.")
+    if isinstance(exponent, bool) or not isinstance(exponent, (int, np.integer)):
+        raise TypeError("exponent must be an integer.")
+    if exponent < 0:
+        raise ValueError("exponent must be non-negative.")
+
+    result = np.eye(matrix.shape[0], dtype=np.uint8)
+    base = matrix.astype(np.uint8)
+    power = int(exponent)
+
+    while power > 0:
+        if power & 1:
+            result = gf2_matmul(result, base)
+        base = gf2_matmul(base, base)
+        power >>= 1
+
+    return result
+
+
+def cnot_gate_matrix(n_qubits, control, target):
+    """Return the binary map of one CNOT(control, target), using zero-based labels."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+
+    for value, name in ((control, "control"), (target, "target")):
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+            raise TypeError(f"{name} must be an integer.")
+    control, target = int(control), int(target)
+
+    if not (0 <= control < n_qubits and 0 <= target < n_qubits):
+        raise ValueError("control and target must be valid zero-based qubit indices.")
+    if control == target:
+        raise ValueError("A CNOT must have different control and target qubits.")
+
+    matrix = np.eye(n_qubits, dtype=np.uint8)
+    matrix[target, control] = 1
+    return matrix
+
+
+def compose_cnot_gates(n_qubits, gates):
+    """Compose CNOTs in circuit order and return b_out = M b_in over GF(2)."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+    total = np.eye(n_qubits, dtype=np.uint8)
+
+    for gate_index, gate in enumerate(gates):
+        try:
+            control, target = gate
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Gate {gate_index} must be a (control, target) pair."
+            ) from error
+        # Later circuit gates multiply the accumulated transformation from the left.
+        total = gf2_matmul(cnot_gate_matrix(n_qubits, control, target), total)
+
+    return total
+
+
+def linear_cnot_matrix(n_qubits):
+    """Forward nearest-neighbor ladder: 0->1->...->n-1."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+    return compose_cnot_gates(
+        n_qubits,
+        [(control, control + 1) for control in range(n_qubits - 1)],
+    )
+
+
+def reverse_linear_cnot_matrix(n_qubits):
+    """Reverse nearest-neighbor ladder: n-1->...->1->0."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+    return compose_cnot_gates(
+        n_qubits,
+        [(control, control - 1) for control in range(n_qubits - 1, 0, -1)],
+    )
+
+
+def ring_cnot_matrix(n_qubits):
+    """Forward ladder followed by n-1->0 when at least three qubits exist."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+    gates = [(control, control + 1) for control in range(n_qubits - 1)]
+    if n_qubits > 2:
+        gates.append((n_qubits - 1, 0))
+    return compose_cnot_gates(n_qubits, gates)
+
+
+def brickwork_cnot_matrix(n_qubits):
+    """Even-bond CNOT sublayer followed by the shifted odd-bond sublayer."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+    first = [(control, control + 1) for control in range(0, n_qubits - 1, 2)]
+    second = [(control, control + 1) for control in range(1, n_qubits - 1, 2)]
+    return compose_cnot_gates(n_qubits, first + second)
+
+
+def symmetric_cnot_ladder_matrix(n_qubits):
+    """Forward CNOT ladder followed by the reverse CNOT ladder."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+    return gf2_matmul(
+        reverse_linear_cnot_matrix(n_qubits),
+        linear_cnot_matrix(n_qubits),
+    )
+
+
+def fixed_cnot_layer_matrix(n_qubits, network_kind):
+    """Build the binary matrix of one supported fixed CNOT layer."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+    network_kind = str(network_kind).lower()
+    if network_kind == "inverse_linear_cnot":
+        network_kind = "reverse_linear_cnot"
+
+    builders = {
+        "linear_cnot": linear_cnot_matrix,
+        "reverse_linear_cnot": reverse_linear_cnot_matrix,
+        "ring_cnot": ring_cnot_matrix,
+        "brickwork_cnot": brickwork_cnot_matrix,
+        "symmetric_cnot_ladder": symmetric_cnot_ladder_matrix,
+    }
+    if network_kind not in builders:
+        options = ", ".join(EXACT_CNOT_NETWORKS)
+        raise ValueError(
+            f"Unknown CNOT network '{network_kind}'. Available options: {options}."
+        )
+    return builders[network_kind](n_qubits)
+
+
+def repeated_cnot_network_matrix(n_qubits, network_kind, n_layers=1):
+    """Return the complete binary map for repeated identical CNOT layers."""
+    n_qubits = _validate_positive_integer(n_qubits, "n_qubits")
+    if isinstance(n_layers, bool) or not isinstance(n_layers, (int, np.integer)):
+        raise TypeError("n_layers must be an integer.")
+    if n_layers < 0:
+        raise ValueError("n_layers must be non-negative.")
+
+    one_layer = fixed_cnot_layer_matrix(n_qubits, network_kind)
+    return gf2_matrix_power(one_layer, int(n_layers))
+
+
+def cnot_cosine_expectations(angle_values, binary_matrix):
+    r"""
+    Evaluate every <Z_i> exactly for an Rx/Ry product encoding followed by CNOTs.
+
+    If b_out = M b_in over GF(2), row i of M determines
+
+        <Z_i> = product_j cos(angle_j)**M[i,j].
+
+    `angle_values` must have shape (batch_size, n_qubits). The implementation
+    uses only differentiable Torch operations and therefore needs neither
+    Qiskit, a statevector simulation, shots, nor parameter-shift evaluations.
+    """
+    if not isinstance(angle_values, tc.Tensor):
+        raise TypeError("angle_values must be a torch.Tensor.")
+    if angle_values.ndim != 2:
+        raise ValueError("angle_values must have shape (batch_size, n_qubits).")
+
+    raw_matrix = tc.as_tensor(binary_matrix, device=angle_values.device)
+    if raw_matrix.ndim != 2 or raw_matrix.shape[0] != raw_matrix.shape[1]:
+        raise ValueError("binary_matrix must be square.")
+    if raw_matrix.dtype != tc.bool and not bool(
+        tc.all((raw_matrix == 0) | (raw_matrix == 1)).item()
+    ):
+        raise ValueError("binary_matrix must contain only zeros and ones.")
+    if raw_matrix.shape[1] != angle_values.shape[1]:
+        raise ValueError(
+            f"Circuit matrix uses {raw_matrix.shape[1]} qubits, but angle_values "
+            f"contains {angle_values.shape[1]} angles per sample."
+        )
+    matrix = raw_matrix.to(dtype=tc.bool)
+
+    cosines = tc.cos(angle_values)
+    selected = tc.where(
+        matrix.unsqueeze(0),
+        cosines.unsqueeze(1),
+        tc.ones((), dtype=angle_values.dtype, device=angle_values.device),
+    )
+    return tc.prod(selected, dim=2)
+
+
+def cnot_cosine_product_expressions(binary_matrix, angle_symbol="theta"):
+    """Return readable product formulas corresponding to the matrix rows."""
+    matrix = np.asarray(binary_matrix)
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("binary_matrix must be square.")
+    if not np.all((matrix == 0) | (matrix == 1)):
+        raise ValueError("binary_matrix must contain only zeros and ones.")
+
+    expressions = []
+    for row in matrix.astype(bool):
+        indices = np.flatnonzero(row)
+        factors = [f"cos({angle_symbol}_{index + 1})" for index in indices]
+        expressions.append(" * ".join(factors) if factors else "1")
+    return expressions
+
+# ----------------------------------------------------------------------
 # Training and evaluation
 # ----------------------------------------------------------------------
 def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
           weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0,
           lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9,
-          target_loss=None):
+          target_loss=None, validation_points=None):
     """Minimizes the Burgers residual loss with AdamW + ReduceLROnPlateau,
     followed by an L-BFGS refinement phase -- the same two-phase schedule as
     `train_autograd` (see its docstring for the rationale). The only
@@ -237,15 +471,19 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     lbfgs_patience=None to disable early stopping and always run the full
     lbfgs_epochs.
 
-    target_loss: optional stopping target for the residual loss (e.g. from
-    `reference_pde_residual`, the reference FDM solution's own discretization
-    error at these collocation points). Training stops as soon as an
-    iterate's loss reaches `<= target_loss` -- in the AdamW phase this also
-    skips the L-BFGS phase entirely, since there is nothing left to refine
-    once the PINN already matches the reference's own precision. This is the
-    *first* stopping condition; whenever it is never reached, `epochs` (plus
-    `lbfgs_epochs`) is what stops training, exactly as when target_loss is
-    left at its default None.
+    target_loss: optional stopping target for the monitored residual loss
+    (e.g. from `reference_pde_residual`, the reference FDM solution's own
+    discretization error). Training stops as soon as an accepted iterate's
+    monitored loss reaches `<= target_loss`. Whenever the target is never
+    reached, `epochs` plus `lbfgs_epochs` remains the fallback limit.
+
+    validation_points: optional fixed tuple `(x_validation, t_validation)`.
+    When supplied, every stopping decision, scheduler update, best-state
+    comparison, and returned `hist["loss"]` value is evaluated on this same
+    fixed set. The optimizer may still receive newly sampled training points
+    through `resample_fn`. Monitoring is performed after each accepted
+    optimizer step, so the saved snapshot and its reported loss correspond to
+    the same parameter state.
     """
     L, nu, hx, ht = loss_kwargs["L"], loss_kwargs["nu"], loss_kwargs["hx"], loss_kwargs["ht"]
 
@@ -255,6 +493,33 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
         return x_p, x_m, t_f + ht, t_f - ht
 
     x_p, x_m, t_p, t_m = stencil_points(x_f, t_f)
+
+    validation_stencil = None
+    if validation_points is not None:
+        if not isinstance(validation_points, (tuple, list)) or len(validation_points) != 2:
+            raise ValueError(
+                "validation_points must be a tuple (x_validation, t_validation)."
+            )
+        x_validation, t_validation = validation_points
+        if x_validation.shape != t_validation.shape:
+            raise ValueError(
+                "x_validation and t_validation must have the same shape."
+            )
+        if x_validation.ndim != 2 or x_validation.shape[1] != 1:
+            raise ValueError(
+                "Fixed validation coordinates must have shape (N, 1)."
+            )
+        x_validation_p, x_validation_m, t_validation_p, t_validation_m = (
+            stencil_points(x_validation, t_validation)
+        )
+        validation_stencil = (
+            x_validation,
+            x_validation_p,
+            x_validation_m,
+            t_validation,
+            t_validation_p,
+            t_validation_m,
+        )
 
     params = [p for p in model.parameters() if p.requires_grad]
     opt = tc.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
@@ -267,7 +532,14 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
         opt, mode="min", factor=0.5, patience=max(10, epochs // 10), min_lr=1.0e-4
     )
 
-    hist = {"loss": [], "residual_rms": []}
+    hist = {
+        "loss": [],
+        "residual_rms": [],
+        "optimizer_loss": [],
+        "monitor_source": (
+            "fixed_validation" if validation_stencil is not None else "training_batch"
+        ),
+    }
 
     def compute_residual(x_f, x_p, x_m, t_f, t_p, t_m):
         u_0 = model(tc.cat([x_f, t_f], dim=1))
@@ -281,6 +553,23 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
         u_xx = (u_xp - 2.0 * u_0 + u_xm) / (hx**2)
 
         return u_t + u_0 * u_x - nu * u_xx
+
+    def evaluate_accepted_state(current_training_stencil):
+        """Evaluate the state currently stored in the model without gradients."""
+        monitor_stencil = (
+            validation_stencil
+            if validation_stencil is not None
+            else current_training_stencil
+        )
+        was_training = model.training
+        model.eval()
+        with tc.no_grad():
+            monitor_residual = compute_residual(*monitor_stencil)
+            monitor_loss = float(tc.mean(monitor_residual**2))
+            monitor_rms = float(tc.sqrt(tc.mean(monitor_residual**2)))
+        if was_training:
+            model.train()
+        return monitor_loss, monitor_rms
 
     def snapshot():
         return {k: v.detach().clone() for k, v in model.state_dict().items()}
@@ -305,15 +594,18 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
             tc.nn.utils.clip_grad_norm_(params, grad_clip)
         opt.step()
 
-        loss_value = float(loss.detach())
+        optimizer_loss_value = float(loss.detach())
+        current_training_stencil = (x_f, x_p, x_m, t_f, t_p, t_m)
+        loss_value, residual_rms = evaluate_accepted_state(current_training_stencil)
         scheduler.step(loss_value)
 
-        if loss_value < best_loss:
+        if math.isfinite(loss_value) and loss_value < best_loss:
             best_loss = loss_value
             best_state = snapshot()
 
         hist["loss"].append(loss_value)
-        hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
+        hist["residual_rms"].append(residual_rms)
+        hist["optimizer_loss"].append(optimizer_loss_value)
 
         # First stopping condition: the residual loss has already reached the
         # reference's own precision at these points -- no need for L-BFGS to
@@ -366,21 +658,29 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
                 x_p, x_m, t_p, t_m = stencil_points(x_f, t_f)
 
             lbfgs_opt.step(closure)
-            # Only the point the line search actually accepted this step is
-            # logged -- `closure` is called several times per step to test
-            # candidate step sizes, and logging every trial would make
-            # rejected, never-applied candidates show up as fake spikes.
-            loss_value = last["loss"]
 
-            if math.isfinite(loss_value) and loss_value < best_loss - lbfgs_tol:
+            # The final closure evaluation is not guaranteed to be the state
+            # accepted by the line search. Re-evaluate the retained parameters.
+            current_training_stencil = (x_f, x_p, x_m, t_f, t_p, t_m)
+            loss_value, residual_rms = evaluate_accepted_state(current_training_stencil)
+            optimizer_loss_value = last.get("loss", float("nan"))
+
+            previous_best_loss = best_loss
+            if math.isfinite(loss_value) and loss_value < best_loss:
                 best_loss = loss_value
                 best_state = snapshot()
+
+            if (
+                math.isfinite(loss_value)
+                and loss_value < previous_best_loss - lbfgs_tol
+            ):
                 stall_count = 0
             else:
                 stall_count += 1
 
             hist["loss"].append(loss_value)
-            hist["residual_rms"].append(last["residual_rms"])
+            hist["residual_rms"].append(residual_rms)
+            hist["optimizer_loss"].append(optimizer_loss_value)
 
             if target_loss is not None and loss_value <= target_loss:
                 target_reached = True
@@ -391,6 +691,7 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
 
     hist["target_loss"] = target_loss
     hist["target_reached"] = target_reached
+    hist["best_loss"] = best_loss
 
     # Always return the lowest-loss point seen across both phases, never
     # just whichever iterate the last epoch happened to land on.

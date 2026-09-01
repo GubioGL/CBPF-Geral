@@ -6,7 +6,12 @@ import numpy as np
 import torch as tc
 import torch.nn as nn
 
-from .functions import initial_condition
+from .functions import (
+    cnot_cosine_expectations,
+    cnot_cosine_product_expressions,
+    initial_condition,
+    repeated_cnot_network_matrix,
+)
 
 try:
     from qiskit.primitives import StatevectorEstimator
@@ -155,6 +160,175 @@ class ClassicalPINN2(PINNBase):
     def Hard_constrain(self, x, tau, output_nn):
         """Hard-imposes the initial condition at tau=0 by construction."""
         return initial_condition(x, L=self.L) + tau * output_nn
+
+
+class QuantumExactPINN(PINNBase):
+    r"""
+    Exact cosine-product HPINN with no Qiskit simulation.
+
+    Its architecture is the direct three-block counterpart of `ClassicalPINN2`:
+
+        periodic inputs -> pre network -> fixed CNOT feature map -> post network.
+
+    The classical internal MLP is replaced by a parameter-free circuit composed
+    of an Rx/Ry product encoding and fixed CNOT layers. For the Z expectations,
+    binary circuit algebra gives the exact differentiable expression
+
+        <Z_i> = product_j cos(theta_j)**M[i,j],
+
+    where M is the complete repeated-CNOT matrix over GF(2). Consequently this
+    model is algebraically identical to the corresponding noiseless quantum
+    circuit for these observables, but requires neither statevectors nor shots.
+
+    For an architecture-matched comparison with `ClassicalPINN2`, use
+    `intra_neuron=n_qubits` and the same pre/post widths and depths. This matches
+    the interfaces and outer networks; it does not match the total parameter
+    count because the fixed quantum block has no trainable parameters.
+    """
+
+    def __init__(
+        self,
+        n_qubits=5,
+        pre_neurons=10,
+        pre_depth=1,
+        post_neurons=10,
+        post_depth=1,
+        fixed_layer="linear_cnot",
+        fixed_layer_repeats=1,
+        input_rotation_axis="rx",
+        angle_scale=None,
+        L=1.0,
+        Tfin=0.1,
+    ):
+        super().__init__()
+
+        integer_options = {
+            "n_qubits": n_qubits,
+            "pre_neurons": pre_neurons,
+            "pre_depth": pre_depth,
+            "post_neurons": post_neurons,
+            "post_depth": post_depth,
+        }
+        for name, value in integer_options.items():
+            if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+                raise TypeError(f"{name} must be an integer.")
+            if value < 1:
+                raise ValueError(f"{name} must be positive.")
+        if (
+            isinstance(fixed_layer_repeats, bool)
+            or not isinstance(fixed_layer_repeats, (int, np.integer))
+        ):
+            raise TypeError("fixed_layer_repeats must be an integer.")
+        if fixed_layer_repeats < 0:
+            raise ValueError("fixed_layer_repeats must be non-negative.")
+        if angle_scale is not None:
+            if isinstance(angle_scale, bool) or not isinstance(
+                angle_scale, (int, float, np.integer, np.floating)
+            ):
+                raise TypeError("angle_scale must be a real number or None.")
+            if not math.isfinite(float(angle_scale)) or float(angle_scale) <= 0.0:
+                raise ValueError("angle_scale must be finite and positive.")
+
+        input_rotation_axis = str(input_rotation_axis).lower()
+        if input_rotation_axis not in ("rx", "ry"):
+            raise ValueError(
+                "The exact cosine-product model supports only 'rx' and 'ry' "
+                "input rotations. Rz acting on |0> does not produce this feature map."
+            )
+
+        self.n_qubits = int(n_qubits)
+        self.fixed_layer = str(fixed_layer).lower()
+        if self.fixed_layer == "inverse_linear_cnot":
+            self.fixed_layer = "reverse_linear_cnot"
+        self.fixed_layer_repeats = int(fixed_layer_repeats)
+        self.input_rotation_axis = input_rotation_axis
+        self.angle_scale = None if angle_scale is None else float(angle_scale)
+        self.L, self.Tfin = float(L), float(Tfin)
+        if self.L <= 0.0 or self.Tfin <= 0.0:
+            raise ValueError("L and Tfin must be positive.")
+
+        self.config = dict(
+            n_qubits=self.n_qubits,
+            pre_neurons=int(pre_neurons),
+            pre_depth=int(pre_depth),
+            post_neurons=int(post_neurons),
+            post_depth=int(post_depth),
+            fixed_layer=self.fixed_layer,
+            fixed_layer_repeats=self.fixed_layer_repeats,
+            input_rotation_axis=self.input_rotation_axis,
+            angle_scale=self.angle_scale,
+            L=self.L,
+            Tfin=self.Tfin,
+        )
+
+        # Same pre-network layout as ClassicalPINN2 with intra_neuron=n_qubits.
+        pre_layers = [nn.Linear(3, pre_neurons), nn.Tanh()]
+        for _ in range(pre_depth - 1):
+            pre_layers += [nn.Linear(pre_neurons, pre_neurons), nn.Tanh()]
+        pre_layers += [nn.Linear(pre_neurons, self.n_qubits)]
+        self.pre = nn.Sequential(*pre_layers)
+
+        complete_matrix = repeated_cnot_network_matrix(
+            n_qubits=self.n_qubits,
+            network_kind=self.fixed_layer,
+            n_layers=self.fixed_layer_repeats,
+        )
+        # A persistent buffer follows the model across devices and checkpoints,
+        # but is not a trainable parameter.
+        self.register_buffer(
+            "cnot_matrix",
+            tc.as_tensor(complete_matrix, dtype=tc.bool),
+            persistent=True,
+        )
+
+        # Same post-network layout as ClassicalPINN2 with intra_neuron=n_qubits.
+        post_layers = [nn.Linear(self.n_qubits, post_neurons), nn.Tanh()]
+        for _ in range(post_depth - 1):
+            post_layers += [nn.Linear(post_neurons, post_neurons), nn.Tanh()]
+        post_layers += [nn.Linear(post_neurons, 1)]
+        self.post = nn.Sequential(*post_layers)
+
+    def forward(self, xt):
+        parameter = self.pre[0].weight
+        xt = xt.to(dtype=parameter.dtype, device=parameter.device)
+        input_features, x = self.Input_angular(xt)
+
+        raw_angles = self.pre(input_features)
+        if self.angle_scale is None:
+            # Default used by the original exact cosine-product HPINN.
+            angles = raw_angles
+        else:
+            # This is the same bounded-angle convention used by QuantumPINN.
+            angles = self.angle_scale * tc.tanh(raw_angles)
+
+        quantum_features = cnot_cosine_expectations(angles, self.cnot_matrix)
+        output = self.post(quantum_features)
+        return self.Hard_constrain(x, input_features[:, 2:3], output)
+
+    def Input_angular(self, xt):
+        """Map (x,t) to exact L-periodic spatial features and normalized time."""
+        x, tt = xt[:, 0:1], xt[:, 1:2]
+        input_features = tc.cat(
+            [
+                tc.sin(2.0 * math.pi * x / self.L),
+                tc.cos(2.0 * math.pi * x / self.L),
+                tt / self.Tfin,
+            ],
+            dim=1,
+        )
+        return input_features, x
+
+    def Hard_constrain(self, x, tau, output_nn):
+        """Hard-impose u(x,0)=u0(x), exactly as in the classical controls."""
+        return initial_condition(x, L=self.L) + tau * output_nn
+
+    def cosine_expressions(self, angle_symbol="theta"):
+        """Return the exact formula associated with every output channel."""
+        return cnot_cosine_product_expressions(
+            self.cnot_matrix.detach().cpu().numpy().astype(np.uint8),
+            angle_symbol=angle_symbol,
+        )
+
 
 # ----------------------------------------------------------------------
 # Quantum-specific circuit builders (only used by QuantumPINN, kept local
@@ -333,7 +507,12 @@ class QuantumPINN(PINNBase):
 # Generic checkpoint loading (use when the caller doesn't already know
 # which PINN subclass produced the checkpoint).
 # ----------------------------------------------------------------------
-_MODEL_REGISTRY = {"ClassicalPINN": ClassicalPINN2, "QuantumPINN": QuantumPINN}
+_MODEL_REGISTRY = {
+    "ClassicalPINN": ClassicalPINN2,
+    "ClassicalPINN2": ClassicalPINN2,
+    "QuantumExactPINN": QuantumExactPINN,
+    "QuantumPINN": QuantumPINN,
+}
 
 def load_model(path, map_location="cpu"):
     """Loads a checkpoint saved with `PINNBase.save`, picking the right
