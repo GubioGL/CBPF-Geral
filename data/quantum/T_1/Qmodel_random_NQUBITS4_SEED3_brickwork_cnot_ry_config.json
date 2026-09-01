@@ -1,0 +1,35 @@
+{
+  "class_name": "QuantumPINNPennyLane",
+  "config": {
+    "n_qubits": 4,
+    "pre_neurons": 10,
+    "pre_depth": 1,
+    "post_neurons": 10,
+    "post_depth": 1,
+    "angle_scale": 3.141592653589793,
+    "fixed_layer": "brickwork_cnot",
+    "fixed_layer_repeats": 1,
+    "input_rotation_axis": "ry",
+    "seed": 3,
+    "L": 1.0,
+    "Tfin": 1,
+    "estrutura": 1
+  },
+  "training_params": {
+    "NU": 0.01,
+    "HX": 0.001953125,
+    "HT": 0.001,
+    "N_COLLOCATION": 100,
+    "SEED": 3,
+    "COLLOCATION_DISTRIBUTION": "random",
+    "EPOCHS": 20000,
+    "LR": 0.001,
+    "LBFGS_EPOCHS": 1000,
+    "LBFGS_LR": 0.5,
+    "HIDDEN_NEURONS": 10,
+    "HIDDEN_DEPTH": 1,
+    "TARGET_LOSS": 0.00026267706324523203,
+    "TARGET_REACHED": false,
+    "STOPPED_AT_STEP": 20144
+  }
+}

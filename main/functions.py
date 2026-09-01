@@ -1,3 +1,4 @@
+import csv
 import glob
 import json
 import math
@@ -398,7 +399,8 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
 
 def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
                     weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0,
-                    lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9):
+                    lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9,
+                    target_loss=None):
     """Same Burgers-residual training as `train`, but u_t, u_x, u_xx come from
     a single forward pass differentiated with autograd (torch.autograd.grad,
     create_graph=True) instead of finite differences on shifted collocation
@@ -449,6 +451,16 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     lbfgs_patience=None to disable early stopping and always run the full
     lbfgs_epochs.
 
+    target_loss: optional stopping target for the residual loss (e.g. from
+    `reference_pde_residual`, the reference FDM solution's own discretization
+    error at these collocation points). Training stops as soon as an
+    iterate's loss reaches `<= target_loss` -- in the AdamW phase this also
+    skips the L-BFGS phase entirely, since there is nothing left to refine
+    once the PINN already matches the reference's own precision. This is the
+    *first* stopping condition; whenever it is never reached, `epochs` (plus
+    `lbfgs_epochs`) is what stops training, exactly as when target_loss is
+    left at its default None.
+
     The lowest-loss parameter snapshot seen across *both* phases is what
     gets loaded into `model` before returning -- not simply whichever
     iterate training happened to end on. This is what makes L-BFGS strictly
@@ -488,6 +500,7 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
 
     best_state = snapshot()
     best_loss = float("inf")
+    target_reached = False
 
     for _ in tqdm(range(epochs), desc="Adam"):
         model.train()
@@ -516,10 +529,17 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
         hist["loss"].append(loss_value)
         hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
 
+        # First stopping condition: the residual loss has already reached the
+        # reference's own precision at these points -- no need for L-BFGS to
+        # refine further, or to burn through the rest of `epochs`.
+        if target_loss is not None and loss_value <= target_loss:
+            target_reached = True
+            break
+
     if lbfgs_epochs is None:
         lbfgs_epochs = epochs
 
-    if lbfgs_epochs > 0:
+    if lbfgs_epochs > 0 and not target_reached:
         # Hand L-BFGS the best basin Adam actually found, not whatever point
         # its last (possibly still-noisy) iterate landed on.
         model.load_state_dict(best_state)
@@ -577,8 +597,15 @@ def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
             hist["loss"].append(loss_value)
             hist["residual_rms"].append(last["residual_rms"])
 
+            if target_loss is not None and loss_value <= target_loss:
+                target_reached = True
+                break
+
             if lbfgs_patience is not None and stall_count >= lbfgs_patience:
                 break
+
+    hist["target_loss"] = target_loss
+    hist["target_reached"] = target_reached
 
     # Always return the lowest-loss point seen across both phases, never
     # just whichever iterate the last epoch happened to land on.
@@ -619,6 +646,22 @@ def asymmetric_yerr(mean, vmin, vmax):
     vmin = np.asarray(vmin, dtype=float)
     vmax = np.asarray(vmax, dtype=float)
     return np.vstack([mean - vmin, vmax - mean])
+
+
+def std_yerr(mean, std):
+    """Builds the (2, N) `yerr` array matplotlib's `errorbar()` expects for
+    symmetric +/-std whiskers, clipping the lower whisker so it never reaches
+    down to or below zero. Plain mean-std can go <= 0 when std >= mean (a
+    handful of seeds and a skewed, positive-only metric like MSE/MAE makes
+    this common), which a log-scale y-axis can't render -- matplotlib would
+    silently clip that whisker to the bottom of the plot instead of stopping
+    below the mean. Clamping the lower half to just under `mean` keeps
+    mean-lower a valid positive value while still showing the full std on
+    the upper half."""
+    mean = np.asarray(mean, dtype=float)
+    std = np.asarray(std, dtype=float)
+    lower = np.minimum(std, mean * (1 - 1e-9))
+    return np.vstack([lower, std])
 
 
 def plot_loss(histories, title="Training loss", save_path=None, show_cond=False):
@@ -693,13 +736,17 @@ def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="", save
 # caller rather than imported here, since models.py/models_pennylane.py
 # both import from this module -- importing them back would be circular.
 # ----------------------------------------------------------------------
-def find_classical_configs(t_dir, collocation_distribution=None):
+def find_classical_configs(t_dir, collocation_distribution=None, n_collocation=None):
     """Returns [(intra_neuron, run_id, pt_path), ...] for every classical
     Cmodel_NEURO* checkpoint in `t_dir` whose COLLOCATION_DISTRIBUTION
     matches `collocation_distribution` ("uniform" or "random"; leave as
-    None to include every distribution found), reading intra_neuron from
-    its companion `_config.json` (the run_id/sample index comes from the
-    trailing `_<run_id>` in the filename)."""
+    None to include every distribution found) and whose N_COLLOCATION
+    matches `n_collocation` (leave as None to include every value found --
+    but note that checkpoints from different N_COLLOCATION sweeps can share
+    the same t_dir, so leaving this unfiltered silently averages runs
+    trained with different N_COLLOCATION together), reading intra_neuron
+    from its companion `_config.json` (the run_id/sample index comes from
+    the trailing `_<run_id>` in the filename)."""
     entries = []
     for config_path in glob.glob(os.path.join(t_dir, "Cmodel_*_NEURO*_config.json")):
         pt_path = config_path[: -len("_config.json")] + ".pt"
@@ -707,8 +754,11 @@ def find_classical_configs(t_dir, collocation_distribution=None):
             continue
         with open(config_path) as f:
             cfg = json.load(f)
-        distribution = cfg["training_params"].get("COLLOCATION_DISTRIBUTION")
+        training_params = cfg["training_params"]
+        distribution = training_params.get("COLLOCATION_DISTRIBUTION")
         if collocation_distribution is not None and distribution != collocation_distribution:
+            continue
+        if n_collocation is not None and training_params.get("N_COLLOCATION") != n_collocation:
             continue
         intra_neuron = cfg["config"]["intra_neuron"]
         run_id = int(os.path.basename(pt_path)[: -len(".pt")].rsplit("_", 1)[1])
@@ -839,17 +889,24 @@ def plot_classical_mae_std(intra_neurons, mae_mean, mae_min, mae_max, Tfin, save
     plt.close(fig)
 
 
-def compute_classical_error_stats_std(t_dir, model_cls, nu, collocation_distribution):
+def compute_classical_error_stats_std(t_dir, model_cls, nu, collocation_distribution,
+                                       n_collocation=None):
     """Loads every classical model in `t_dir` whose COLLOCATION_DISTRIBUTION
-    matches `collocation_distribution`, evaluates each against the FDM
-    reference at t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MSE and
-    MAE across the run_id samples. Returns (intra_neurons, mse_mean, mse_std,
-    mse_min, mse_max, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin),
-    one point per INTRA_NEURO. The _min/_max values (the extremes actually
-    observed across run_ids) are what the plot uses for its error bars --
-    unlike mean +/- std, they can never go negative on the plot's log-scale
-    y-axis. Used by `plote_classico_std.py`."""
-    entries = find_classical_configs(t_dir, collocation_distribution=collocation_distribution)
+    matches `collocation_distribution` and, when given, whose N_COLLOCATION
+    matches `n_collocation`, evaluates each against the FDM reference at
+    t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MSE and MAE across
+    the run_id samples. Returns (intra_neurons, mse_mean, mse_std, mse_min,
+    mse_max, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin), one point
+    per INTRA_NEURO. The _min/_max values (the extremes actually observed
+    across run_ids) are what the plot uses for its error bars -- unlike mean
+    +/- std, they can never go negative on the plot's log-scale y-axis.
+    Leaving n_collocation as None mixes checkpoints from every N_COLLOCATION
+    sweep found in `t_dir` into the same INTRA_NEURO point -- pass it
+    explicitly to compare against a quantum curve pinned to one
+    N_COLLOCATION value. Used by `plote_classico_std.py` and
+    `plote_classico_vs_Intra.py`."""
+    entries = find_classical_configs(
+        t_dir, collocation_distribution=collocation_distribution, n_collocation=n_collocation)
     if not entries:
         return [], [], [], [], [], [], [], [], [], [], None
 
@@ -904,12 +961,106 @@ def plot_classical_errors_std(stats_by_distribution, Tfin, save_path,
         mse_yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
         ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"], color=color_mse,
                     markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
-                    capsize=4, label=f"MSE ({distribution})")
+                    capsize=4, label=f"with {distribution}")
     ax.set_xlabel("INTRA_NEURO", fontsize=14)
     ax.set_ylabel("MSE", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(sorted(all_neurons))
-    ax.set_title(f"Classical PINN error vs INTRA_NEURO (T = {Tfin})", fontsize=13)
+    ax.set_title(f"T = {Tfin}", fontsize=13)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def load_quantum_sweep_summary(csv_path):
+    """Loads a qubit_sweep_summary.csv (produced by the N_QUBITS sweep script,
+    one aggregated row per network/n_cnot_layers/n_qubits/Tfin/n_collocation
+    combo, with mse_mean/mse_min/mse_max/mse_std already computed across
+    seeds) into a list of dict rows with the numeric columns converted to
+    float. Returns [] if `csv_path` doesn't exist. Use the raw
+    qubit_sweep_runs.csv (one row per seed) instead only if you need to
+    recompute the aggregation yourself."""
+    if not os.path.exists(csv_path):
+        return []
+    numeric_fields = {
+        "n_cnot_layers", "n_qubits", "Tfin", "n_collocation", "mse_mean", "mse_min",
+        "mse_max", "mse_std", "mse_variance", "steps_mean", "steps_std", "steps_variance",
+        "steps_min", "steps_max", "target_reached_fraction", "trainable_parameters", "n_samples",
+    }
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    for row in rows:
+        for field in numeric_fields:
+            if row.get(field, "") != "":
+                row[field] = float(row[field])
+    return rows
+
+
+def quantum_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_collocation, Tfin):
+    """Filters a qubit_sweep_summary.csv (see `load_quantum_sweep_summary`)
+    down to the rows matching `network`, `n_cnot_layers`, `n_collocation`,
+    and `Tfin`, and returns (n_qubits, mse_mean, mse_std) sorted by n_qubits
+    -- one point per N_QUBITS, in the same shape `std_yerr` and
+    `plot_classical_vs_quantum_std` expect. Returns ([], [], []) if no rows
+    match."""
+    rows = load_quantum_sweep_summary(csv_path)
+    matches = [
+        row for row in rows
+        if row.get("network") == network
+        and int(row["n_cnot_layers"]) == n_cnot_layers
+        and int(row["n_collocation"]) == n_collocation
+        and math.isclose(row["Tfin"], Tfin, rel_tol=1e-9, abs_tol=1e-9)
+    ]
+    matches.sort(key=lambda row: row["n_qubits"])
+    n_qubits = [int(row["n_qubits"]) for row in matches]
+    mse_mean = [row["mse_mean"] for row in matches]
+    mse_std = [row["mse_std"] for row in matches]
+    return n_qubits, mse_mean, mse_std
+
+
+def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, save_path,
+                                   color_mse="#2a78d6", color_quantum="#d62728", dist_styles=None):
+    """Like `plot_classical_errors_std`, but overlays a quantum PINN
+    N_QUBITS-sweep curve in `color_quantum` on the same axes so it can be
+    compared directly against the classical INTRA_NEURO curve(s).
+    `stats_by_distribution`/`dist_styles` behave exactly as in
+    `plot_classical_errors_std`, except each distribution maps to
+    (intra_neurons, mse_mean, mse_std). `quantum_stats` is (n_qubits,
+    mse_mean, mse_std), e.g. from `quantum_stats_from_sweep_summary`; pass
+    ([], [], []) (or None) to skip the quantum curve. Error bars show
+    +/-std (via `std_yerr`) rather than the observed min/max. Used by
+    `plote_classico_vs_Intra.py`."""
+    if dist_styles is None:
+        dist_styles = {
+            "uniform": dict(fmt="o-", markerfacecolor=None),
+            "random": dict(fmt="s--", markerfacecolor="none"),
+        }
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    all_widths = set()
+    for distribution, (intra_neurons, mse_mean,
+                        mse_std) in stats_by_distribution.items():
+        all_widths.update(intra_neurons)
+        style = dist_styles.get(distribution, dict(fmt="o-", markerfacecolor=None))
+        mse_yerr = std_yerr(mse_mean, mse_std)
+        ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"], color=color_mse,
+                    markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
+                    capsize=4, label=f"Classical MSE ({distribution})")
+
+    if quantum_stats is not None:
+        n_qubits, q_mse_mean, q_mse_std = quantum_stats
+        if n_qubits:
+            all_widths.update(n_qubits)
+            q_yerr = std_yerr(q_mse_mean, q_mse_std)
+            ax.errorbar(n_qubits, q_mse_mean, yerr=q_yerr, fmt="^-", color=color_quantum,
+                        linewidth=2.0, markersize=6, capsize=4, label="Quantum MSE (N_QUBITS)")
+
+    ax.set_xlabel("INTRA_NEURO / N_QUBITS", fontsize=14)
+    ax.set_ylabel("MSE", fontsize=14)
+    ax.set_yscale("log")
+    ax.set_xticks(sorted(all_widths))
+    ax.set_title(f"T = {Tfin}", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()
