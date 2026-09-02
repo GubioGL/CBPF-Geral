@@ -131,6 +131,18 @@ def sample_collocation_points(n_points, L, T, ht, seed=None, distribution="unifo
     distribution="uniform" (default): points are laid out on a uniform grid
     (not sampled randomly): n_side = round(sqrt(n_points)) values along each
     axis, combined via meshgrid, for n_side**2 total collocation points.
+    NOTE: this grid does NOT come out to exactly n_points (see
+    "uniform_exact" below for that) -- kept as-is for backward compatibility
+    with existing runs/scripts that rely on this exact point count.
+
+    distribution="uniform_exact": same idea as "uniform" (a uniform grid,
+    not randomly sampled), but returns EXACTLY n_points: n_t =
+    round(sqrt(n_points)) values along t, n_x = ceil(n_points / n_t) along
+    x, combined via meshgrid (n_x*n_t >= n_points) and truncated to the
+    first n_points. Use this whenever the caller needs a uniform reference
+    set directly comparable (point-for-point) to an n_points-sized "random"
+    draw -- e.g. a fixed validation/stopping-condition set that must use the
+    same N as training regardless of the training collocation distribution.
 
     distribution="random": n_points points drawn independently from a
     uniform distribution over the domain, x ~ U[0, L) and t ~ U[ht, T-ht].
@@ -151,6 +163,15 @@ def sample_collocation_points(n_points, L, T, ht, seed=None, distribution="unifo
         x_grid, t_grid = tc.meshgrid(x_lin, t_lin, indexing="ij")
         x = x_grid.reshape(-1, 1)
         t = t_grid.reshape(-1, 1)
+    elif distribution == "uniform_exact":
+        n_t = max(1, round(math.sqrt(n_points)))
+        n_x = max(1, math.ceil(n_points / n_t))
+        x_lin = tc.linspace(0.0, L, n_x + 1)[:-1]
+        t_lin = tc.linspace(ht, T - ht, n_t)
+
+        x_grid, t_grid = tc.meshgrid(x_lin, t_lin, indexing="ij")
+        x = x_grid.reshape(-1, 1)[:n_points]
+        t = t_grid.reshape(-1, 1)[:n_points]
     elif distribution == "random":
         generator = None
         if seed is not None:
@@ -158,7 +179,7 @@ def sample_collocation_points(n_points, L, T, ht, seed=None, distribution="unifo
         x = tc.rand((n_points, 1), generator=generator) * L
         t = ht + tc.rand((n_points, 1), generator=generator) * (T - 2.0 * ht)
     else:
-        raise ValueError("distribution must be 'uniform' or 'random'.")
+        raise ValueError("distribution must be 'uniform', 'uniform_exact' or 'random'.")
 
     return x, t
 
@@ -965,6 +986,31 @@ def std_yerr(mean, std):
     return np.vstack([lower, std])
 
 
+ERROR_BAR_TYPES = ("minimo_maximo", "desvio_padrao", "variancia")
+
+
+def error_bar_yerr(error_type, mean, std, var, vmin, vmax):
+    """Builds the (2, N) `yerr` array for one of the three error-bar types
+    the plote_*.py scripts let the user pick between:
+
+    - "minimo_maximo": asymmetric whiskers reaching the observed min/max
+      (via `asymmetric_yerr`).
+    - "desvio_padrao": symmetric +/-std whiskers (via `std_yerr`, so the
+      lower whisker is clipped instead of going negative on a log axis).
+    - "variancia": symmetric +/-variance whiskers (also via `std_yerr`).
+
+    Raises ValueError for any other `error_type`."""
+    if error_type == "minimo_maximo":
+        return asymmetric_yerr(mean, vmin, vmax)
+    if error_type == "desvio_padrao":
+        return std_yerr(mean, std)
+    if error_type == "variancia":
+        return std_yerr(mean, var)
+    raise ValueError(
+        f"error_type deve ser um de {ERROR_BAR_TYPES} (recebido {error_type!r})."
+    )
+
+
 def plot_loss(histories, title="Training loss", save_path=None, show_cond=False):
     """histories: dict of label -> list of loss values."""
     plt.figure(figsize=(9, 4.5))
@@ -1195,21 +1241,21 @@ def compute_classical_error_stats_std(t_dir, model_cls, nu, collocation_distribu
     """Loads every classical model in `t_dir` whose COLLOCATION_DISTRIBUTION
     matches `collocation_distribution` and, when given, whose N_COLLOCATION
     matches `n_collocation`, evaluates each against the FDM reference at
-    t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MSE and MAE across
-    the run_id samples. Returns (intra_neurons, mse_mean, mse_std, mse_min,
-    mse_max, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin), one point
-    per INTRA_NEURO. The _min/_max values (the extremes actually observed
-    across run_ids) are what the plot uses for its error bars -- unlike mean
-    +/- std, they can never go negative on the plot's log-scale y-axis.
-    Leaving n_collocation as None mixes checkpoints from every N_COLLOCATION
-    sweep found in `t_dir` into the same INTRA_NEURO point -- pass it
-    explicitly to compare against a quantum curve pinned to one
-    N_COLLOCATION value. Used by `plote_classico_std.py` and
+    t=Tfin, and returns per-INTRA_NEURO mean/std/variance/min/max MSE and MAE
+    across the run_id samples. Returns (intra_neurons, mse_mean, mse_std,
+    mse_var, mse_min, mse_max, mae_mean, mae_std, mae_var, mae_min, mae_max,
+    n_samples, Tfin), one point per INTRA_NEURO. The _min/_max values (the
+    extremes actually observed across run_ids) are what the plot uses for
+    its error bars -- unlike mean +/- std, they can never go negative on the
+    plot's log-scale y-axis. Leaving n_collocation as None mixes checkpoints
+    from every N_COLLOCATION sweep found in `t_dir` into the same
+    INTRA_NEURO point -- pass it explicitly to compare against a quantum
+    curve pinned to one N_COLLOCATION value. Used by
     `plote_classico_vs_Intra.py`."""
     entries = find_classical_configs(
         t_dir, collocation_distribution=collocation_distribution, n_collocation=n_collocation)
     if not entries:
-        return [], [], [], [], [], [], [], [], [], [], None
+        return [], [], [], [], [], [], [], [], [], [], [], [], None
 
     first_model = model_cls.load(entries[0][2])
     L, Tfin = first_model.L, first_model.Tfin
@@ -1229,15 +1275,17 @@ def compute_classical_error_stats_std(t_dir, model_cls, nu, collocation_distribu
     intra_neurons = sorted(errors_by_neuron)
     mse_mean = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
     mse_std = [float(np.std(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+    mse_var = [float(np.var(errors_by_neuron[n]["mse"])) for n in intra_neurons]
     mse_min = [float(np.min(errors_by_neuron[n]["mse"])) for n in intra_neurons]
     mse_max = [float(np.max(errors_by_neuron[n]["mse"])) for n in intra_neurons]
     mae_mean = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
     mae_std = [float(np.std(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+    mae_var = [float(np.var(errors_by_neuron[n]["mae"])) for n in intra_neurons]
     mae_min = [float(np.min(errors_by_neuron[n]["mae"])) for n in intra_neurons]
     mae_max = [float(np.max(errors_by_neuron[n]["mae"])) for n in intra_neurons]
     n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
-    return (intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
-            mae_max, n_samples, Tfin)
+    return (intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max, mae_mean, mae_std,
+            mae_var, mae_min, mae_max, n_samples, Tfin)
 
 
 def plot_classical_errors_std(stats_by_distribution, Tfin, save_path,
@@ -1302,10 +1350,11 @@ def load_quantum_sweep_summary(csv_path):
 def quantum_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_collocation, Tfin):
     """Filters a qubit_sweep_summary.csv (see `load_quantum_sweep_summary`)
     down to the rows matching `network`, `n_cnot_layers`, `n_collocation`,
-    and `Tfin`, and returns (n_qubits, mse_mean, mse_std) sorted by n_qubits
-    -- one point per N_QUBITS, in the same shape `std_yerr` and
-    `plot_classical_vs_quantum_std` expect. Returns ([], [], []) if no rows
-    match."""
+    and `Tfin`, and returns (n_qubits, mse_mean, mse_std, mse_var, mse_min,
+    mse_max) sorted by n_qubits -- one point per N_QUBITS, in the same shape
+    `plot_classical_vs_quantum_std` expects (it picks whichever of
+    std/var/min-max the caller asked for via `error_type`). Returns
+    ([], [], [], [], [], []) if no rows match."""
     rows = load_quantum_sweep_summary(csv_path)
     matches = [
         row for row in rows
@@ -1318,44 +1367,62 @@ def quantum_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_colloca
     n_qubits = [int(row["n_qubits"]) for row in matches]
     mse_mean = [row["mse_mean"] for row in matches]
     mse_std = [row["mse_std"] for row in matches]
-    return n_qubits, mse_mean, mse_std
+    mse_var = [row["mse_variance"] for row in matches]
+    mse_min = [row["mse_min"] for row in matches]
+    mse_max = [row["mse_max"] for row in matches]
+    return n_qubits, mse_mean, mse_std, mse_var, mse_min, mse_max
 
 
 def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, save_path,
-                                   color_mse="#2a78d6", color_quantum="#d62728", dist_styles=None):
+                                   color_mse="#2a78d6", color_quantum="#d62728", dist_styles=None,
+                                   error_type="desvio_padrao"):
     """Like `plot_classical_errors_std`, but overlays a quantum PINN
     N_QUBITS-sweep curve in `color_quantum` on the same axes so it can be
     compared directly against the classical INTRA_NEURO curve(s).
     `stats_by_distribution`/`dist_styles` behave exactly as in
     `plot_classical_errors_std`, except each distribution maps to
-    (intra_neurons, mse_mean, mse_std). `quantum_stats` is (n_qubits,
-    mse_mean, mse_std), e.g. from `quantum_stats_from_sweep_summary`; pass
-    ([], [], []) (or None) to skip the quantum curve. Error bars show
-    +/-std (via `std_yerr`) rather than the observed min/max. Used by
+    (intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max) -- the
+    full tuple `compute_classical_error_stats_std` returns for MSE.
+    `quantum_stats` is (n_qubits, mse_mean, mse_std, mse_var, mse_min,
+    mse_max), e.g. from `quantum_stats_from_sweep_summary`; pass
+    ([], [], [], [], [], []) (or None) to skip the quantum curve.
+
+    `error_type` selects what the error bars show, both for the classical
+    and the quantum curve -- one of `ERROR_BAR_TYPES`:
+    "minimo_maximo" (whiskers reaching the observed min/max), "desvio_padrao"
+    (+/-std), or "variancia" (+/-variance). See `error_bar_yerr`. Used by
     `plote_classico_vs_Intra.py`."""
     if dist_styles is None:
         dist_styles = {
             "uniform": dict(fmt="o-", markerfacecolor=None),
             "random": dict(fmt="s--", markerfacecolor="none"),
         }
+    error_labels = {
+        "minimo_maximo": "min/max",
+        "desvio_padrao": "±std",
+        "variancia": "±var",
+    }
+    error_label = error_labels.get(error_type, error_type)
+
     fig, ax = plt.subplots(figsize=(9, 4.5))
     all_widths = set()
-    for distribution, (intra_neurons, mse_mean,
-                        mse_std) in stats_by_distribution.items():
+    for distribution, (intra_neurons, mse_mean, mse_std, mse_var, mse_min,
+                        mse_max) in stats_by_distribution.items():
         all_widths.update(intra_neurons)
         style = dist_styles.get(distribution, dict(fmt="o-", markerfacecolor=None))
-        mse_yerr = std_yerr(mse_mean, mse_std)
+        mse_yerr = error_bar_yerr(error_type, mse_mean, mse_std, mse_var, mse_min, mse_max)
         ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"], color=color_mse,
                     markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
-                    capsize=4, label=f"Classical MSE ({distribution})")
+                    capsize=4, label=f"Classical MSE ({distribution}, {error_label})")
 
     if quantum_stats is not None:
-        n_qubits, q_mse_mean, q_mse_std = quantum_stats
+        n_qubits, q_mse_mean, q_mse_std, q_mse_var, q_mse_min, q_mse_max = quantum_stats
         if n_qubits:
             all_widths.update(n_qubits)
-            q_yerr = std_yerr(q_mse_mean, q_mse_std)
+            q_yerr = error_bar_yerr(error_type, q_mse_mean, q_mse_std, q_mse_var, q_mse_min, q_mse_max)
             ax.errorbar(n_qubits, q_mse_mean, yerr=q_yerr, fmt="^-", color=color_quantum,
-                        linewidth=2.0, markersize=6, capsize=4, label="Quantum MSE (N_QUBITS)")
+                        linewidth=2.0, markersize=6, capsize=4,
+                        label=f"Quantum MSE (N_QUBITS, {error_label})")
 
     ax.set_xlabel("INTRA_NEURO / N_QUBITS", fontsize=14)
     ax.set_ylabel("MSE", fontsize=14)

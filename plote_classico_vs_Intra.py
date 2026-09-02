@@ -13,6 +13,12 @@ COLLOCATION_DISTRIBUTIONS = ["random"]
 
 CLASSICAL_N_COLLOCATION = 100
 
+# One of ERROR_BAR_TYPES: 
+# "minimo_maximo" (observed min/max), 
+# "desvio_padrao" (+/-std), or
+# "variancia" (+/-variance).
+ERROR_BAR_TYPE = "variancia"
+
 # Quantum N_QUBITS sweep, read from qubit_sweep_summary.csv (already aggregated
 # mean/min/max/std per network/n_cnot_layers/n_qubits/Tfin/n_collocation -- see
 # `qubit_sweep_runs.csv` for the raw per-seed rows it was built from).
@@ -29,14 +35,16 @@ if __name__ == "__main__":
         stats_by_distribution = {}
         Tfin = None
         for distribution in COLLOCATION_DISTRIBUTIONS:
-            (intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, mae_min,
-             mae_max, n_samples, dist_Tfin) = compute_classical_error_stats_std(
+            (intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max, mae_mean, mae_std,
+             mae_var, mae_min, mae_max, n_samples, dist_Tfin) = compute_classical_error_stats_std(
                 t_dir, ClassicalPINN2, NU, distribution, n_collocation=CLASSICAL_N_COLLOCATION
             )
             if not intra_neurons:
                 continue
             Tfin = dist_Tfin
-            stats_by_distribution[distribution] = (intra_neurons, mse_mean, mse_std)
+            stats_by_distribution[distribution] = (
+                intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max
+            )
 
         if not stats_by_distribution:
             print(f"No classical models found in {t_dir}, skipping.")
@@ -53,5 +61,7 @@ if __name__ == "__main__":
             print(f"  no quantum sweep rows found for T={t_label} in {QUBIT_SWEEP_SUMMARY_CSV}")
 
         save_path = f"Error_std_vs_IntraNeuro_T_{t_label}_NCOL{CLASSICAL_N_COLLOCATION}.png"
-        plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, save_path)
+        plot_classical_vs_quantum_std(
+            stats_by_distribution, quantum_stats, Tfin, save_path, error_type=ERROR_BAR_TYPE
+        )
         print(f"  -> saved {save_path}")
