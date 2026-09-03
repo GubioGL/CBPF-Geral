@@ -192,17 +192,21 @@ def sample_collocation_points(n_points, L, T, ht, seed=None, distribution="unifo
 # collocation set is differentiated in one shot -- no Python loop over
 # the mesh is needed, uniform or not.
 # ----------------------------------------------------------------------
-def nonuniform_first_derivative(f_left, f_center, f_right, h_L, h_R):
-    """f'(x_i) via the 3-point asymmetric central difference on a non-uniform mesh."""
-    return (
-        (h_L / (h_R * (h_L + h_R))) * f_right
-        + ((h_R - h_L) / (h_L * h_R)) * f_center
-        - (h_R / (h_L * (h_L + h_R))) * f_left
-    )
+# UNUSED (not called anywhere in the codebase, including main/old/) --
+# commented out 2026-09-03.
+# def nonuniform_first_derivative(f_left, f_center, f_right, h_L, h_R):
+#     """f'(x_i) via the 3-point asymmetric central difference on a non-uniform mesh."""
+#     return (
+#         (h_L / (h_R * (h_L + h_R))) * f_right
+#         + ((h_R - h_L) / (h_L * h_R)) * f_center
+#         - (h_R / (h_L * (h_L + h_R))) * f_left
+#     )
 
-def nonuniform_second_derivative(f_left, f_center, f_right, h_L, h_R):
-    """f''(x_i) via the 3-point central difference on a non-uniform mesh."""
-    return (2.0 / (h_L + h_R)) * ((f_right - f_center) / h_R - (f_center - f_left) / h_L)
+# UNUSED (not called anywhere in the codebase, including main/old/) --
+# commented out 2026-09-03.
+# def nonuniform_second_derivative(f_left, f_center, f_right, h_L, h_R):
+#     """f''(x_i) via the 3-point central difference on a non-uniform mesh."""
+#     return (2.0 / (h_L + h_R)) * ((f_right - f_center) / h_R - (f_center - f_left) / h_L)
 
 # ----------------------------------------------------------------------
 # Exact fixed-CNOT feature maps through binary algebra
@@ -563,7 +567,7 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     }
 
     def compute_residual(x_f, x_p, x_m, t_f, t_p, t_m):
-        u_0 = model(tc.cat([x_f, t_f], dim=1))
+        u_0  = model(tc.cat([x_f, t_f], dim=1))
         u_xp = model(tc.cat([x_p, t_f], dim=1))
         u_xm = model(tc.cat([x_m, t_f], dim=1))
         u_tp = model(tc.cat([x_f, t_p], dim=1))
@@ -719,220 +723,222 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     model.load_state_dict(best_state)
     return model, hist
 
-def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
-                    weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0,
-                    lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9,
-                    target_loss=None):
-    """Same Burgers-residual training as `train`, but u_t, u_x, u_xx come from
-    a single forward pass differentiated with autograd (torch.autograd.grad,
-    create_graph=True) instead of finite differences on shifted collocation
-    points. Only `nu` from `loss_kwargs` is used; hx/ht are not needed since
-    no stencil is built.
-
-    Training runs in two phases: `epochs` iterations of AdamW doing a broad,
-    global search of parameter space (its lr decays via ReduceLROnPlateau as
-    the loss stalls, so it actually settles instead of still bouncing around
-    at a high lr when L-BFGS takes over), followed by `lbfgs_epochs`
-    iterations of L-BFGS refining that region into a low-loss local minimum
-    (defaults to `epochs` when not given). Set `lbfgs_epochs=0` to skip the
-    second phase.
-
-    resample_fn: optional zero-argument callable returning a fresh (x_f, t_f)
-    pair, called at the start of every epoch during the AdamW phase to
-    replace the collocation points used that epoch. Pass a closure over
-    `sample_collocation_points(..., distribution="random")` (with seed left
-    as None) to train on different random collocation points each epoch;
-    leave as None to keep training on the fixed x_f, t_f passed in (e.g. a
-    uniform grid).
-
-    lbfgs_resample_fn: optional zero-argument callable, same shape as
-    resample_fn, called once per L-BFGS *outer* iteration (before that
-    iteration's `lbfgs_opt.step(closure)`) to replace the collocation
-    points used from then on. A single step() call still evaluates
-    `closure` several times internally (the strong_wolfe bracketing/zoom
-    search) and every one of those internal calls sees the same, just
-    -resampled point set -- only the set changes *between* outer steps, so
-    the line search itself is never fed a moving target. What does shift
-    across outer steps is the (s, y) curvature pairs L-BFGS accumulates in
-    its history, since they're now measured on slightly different
-    objectives; this is a real tradeoff against a fully fixed point set,
-    so prefer a lbfgs_resample_fn that draws a reasonably large batch (a
-    handful of points relative to the model's parameter count lets L-BFGS
-    drive the residual to ~0 by pure interpolation in one step, which is
-    what produces a long flat tail on the loss curve rather than genuine
-    convergence). Leave as None (default) to keep the old behavior: a
-    single fixed point set for the whole L-BFGS phase (whatever x_f, t_f
-    ended up being after the last AdamW epoch).
-
-    lbfgs_patience, lbfgs_tol: early-stopping controls for the L-BFGS loop.
-    If `best_loss` fails to improve by more than `lbfgs_tol` for
-    `lbfgs_patience` consecutive outer iterations, the loop stops instead
-    of burning through the rest of `lbfgs_epochs` -- this is what a flat
-    loss tail actually means (L-BFGS has nothing left to descend) and there
-    is no point paying for more iterations once it happens. Set
-    lbfgs_patience=None to disable early stopping and always run the full
-    lbfgs_epochs.
-
-    target_loss: optional stopping target for the residual loss (e.g. from
-    `reference_pde_residual`, the reference FDM solution's own discretization
-    error at these collocation points). Training stops as soon as an
-    iterate's loss reaches `<= target_loss` -- in the AdamW phase this also
-    skips the L-BFGS phase entirely, since there is nothing left to refine
-    once the PINN already matches the reference's own precision. This is the
-    *first* stopping condition; whenever it is never reached, `epochs` (plus
-    `lbfgs_epochs`) is what stops training, exactly as when target_loss is
-    left at its default None.
-
-    The lowest-loss parameter snapshot seen across *both* phases is what
-    gets loaded into `model` before returning -- not simply whichever
-    iterate training happened to end on. This is what makes L-BFGS strictly
-    help: even if a step lands somewhere much worse (a bad quasi-Newton
-    step, or a noisy hand-off point from Adam), the snapshot rollback means
-    the returned model can never be worse than the best point already
-    found."""
-    nu = loss_kwargs["nu"]
-
-    x_f = x_f.clone().requires_grad_(True)
-    t_f = t_f.clone().requires_grad_(True)
-
-    params = [p for p in model.parameters() if p.requires_grad]
-    opt = tc.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
-    # Decays lr as the loss plateaus: a larger lr early on drives the broad
-    # global search, but without decay Adam is still bouncing around at that
-    # same high lr on its last iteration, so L-BFGS would build its local
-    # quadratic model from a noisy, badly-conditioned point instead of a
-    # settled basin.
-    scheduler = tc.optim.lr_scheduler.ReduceLROnPlateau(
-        opt, mode="min", factor=0.5, patience=max(10, epochs // 10), min_lr=1.0e-4
-    )
-
-    hist = {"loss": [], "residual_rms": []}
-
-    def compute_residual():
-        u_0 = model(tc.cat([x_f, t_f], dim=1))
-
-        u_x = tc.autograd.grad(u_0, x_f, grad_outputs=tc.ones_like(u_0), create_graph=True)[0]
-        u_xx = tc.autograd.grad(u_x, x_f, grad_outputs=tc.ones_like(u_x), create_graph=True)[0]
-        u_t = tc.autograd.grad(u_0, t_f, grad_outputs=tc.ones_like(u_0), create_graph=True)[0]
-
-        return u_t + u_0 * u_x - nu * u_xx
-
-    def snapshot():
-        return {k: v.detach().clone() for k, v in model.state_dict().items()}
-
-    best_state = snapshot()
-    best_loss = float("inf")
-    target_reached = False
-
-    for _ in tqdm(range(epochs), desc="Adam"):
-        model.train()
-
-        if resample_fn is not None and _ % 10 == 0:  # Resample every 10 iterations
-            x_f, t_f = resample_fn()
-            x_f = x_f.clone().requires_grad_(True)
-            t_f = t_f.clone().requires_grad_(True)
-
-        residual = compute_residual()
-        loss = tc.mean(residual**2)
-
-        opt.zero_grad()
-        loss.backward()
-        if grad_clip is not None:
-            tc.nn.utils.clip_grad_norm_(params, grad_clip)
-        opt.step()
-
-        loss_value = float(loss.detach())
-        scheduler.step(loss_value)
-
-        if loss_value < best_loss:
-            best_loss = loss_value
-            best_state = snapshot()
-
-        hist["loss"].append(loss_value)
-        hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
-
-        # First stopping condition: the residual loss has already reached the
-        # reference's own precision at these points -- no need for L-BFGS to
-        # refine further, or to burn through the rest of `epochs`.
-        if target_loss is not None and loss_value <= target_loss:
-            target_reached = True
-            break
-
-    if lbfgs_epochs is None:
-        lbfgs_epochs = epochs
-
-    if lbfgs_epochs > 0 and not target_reached:
-        # Hand L-BFGS the best basin Adam actually found, not whatever point
-        # its last (possibly still-noisy) iterate landed on.
-        model.load_state_dict(best_state)
-
-        lbfgs_opt = tc.optim.LBFGS(
-            params, lr=lbfgs_lr, max_iter=10, history_size=50,
-            line_search_fn="strong_wolfe",
-        )
-
-        # Squared (not abs) residual: L-BFGS builds its Hessian approximation
-        # from consecutive gradients, and the kink of |residual| at 0 makes
-        # that curvature estimate unreliable, which is what drives loss
-        # instability. Gradient clipping is skipped here for the same reason
-        # -- it would distort the (s, y) pairs L-BFGS relies on. `strong_wolfe`
-        # rejects any candidate step that doesn't give sufficient decrease,
-        # but its bracketing/zoom search can still fall back to a non-improving
-        # step if it can't find one inside its own iteration budget -- the
-        # best-snapshot tracking below is what actually guarantees the final
-        # model is never worse than the best point found.
-        last = {}
-
-        def closure():
-            lbfgs_opt.zero_grad()
-            residual = compute_residual()
-            loss = tc.mean(residual**2)
-            loss.backward()
-
-            last["loss"] = float(loss.detach())
-            last["residual_rms"] = float(tc.sqrt(tc.mean(residual.detach() ** 2)))
-            return loss
-
-        stall_count = 0
-        for _ in tqdm(range(lbfgs_epochs), desc="L-BFGS"):
-            model.train()
-
-            if lbfgs_resample_fn is not None:
-                x_f, t_f = lbfgs_resample_fn()
-                x_f = x_f.clone().requires_grad_(True)
-                t_f = t_f.clone().requires_grad_(True)
-
-            lbfgs_opt.step(closure)
-            # Only the point the line search actually accepted this step is
-            # logged -- `closure` is called several times per step to test
-            # candidate step sizes, and logging every trial would make
-            # rejected, never-applied candidates show up as fake spikes.
-            loss_value = last["loss"]
-
-            if math.isfinite(loss_value) and loss_value < best_loss - lbfgs_tol:
-                best_loss = loss_value
-                best_state = snapshot()
-                stall_count = 0
-            else:
-                stall_count += 1
-
-            hist["loss"].append(loss_value)
-            hist["residual_rms"].append(last["residual_rms"])
-
-            if target_loss is not None and loss_value <= target_loss:
-                target_reached = True
-                break
-
-            if lbfgs_patience is not None and stall_count >= lbfgs_patience:
-                break
-
-    hist["target_loss"] = target_loss
-    hist["target_reached"] = target_reached
-
-    # Always return the lowest-loss point seen across both phases, never
-    # just whichever iterate the last epoch happened to land on.
-    model.load_state_dict(best_state)
-    return model, hist
+# UNUSED (only referenced by main/old/run_quantum.py and main/old/run_quantum_autograd_pennylane.py,
+# not by any other file in the repo) -- commented out 2026-09-03.
+# def train_autograd(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
+#                     weight_decay=1.0e-6, resample_fn=None, lbfgs_epochs=None, lbfgs_lr=1.0,
+#                     lbfgs_resample_fn=None, lbfgs_patience=50, lbfgs_tol=1.0e-9,
+#                     target_loss=None):
+#     """Same Burgers-residual training as `train`, but u_t, u_x, u_xx come from
+#     a single forward pass differentiated with autograd (torch.autograd.grad,
+#     create_graph=True) instead of finite differences on shifted collocation
+#     points. Only `nu` from `loss_kwargs` is used; hx/ht are not needed since
+#     no stencil is built.
+# 
+#     Training runs in two phases: `epochs` iterations of AdamW doing a broad,
+#     global search of parameter space (its lr decays via ReduceLROnPlateau as
+#     the loss stalls, so it actually settles instead of still bouncing around
+#     at a high lr when L-BFGS takes over), followed by `lbfgs_epochs`
+#     iterations of L-BFGS refining that region into a low-loss local minimum
+#     (defaults to `epochs` when not given). Set `lbfgs_epochs=0` to skip the
+#     second phase.
+# 
+#     resample_fn: optional zero-argument callable returning a fresh (x_f, t_f)
+#     pair, called at the start of every epoch during the AdamW phase to
+#     replace the collocation points used that epoch. Pass a closure over
+#     `sample_collocation_points(..., distribution="random")` (with seed left
+#     as None) to train on different random collocation points each epoch;
+#     leave as None to keep training on the fixed x_f, t_f passed in (e.g. a
+#     uniform grid).
+# 
+#     lbfgs_resample_fn: optional zero-argument callable, same shape as
+#     resample_fn, called once per L-BFGS *outer* iteration (before that
+#     iteration's `lbfgs_opt.step(closure)`) to replace the collocation
+#     points used from then on. A single step() call still evaluates
+#     `closure` several times internally (the strong_wolfe bracketing/zoom
+#     search) and every one of those internal calls sees the same, just
+#     -resampled point set -- only the set changes *between* outer steps, so
+#     the line search itself is never fed a moving target. What does shift
+#     across outer steps is the (s, y) curvature pairs L-BFGS accumulates in
+#     its history, since they're now measured on slightly different
+#     objectives; this is a real tradeoff against a fully fixed point set,
+#     so prefer a lbfgs_resample_fn that draws a reasonably large batch (a
+#     handful of points relative to the model's parameter count lets L-BFGS
+#     drive the residual to ~0 by pure interpolation in one step, which is
+#     what produces a long flat tail on the loss curve rather than genuine
+#     convergence). Leave as None (default) to keep the old behavior: a
+#     single fixed point set for the whole L-BFGS phase (whatever x_f, t_f
+#     ended up being after the last AdamW epoch).
+# 
+#     lbfgs_patience, lbfgs_tol: early-stopping controls for the L-BFGS loop.
+#     If `best_loss` fails to improve by more than `lbfgs_tol` for
+#     `lbfgs_patience` consecutive outer iterations, the loop stops instead
+#     of burning through the rest of `lbfgs_epochs` -- this is what a flat
+#     loss tail actually means (L-BFGS has nothing left to descend) and there
+#     is no point paying for more iterations once it happens. Set
+#     lbfgs_patience=None to disable early stopping and always run the full
+#     lbfgs_epochs.
+# 
+#     target_loss: optional stopping target for the residual loss (e.g. from
+#     `reference_pde_residual`, the reference FDM solution's own discretization
+#     error at these collocation points). Training stops as soon as an
+#     iterate's loss reaches `<= target_loss` -- in the AdamW phase this also
+#     skips the L-BFGS phase entirely, since there is nothing left to refine
+#     once the PINN already matches the reference's own precision. This is the
+#     *first* stopping condition; whenever it is never reached, `epochs` (plus
+#     `lbfgs_epochs`) is what stops training, exactly as when target_loss is
+#     left at its default None.
+# 
+#     The lowest-loss parameter snapshot seen across *both* phases is what
+#     gets loaded into `model` before returning -- not simply whichever
+#     iterate training happened to end on. This is what makes L-BFGS strictly
+#     help: even if a step lands somewhere much worse (a bad quasi-Newton
+#     step, or a noisy hand-off point from Adam), the snapshot rollback means
+#     the returned model can never be worse than the best point already
+#     found."""
+#     nu = loss_kwargs["nu"]
+# 
+#     x_f = x_f.clone().requires_grad_(True)
+#     t_f = t_f.clone().requires_grad_(True)
+# 
+#     params = [p for p in model.parameters() if p.requires_grad]
+#     opt = tc.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+#     # Decays lr as the loss plateaus: a larger lr early on drives the broad
+#     # global search, but without decay Adam is still bouncing around at that
+#     # same high lr on its last iteration, so L-BFGS would build its local
+#     # quadratic model from a noisy, badly-conditioned point instead of a
+#     # settled basin.
+#     scheduler = tc.optim.lr_scheduler.ReduceLROnPlateau(
+#         opt, mode="min", factor=0.5, patience=max(10, epochs // 10), min_lr=1.0e-4
+#     )
+# 
+#     hist = {"loss": [], "residual_rms": []}
+# 
+#     def compute_residual():
+#         u_0 = model(tc.cat([x_f, t_f], dim=1))
+# 
+#         u_x = tc.autograd.grad(u_0, x_f, grad_outputs=tc.ones_like(u_0), create_graph=True)[0]
+#         u_xx = tc.autograd.grad(u_x, x_f, grad_outputs=tc.ones_like(u_x), create_graph=True)[0]
+#         u_t = tc.autograd.grad(u_0, t_f, grad_outputs=tc.ones_like(u_0), create_graph=True)[0]
+# 
+#         return u_t + u_0 * u_x - nu * u_xx
+# 
+#     def snapshot():
+#         return {k: v.detach().clone() for k, v in model.state_dict().items()}
+# 
+#     best_state = snapshot()
+#     best_loss = float("inf")
+#     target_reached = False
+# 
+#     for _ in tqdm(range(epochs), desc="Adam"):
+#         model.train()
+# 
+#         if resample_fn is not None and _ % 10 == 0:  # Resample every 10 iterations
+#             x_f, t_f = resample_fn()
+#             x_f = x_f.clone().requires_grad_(True)
+#             t_f = t_f.clone().requires_grad_(True)
+# 
+#         residual = compute_residual()
+#         loss = tc.mean(residual**2)
+# 
+#         opt.zero_grad()
+#         loss.backward()
+#         if grad_clip is not None:
+#             tc.nn.utils.clip_grad_norm_(params, grad_clip)
+#         opt.step()
+# 
+#         loss_value = float(loss.detach())
+#         scheduler.step(loss_value)
+# 
+#         if loss_value < best_loss:
+#             best_loss = loss_value
+#             best_state = snapshot()
+# 
+#         hist["loss"].append(loss_value)
+#         hist["residual_rms"].append(float(tc.sqrt(tc.mean(residual.detach() ** 2))))
+# 
+#         # First stopping condition: the residual loss has already reached the
+#         # reference's own precision at these points -- no need for L-BFGS to
+#         # refine further, or to burn through the rest of `epochs`.
+#         if target_loss is not None and loss_value <= target_loss:
+#             target_reached = True
+#             break
+# 
+#     if lbfgs_epochs is None:
+#         lbfgs_epochs = epochs
+# 
+#     if lbfgs_epochs > 0 and not target_reached:
+#         # Hand L-BFGS the best basin Adam actually found, not whatever point
+#         # its last (possibly still-noisy) iterate landed on.
+#         model.load_state_dict(best_state)
+# 
+#         lbfgs_opt = tc.optim.LBFGS(
+#             params, lr=lbfgs_lr, max_iter=10, history_size=50,
+#             line_search_fn="strong_wolfe",
+#         )
+# 
+#         # Squared (not abs) residual: L-BFGS builds its Hessian approximation
+#         # from consecutive gradients, and the kink of |residual| at 0 makes
+#         # that curvature estimate unreliable, which is what drives loss
+#         # instability. Gradient clipping is skipped here for the same reason
+#         # -- it would distort the (s, y) pairs L-BFGS relies on. `strong_wolfe`
+#         # rejects any candidate step that doesn't give sufficient decrease,
+#         # but its bracketing/zoom search can still fall back to a non-improving
+#         # step if it can't find one inside its own iteration budget -- the
+#         # best-snapshot tracking below is what actually guarantees the final
+#         # model is never worse than the best point found.
+#         last = {}
+# 
+#         def closure():
+#             lbfgs_opt.zero_grad()
+#             residual = compute_residual()
+#             loss = tc.mean(residual**2)
+#             loss.backward()
+# 
+#             last["loss"] = float(loss.detach())
+#             last["residual_rms"] = float(tc.sqrt(tc.mean(residual.detach() ** 2)))
+#             return loss
+# 
+#         stall_count = 0
+#         for _ in tqdm(range(lbfgs_epochs), desc="L-BFGS"):
+#             model.train()
+# 
+#             if lbfgs_resample_fn is not None:
+#                 x_f, t_f = lbfgs_resample_fn()
+#                 x_f = x_f.clone().requires_grad_(True)
+#                 t_f = t_f.clone().requires_grad_(True)
+# 
+#             lbfgs_opt.step(closure)
+#             # Only the point the line search actually accepted this step is
+#             # logged -- `closure` is called several times per step to test
+#             # candidate step sizes, and logging every trial would make
+#             # rejected, never-applied candidates show up as fake spikes.
+#             loss_value = last["loss"]
+# 
+#             if math.isfinite(loss_value) and loss_value < best_loss - lbfgs_tol:
+#                 best_loss = loss_value
+#                 best_state = snapshot()
+#                 stall_count = 0
+#             else:
+#                 stall_count += 1
+# 
+#             hist["loss"].append(loss_value)
+#             hist["residual_rms"].append(last["residual_rms"])
+# 
+#             if target_loss is not None and loss_value <= target_loss:
+#                 target_reached = True
+#                 break
+# 
+#             if lbfgs_patience is not None and stall_count >= lbfgs_patience:
+#                 break
+# 
+#     hist["target_loss"] = target_loss
+#     hist["target_reached"] = target_reached
+# 
+#     # Always return the lowest-loss point seen across both phases, never
+#     # just whichever iterate the last epoch happened to land on.
+#     model.load_state_dict(best_state)
+#     return model, hist
 
 def predict(model, x, t_val):
     """Evaluates the model on a spatial grid x at a fixed time t_val."""
@@ -1113,127 +1119,138 @@ def find_classical_configs(t_dir, collocation_distribution=None, n_collocation=N
     return sorted(entries)
 
 
-def find_quantum_configs(t_dir, input_rotation_axis="ry", collocation_distribution="random"):
-    """Returns [(fixed_layer, n_qubits, seed, pt_path), ...] for every
-    Qmodel_<collocation_distribution>_NQUBITS* checkpoint in `t_dir` whose
-    input_rotation_axis matches, reading fixed_layer/n_qubits/seed from its
-    companion `_config.json`."""
-    entries = []
-    pattern = f"Qmodel_{collocation_distribution}_NQUBITS*_config.json"
-    for config_path in glob.glob(os.path.join(t_dir, pattern)):
-        pt_path = config_path[: -len("_config.json")] + ".pt"
-        if not os.path.exists(pt_path):
-            continue
-        with open(config_path) as f:
-            cfg = json.load(f)["config"]
-        if cfg.get("input_rotation_axis") != input_rotation_axis:
-            continue
-        entries.append((cfg["fixed_layer"], cfg["n_qubits"], cfg["seed"], pt_path))
-    return sorted(entries)
+# UNUSED (only reachable through main/old/plote_comparativo.py and the two dead
+# helpers below it, compute_quantum_error_stats_std / compute_quantum_errors_comparativo)
+# -- commented out 2026-09-03.
+# def find_quantum_configs(t_dir, input_rotation_axis="ry", collocation_distribution="random"):
+#     """Returns [(fixed_layer, n_qubits, seed, pt_path), ...] for every
+#     Qmodel_<collocation_distribution>_NQUBITS* checkpoint in `t_dir` whose
+#     input_rotation_axis matches, reading fixed_layer/n_qubits/seed from its
+#     companion `_config.json`."""
+#     entries = []
+#     pattern = f"Qmodel_{collocation_distribution}_NQUBITS*_config.json"
+#     for config_path in glob.glob(os.path.join(t_dir, pattern)):
+#         pt_path = config_path[: -len("_config.json")] + ".pt"
+#         if not os.path.exists(pt_path):
+#             continue
+#         with open(config_path) as f:
+#             cfg = json.load(f)["config"]
+#         if cfg.get("input_rotation_axis") != input_rotation_axis:
+#             continue
+#         entries.append((cfg["fixed_layer"], cfg["n_qubits"], cfg["seed"], pt_path))
+#     return sorted(entries)
 
 
-def compute_classical_mean_errors(t_dir, model_cls, nu):
-    """Loads every classical model in `t_dir`, evaluates each against the FDM
-    reference at t=Tfin, and averages the MSE/MAE across the run_id samples
-    (one per amostragem) for each INTRA_NEURO value. Returns (intra_neurons,
-    mean_mse, mean_mae, n_samples, Tfin), one point per INTRA_NEURO. Used by
-    the legacy `old/plote_classico.py`."""
-    entries = find_classical_configs(t_dir)
-    if not entries:
-        return [], [], [], [], None
-
-    first_model = model_cls.load(entries[0][2])
-    L, Tfin = first_model.L, first_model.Tfin
-
-    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
-    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
-    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
-
-    errors_by_neuron = {}
-    for intra_neuron, _run_id, pt_path in entries:
-        model = model_cls.load(pt_path)
-        u_pred = predict(model, x_plot, Tfin)
-        entry = errors_by_neuron.setdefault(intra_neuron, {"mse": [], "mae": []})
-        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
-        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
-
-    intra_neurons = sorted(errors_by_neuron)
-    mse = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
-    mae = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
-    n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
-    return intra_neurons, mse, mae, n_samples, Tfin
-
-
-def plot_classical_mean_errors(intra_neurons, mse, mae, Tfin, save_path,
-                                color_mse="#2a78d6", color_mae="#1baf7a"):
-    """Companion plot for `compute_classical_mean_errors` (legacy, mean-only)."""
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    ax.plot(intra_neurons, mse, "o-", color=color_mse, linewidth=2.0, markersize=6, label="MSE")
-    ax.plot(intra_neurons, mae, "o-", color=color_mae, linewidth=2.0, markersize=6, label="MAE")
-    ax.set_xlabel("INTRA_NEURO", fontsize=14)
-    ax.set_ylabel("Error", fontsize=14)
-    ax.set_yscale("log")
-    ax.set_xticks(intra_neurons)
-    ax.set_title(f"Classical PINN mean error vs INTRA_NEURO (T = {Tfin})", fontsize=13)
-    ax.grid(True, linestyle="--", alpha=0.6)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=150)
-    plt.close(fig)
+# UNUSED (only referenced by main/old/plote_classico.py, not by any other file) --
+# commented out 2026-09-03.
+# def compute_classical_mean_errors(t_dir, model_cls, nu):
+#     """Loads every classical model in `t_dir`, evaluates each against the FDM
+#     reference at t=Tfin, and averages the MSE/MAE across the run_id samples
+#     (one per amostragem) for each INTRA_NEURO value. Returns (intra_neurons,
+#     mean_mse, mean_mae, n_samples, Tfin), one point per INTRA_NEURO. Used by
+#     the legacy `old/plote_classico.py`."""
+#     entries = find_classical_configs(t_dir)
+#     if not entries:
+#         return [], [], [], [], None
+# 
+#     first_model = model_cls.load(entries[0][2])
+#     L, Tfin = first_model.L, first_model.Tfin
+# 
+#     x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+#     x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+#     u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+# 
+#     errors_by_neuron = {}
+#     for intra_neuron, _run_id, pt_path in entries:
+#         model = model_cls.load(pt_path)
+#         u_pred = predict(model, x_plot, Tfin)
+#         entry = errors_by_neuron.setdefault(intra_neuron, {"mse": [], "mae": []})
+#         entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+#         entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+# 
+#     intra_neurons = sorted(errors_by_neuron)
+#     mse = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+#     mae = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+#     n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
+#     return intra_neurons, mse, mae, n_samples, Tfin
 
 
-def compute_classical_mae_stats(t_dir, model_cls, nu):
-    """Loads every classical model in `t_dir`, evaluates each against the FDM
-    reference at t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MAE
-    across the run_id samples. Returns (intra_neurons, mae_mean, mae_std,
-    mae_min, mae_max, n_samples, Tfin), one point per INTRA_NEURO.
-    mae_min/mae_max (the extremes actually observed across run_ids) are what
-    the plot uses for its error bars -- unlike mean +/- std, they can never
-    go negative on the plot's log-scale y-axis. Used by the legacy
-    `plote_classico_std copy.py` (MAE-only, ignores COLLOCATION_DISTRIBUTION)."""
-    entries = find_classical_configs(t_dir)
-    if not entries:
-        return [], [], [], [], [], [], None
-
-    first_model = model_cls.load(entries[0][2])
-    L, Tfin = first_model.L, first_model.Tfin
-
-    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
-    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
-    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
-
-    errors_by_neuron = {}
-    for intra_neuron, _run_id, pt_path in entries:
-        model = model_cls.load(pt_path)
-        u_pred = predict(model, x_plot, Tfin)
-        entry = errors_by_neuron.setdefault(intra_neuron, [])
-        entry.append(float(np.mean(np.abs(u_pred - u_ref))))
-
-    intra_neurons = sorted(errors_by_neuron)
-    mae_mean = [float(np.mean(errors_by_neuron[n])) for n in intra_neurons]
-    mae_std = [float(np.std(errors_by_neuron[n])) for n in intra_neurons]
-    mae_min = [float(np.min(errors_by_neuron[n])) for n in intra_neurons]
-    mae_max = [float(np.max(errors_by_neuron[n])) for n in intra_neurons]
-    n_samples = [len(errors_by_neuron[n]) for n in intra_neurons]
-    return intra_neurons, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin
+# UNUSED (only referenced by main/old/plote_classico.py, not by any other file) --
+# commented out 2026-09-03.
+# def plot_classical_mean_errors(intra_neurons, mse, mae, Tfin, save_path,
+#                                 color_mse="#2a78d6", color_mae="#1baf7a"):
+#     """Companion plot for `compute_classical_mean_errors` (legacy, mean-only)."""
+#     fig, ax = plt.subplots(figsize=(9, 4.5))
+#     ax.plot(intra_neurons, mse, "o-", color=color_mse, linewidth=2.0, markersize=6, label="MSE")
+#     ax.plot(intra_neurons, mae, "o-", color=color_mae, linewidth=2.0, markersize=6, label="MAE")
+#     ax.set_xlabel("INTRA_NEURO", fontsize=14)
+#     ax.set_ylabel("Error", fontsize=14)
+#     ax.set_yscale("log")
+#     ax.set_xticks(intra_neurons)
+#     ax.set_title(f"Classical PINN mean error vs INTRA_NEURO (T = {Tfin})", fontsize=13)
+#     ax.grid(True, linestyle="--", alpha=0.6)
+#     ax.legend()
+#     fig.tight_layout()
+#     fig.savefig(save_path, dpi=150)
+#     plt.close(fig)
 
 
-def plot_classical_mae_std(intra_neurons, mae_mean, mae_min, mae_max, Tfin, save_path,
-                            color_mae="#1baf7a"):
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    yerr = asymmetric_yerr(mae_mean, mae_min, mae_max)
-    ax.errorbar(intra_neurons, mae_mean, yerr=yerr, fmt="o-", color=color_mae,
-                linewidth=2.0, markersize=6, capsize=4, label="MAE (mean, [min,max])")
-    ax.set_xlabel("INTRA_NEURO", fontsize=14)
-    ax.set_ylabel("Error", fontsize=14)
-    ax.set_yscale("log")
-    ax.set_xticks(intra_neurons)
-    ax.set_title(f"Classical PINN MAE vs INTRA_NEURO (T = {Tfin}, legacy data)", fontsize=13)
-    ax.grid(True, linestyle="--", alpha=0.6)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=150)
-    plt.close(fig)
+# UNUSED (not called anywhere in the codebase -- its would-be caller,
+# plote_classico_std copy.py, no longer exists in the repo) -- commented out 2026-09-03.
+# def compute_classical_mae_stats(t_dir, model_cls, nu):
+#     """Loads every classical model in `t_dir`, evaluates each against the FDM
+#     reference at t=Tfin, and returns per-INTRA_NEURO mean/std/min/max MAE
+#     across the run_id samples. Returns (intra_neurons, mae_mean, mae_std,
+#     mae_min, mae_max, n_samples, Tfin), one point per INTRA_NEURO.
+#     mae_min/mae_max (the extremes actually observed across run_ids) are what
+#     the plot uses for its error bars -- unlike mean +/- std, they can never
+#     go negative on the plot's log-scale y-axis. Used by the legacy
+#     `plote_classico_std copy.py` (MAE-only, ignores COLLOCATION_DISTRIBUTION)."""
+#     entries = find_classical_configs(t_dir)
+#     if not entries:
+#         return [], [], [], [], [], [], None
+# 
+#     first_model = model_cls.load(entries[0][2])
+#     L, Tfin = first_model.L, first_model.Tfin
+# 
+#     x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+#     x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+#     u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+# 
+#     errors_by_neuron = {}
+#     for intra_neuron, _run_id, pt_path in entries:
+#         model = model_cls.load(pt_path)
+#         u_pred = predict(model, x_plot, Tfin)
+#         entry = errors_by_neuron.setdefault(intra_neuron, [])
+#         entry.append(float(np.mean(np.abs(u_pred - u_ref))))
+# 
+#     intra_neurons = sorted(errors_by_neuron)
+#     mae_mean = [float(np.mean(errors_by_neuron[n])) for n in intra_neurons]
+#     mae_std = [float(np.std(errors_by_neuron[n])) for n in intra_neurons]
+#     mae_min = [float(np.min(errors_by_neuron[n])) for n in intra_neurons]
+#     mae_max = [float(np.max(errors_by_neuron[n])) for n in intra_neurons]
+#     n_samples = [len(errors_by_neuron[n]) for n in intra_neurons]
+#     return intra_neurons, mae_mean, mae_std, mae_min, mae_max, n_samples, Tfin
+
+
+# UNUSED (not called anywhere in the codebase -- its would-be caller,
+# plote_classico_std copy.py, no longer exists in the repo) -- commented out 2026-09-03.
+# def plot_classical_mae_std(intra_neurons, mae_mean, mae_min, mae_max, Tfin, save_path,
+#                             color_mae="#1baf7a"):
+#     fig, ax = plt.subplots(figsize=(9, 4.5))
+#     yerr = asymmetric_yerr(mae_mean, mae_min, mae_max)
+#     ax.errorbar(intra_neurons, mae_mean, yerr=yerr, fmt="o-", color=color_mae,
+#                 linewidth=2.0, markersize=6, capsize=4, label="MAE (mean, [min,max])")
+#     ax.set_xlabel("INTRA_NEURO", fontsize=14)
+#     ax.set_ylabel("Error", fontsize=14)
+#     ax.set_yscale("log")
+#     ax.set_xticks(intra_neurons)
+#     ax.set_title(f"Classical PINN MAE vs INTRA_NEURO (T = {Tfin}, legacy data)", fontsize=13)
+#     ax.grid(True, linestyle="--", alpha=0.6)
+#     ax.legend()
+#     fig.tight_layout()
+#     fig.savefig(save_path, dpi=150)
+#     plt.close(fig)
 
 
 def compute_classical_error_stats_std(t_dir, model_cls, nu, collocation_distribution,
@@ -1288,39 +1305,94 @@ def compute_classical_error_stats_std(t_dir, model_cls, nu, collocation_distribu
             mae_var, mae_min, mae_max, n_samples, Tfin)
 
 
-def plot_classical_errors_std(stats_by_distribution, Tfin, save_path,
-                               color_mse="#2a78d6", dist_styles=None):
-    """`stats_by_distribution` maps COLLOCATION_DISTRIBUTION -> (intra_neurons,
-    mse_mean, mse_min, mse_max) for that distribution; distributions with no
-    models are omitted by the caller. `dist_styles` maps distribution name ->
-    dict(fmt=..., markerfacecolor=...); defaults to solid filled markers for
-    "uniform" and dashed hollow markers for "random", so both variants can
-    share one set of axes."""
-    if dist_styles is None:
-        dist_styles = {
-            "uniform": dict(fmt="o-", markerfacecolor=None),
-            "random": dict(fmt="s--", markerfacecolor="none"),
-        }
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    all_neurons = set()
-    for distribution, (intra_neurons, mse_mean, mse_min,
-                        mse_max) in stats_by_distribution.items():
-        all_neurons.update(intra_neurons)
-        style = dist_styles.get(distribution, dict(fmt="o-", markerfacecolor=None))
-        mse_yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
-        ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"], color=color_mse,
-                    markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
-                    capsize=4, label=f"with {distribution}")
-    ax.set_xlabel("INTRA_NEURO", fontsize=14)
-    ax.set_ylabel("MSE", fontsize=14)
-    ax.set_yscale("log")
-    ax.set_xticks(sorted(all_neurons))
-    ax.set_title(f"T = {Tfin}", fontsize=13)
-    ax.grid(True, linestyle="--", alpha=0.6)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=150)
-    plt.close(fig)
+def compute_classical_error_and_stopping_per_run(t_dir, model_cls, nu, collocation_distribution,
+                                                   n_collocation=None):
+    """Like `compute_classical_error_stats_std`, but returns one row per
+    individual run_id instead of aggregating across seeds -- every sampled
+    checkpoint found in `t_dir`, its MSE/MAE against the FDM reference at
+    t=Tfin, and whether its training used its full EPOCHS+LBFGS_EPOCHS budget
+    (TARGET_REACHED False, STOPPED_AT_STEP close to the budget) or converged
+    early by reaching TARGET_LOSS (TARGET_REACHED True). Returns (rows,
+    Tfin), where each row is a dict with keys "intra_neuron", "run_id",
+    "mse", "mae", "stopped_at_step", "epoch_budget", "target_reached".
+    Companion to `compute_classical_error_stats_std`, read from the same
+    checkpoints but without collapsing the run_id samples into a mean/std --
+    used by `plote_erro_epocas_classico.py` to plot every sample point
+    against its training cost."""
+    entries = find_classical_configs(
+        t_dir, collocation_distribution=collocation_distribution, n_collocation=n_collocation)
+    if not entries:
+        return [], None
+
+    first_model = model_cls.load(entries[0][2])
+    L, Tfin = first_model.L, first_model.Tfin
+
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+
+    rows = []
+    for intra_neuron, run_id, pt_path in entries:
+        model = model_cls.load(pt_path)
+        u_pred = predict(model, x_plot, Tfin)
+        mse = float(np.mean((u_pred - u_ref) ** 2))
+        mae = float(np.mean(np.abs(u_pred - u_ref)))
+
+        config_path = pt_path[: -len(".pt")] + "_config.json"
+        with open(config_path) as f:
+            cfg = json.load(f)
+        training_params = cfg.get("training_params", {})
+        epochs = training_params.get("EPOCHS")
+        lbfgs_epochs = training_params.get("LBFGS_EPOCHS", 0)
+        epoch_budget = (epochs + lbfgs_epochs) if epochs is not None else None
+
+        rows.append({
+            "intra_neuron": intra_neuron,
+            "run_id": run_id,
+            "mse": mse,
+            "mae": mae,
+            "stopped_at_step": training_params.get("STOPPED_AT_STEP"),
+            "epoch_budget": epoch_budget,
+            "target_reached": bool(training_params.get("TARGET_REACHED")),
+        })
+    return rows, Tfin
+
+
+# UNUSED (not called anywhere in the codebase -- plote_classico_vs_Intra.py uses
+# plot_classical_vs_quantum_std instead) -- commented out 2026-09-03.
+# def plot_classical_errors_std(stats_by_distribution, Tfin, save_path,
+#                                color_mse="#2a78d6", dist_styles=None):
+#     """`stats_by_distribution` maps COLLOCATION_DISTRIBUTION -> (intra_neurons,
+#     mse_mean, mse_min, mse_max) for that distribution; distributions with no
+#     models are omitted by the caller. `dist_styles` maps distribution name ->
+#     dict(fmt=..., markerfacecolor=...); defaults to solid filled markers for
+#     "uniform" and dashed hollow markers for "random", so both variants can
+#     share one set of axes."""
+#     if dist_styles is None:
+#         dist_styles = {
+#             "uniform": dict(fmt="o-", markerfacecolor=None),
+#             "random": dict(fmt="s--", markerfacecolor="none"),
+#         }
+#     fig, ax = plt.subplots(figsize=(9, 4.5))
+#     all_neurons = set()
+#     for distribution, (intra_neurons, mse_mean, mse_min,
+#                         mse_max) in stats_by_distribution.items():
+#         all_neurons.update(intra_neurons)
+#         style = dist_styles.get(distribution, dict(fmt="o-", markerfacecolor=None))
+#         mse_yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
+#         ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"], color=color_mse,
+#                     markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
+#                     capsize=4, label=f"with {distribution}")
+#     ax.set_xlabel("INTRA_NEURO", fontsize=14)
+#     ax.set_ylabel("MSE", fontsize=14)
+#     ax.set_yscale("log")
+#     ax.set_xticks(sorted(all_neurons))
+#     ax.set_title(f"T = {Tfin}", fontsize=13)
+#     ax.grid(True, linestyle="--", alpha=0.6)
+#     ax.legend()
+#     fig.tight_layout()
+#     fig.savefig(save_path, dpi=150)
+#     plt.close(fig)
 
 
 def load_quantum_sweep_summary(csv_path):
@@ -1373,8 +1445,64 @@ def quantum_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_colloca
     return n_qubits, mse_mean, mse_std, mse_var, mse_min, mse_max
 
 
+def load_quantum_exact_summary(csv_path):
+    """Loads a quantum_exact_summary.csv (produced by run_quantumExact.ipynb,
+    one aggregated row per network/n_cnot_layers/Tfin/n_collocation combo at
+    a fixed N_QUBITS, with mse_mean/mse_std/mse_variance and
+    steps_mean/steps_std/steps_variance already computed across seeds) into a
+    list of dict rows with the numeric columns converted to float. Returns
+    [] if `csv_path` doesn't exist. Sibling of `load_quantum_sweep_summary`,
+    for the fixed-N_QUBITS exact-sweep results instead of the N_QUBITS sweep."""
+    if not os.path.exists(csv_path):
+        return []
+    numeric_fields = {
+        "n_cnot_layers", "Tfin", "n_collocation", "mse_mean", "mse_min", "mse_max",
+        "mse_std", "mse_variance", "steps_mean", "steps_std", "steps_variance",
+        "steps_min", "steps_max", "target_reached_fraction", "early_target_fraction",
+        "adam_target_missed_fraction", "adam_epoch_limit", "n_samples",
+    }
+    with open(csv_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+    for row in rows:
+        for field in numeric_fields:
+            if row.get(field, "") != "":
+                row[field] = float(row[field])
+    return rows
+
+
+def quantum_exact_stats_vs_collocation(csv_path, Tfin, network=None, n_cnot_layers=None):
+    """Filters a quantum_exact_summary.csv (see `load_quantum_exact_summary`)
+    down to the rows matching `Tfin` (and, when given, `network` and
+    `n_cnot_layers`), and returns (n_collocation, mse_mean, mse_std, mse_var,
+    steps_mean, steps_std, steps_var, target_reached_frac, n_samples) sorted
+    by n_collocation -- one point per N_COLLOCATION value, the same shape the
+    classical `compute_classical_error_stats_vs_collocation` /
+    `compute_classical_stopping_stats_vs_collocation` pair returns, so
+    quantum and classical curves can share one plot. Returns an
+    all-empty-lists tuple if no rows match."""
+    rows = load_quantum_exact_summary(csv_path)
+    matches = [
+        row for row in rows
+        if math.isclose(row["Tfin"], Tfin, rel_tol=1e-9, abs_tol=1e-9)
+        and (network is None or row.get("network") == network)
+        and (n_cnot_layers is None or int(row["n_cnot_layers"]) == n_cnot_layers)
+    ]
+    matches.sort(key=lambda row: row["n_collocation"])
+    n_collocation = [int(row["n_collocation"]) for row in matches]
+    mse_mean = [row["mse_mean"] for row in matches]
+    mse_std = [row["mse_std"] for row in matches]
+    mse_var = [row["mse_variance"] for row in matches]
+    steps_mean = [row["steps_mean"] for row in matches]
+    steps_std = [row["steps_std"] for row in matches]
+    steps_var = [row["steps_variance"] for row in matches]
+    target_reached_frac = [row["target_reached_fraction"] for row in matches]
+    n_samples = [int(row["n_samples"]) for row in matches]
+    return (n_collocation, mse_mean, mse_std, mse_var, steps_mean, steps_std, steps_var,
+            target_reached_frac, n_samples)
+
+
 def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, save_path,
-                                   color_mse="#2a78d6", color_quantum="#d62728", dist_styles=None,
+                                   color_mse="b", color_quantum="#000000", dist_styles=None,
                                    error_type="desvio_padrao"):
     """Like `plot_classical_errors_std`, but overlays a quantum PINN
     N_QUBITS-sweep curve in `color_quantum` on the same axes so it can be
@@ -1427,6 +1555,136 @@ def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, sa
     ax.set_xlabel("INTRA_NEURO / N_QUBITS", fontsize=14)
     ax.set_ylabel("MSE", fontsize=14)
     ax.set_yscale("log")
+    ax.set_xticks(sorted(all_widths))
+    ax.set_title(f"T = {Tfin}", fontsize=13)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def compute_classical_stopping_stats_std(t_dir, collocation_distribution, n_collocation=None):
+    """Reads STOPPED_AT_STEP and TARGET_REACHED from every classical
+    checkpoint's training_params in `t_dir` (no model loading needed --
+    config json only), grouped by INTRA_NEURO. Returns (intra_neurons,
+    steps_mean, steps_std, steps_var, steps_min, steps_max,
+    target_reached_frac, n_samples, Tfin), one point per INTRA_NEURO found:
+    how many AdamW+L-BFGS iterations training actually ran before hitting
+    `target_loss` (or the EPOCHS+LBFGS_EPOCHS fallback), averaged over the
+    run_id seeds, plus the fraction of seeds that reached `target_loss`
+    rather than exhausting the epoch budget. Companion stat to
+    `compute_classical_error_stats_std`, read from the same checkpoints but
+    reporting training cost instead of accuracy; mirrors
+    `compute_classical_stopping_stats_vs_collocation`, but grouped by
+    INTRA_NEURO instead of by N_COLLOCATION. Used by
+    `plote_classico_vs_Intra.py`."""
+    entries = find_classical_configs(
+        t_dir, collocation_distribution=collocation_distribution, n_collocation=n_collocation)
+    if not entries:
+        return [], [], [], [], [], [], [], [], None
+
+    steps_by_neuron = {}
+    Tfin = None
+    for intra_neuron, _run_id, pt_path in entries:
+        config_path = pt_path[: -len(".pt")] + "_config.json"
+        with open(config_path) as f:
+            cfg = json.load(f)
+        training_params = cfg.get("training_params", {})
+        stopped_at_step = training_params.get("STOPPED_AT_STEP")
+        if stopped_at_step is None:
+            continue
+        Tfin = cfg["config"].get("Tfin", Tfin)
+        entry = steps_by_neuron.setdefault(intra_neuron, {"steps": [], "reached": []})
+        entry["steps"].append(stopped_at_step)
+        entry["reached"].append(bool(training_params.get("TARGET_REACHED")))
+
+    intra_neurons = sorted(steps_by_neuron)
+    steps_mean = [float(np.mean(steps_by_neuron[n]["steps"])) for n in intra_neurons]
+    steps_std = [float(np.std(steps_by_neuron[n]["steps"])) for n in intra_neurons]
+    steps_var = [float(np.var(steps_by_neuron[n]["steps"])) for n in intra_neurons]
+    steps_min = [float(np.min(steps_by_neuron[n]["steps"])) for n in intra_neurons]
+    steps_max = [float(np.max(steps_by_neuron[n]["steps"])) for n in intra_neurons]
+    target_reached_frac = [float(np.mean(steps_by_neuron[n]["reached"])) for n in intra_neurons]
+    n_samples = [len(steps_by_neuron[n]["steps"]) for n in intra_neurons]
+    return (intra_neurons, steps_mean, steps_std, steps_var, steps_min, steps_max,
+            target_reached_frac, n_samples, Tfin)
+
+
+def quantum_steps_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_collocation, Tfin):
+    """Like `quantum_stats_from_sweep_summary`, but returns the training-cost
+    columns (steps until the stopping criterion was hit) instead of MSE:
+    (n_qubits, steps_mean, steps_std, steps_var, steps_min, steps_max),
+    sorted by n_qubits -- one point per N_QUBITS, in the shape
+    `plot_classical_vs_quantum_steps_std` expects. Returns
+    ([], [], [], [], [], []) if no rows match."""
+    rows = load_quantum_sweep_summary(csv_path)
+    matches = [
+        row for row in rows
+        if row.get("network") == network
+        and int(row["n_cnot_layers"]) == n_cnot_layers
+        and int(row["n_collocation"]) == n_collocation
+        and math.isclose(row["Tfin"], Tfin, rel_tol=1e-9, abs_tol=1e-9)
+    ]
+    matches.sort(key=lambda row: row["n_qubits"])
+    n_qubits = [int(row["n_qubits"]) for row in matches]
+    steps_mean = [row["steps_mean"] for row in matches]
+    steps_std = [row["steps_std"] for row in matches]
+    steps_var = [row["steps_variance"] for row in matches]
+    steps_min = [row["steps_min"] for row in matches]
+    steps_max = [row["steps_max"] for row in matches]
+    return n_qubits, steps_mean, steps_std, steps_var, steps_min, steps_max
+
+
+def plot_classical_vs_quantum_steps_std(stats_by_distribution, quantum_stats, Tfin, save_path,
+                                         color_steps="b", color_quantum="#000000", dist_styles=None,
+                                         error_type="desvio_padrao"):
+    """Like `plot_classical_vs_quantum_std`, but plots training cost (steps
+    until the stopping criterion was hit) instead of MSE against INTRA_NEURO
+    / N_QUBITS. `stats_by_distribution` maps distribution -> (intra_neurons,
+    steps_mean, steps_std, steps_var, steps_min, steps_max) -- the step
+    portion of what `compute_classical_stopping_stats_std` returns.
+    `quantum_stats` is (n_qubits, steps_mean, steps_std, steps_var,
+    steps_min, steps_max), e.g. from `quantum_steps_stats_from_sweep_summary`;
+    pass ([], [], [], [], [], []) (or None) to skip the quantum curve.
+    `error_type` selects what the error bars show, same convention as
+    `plot_classical_vs_quantum_std` -- one of `ERROR_BAR_TYPES`. Used by
+    `plote_classico_vs_Intra.py`."""
+    if dist_styles is None:
+        dist_styles = {
+            "uniform": dict(fmt="o-", markerfacecolor=None),
+            "random": dict(fmt="s--", markerfacecolor="none"),
+        }
+    error_labels = {
+        "minimo_maximo": "min/max",
+        "desvio_padrao": "±std",
+        "variancia": "±var",
+    }
+    error_label = error_labels.get(error_type, error_type)
+
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    all_widths = set()
+    for distribution, (intra_neurons, steps_mean, steps_std, steps_var, steps_min,
+                        steps_max) in stats_by_distribution.items():
+        all_widths.update(intra_neurons)
+        style = dist_styles.get(distribution, dict(fmt="o-", markerfacecolor=None))
+        steps_yerr = error_bar_yerr(error_type, steps_mean, steps_std, steps_var, steps_min, steps_max)
+        ax.errorbar(intra_neurons, steps_mean, yerr=steps_yerr, fmt=style["fmt"], color=color_steps,
+                    markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
+                    capsize=4, label=f"Classical steps ({distribution}, {error_label})")
+
+    if quantum_stats is not None:
+        n_qubits, q_steps_mean, q_steps_std, q_steps_var, q_steps_min, q_steps_max = quantum_stats
+        if n_qubits:
+            all_widths.update(n_qubits)
+            q_yerr = error_bar_yerr(error_type, q_steps_mean, q_steps_std, q_steps_var,
+                                     q_steps_min, q_steps_max)
+            ax.errorbar(n_qubits, q_steps_mean, yerr=q_yerr, fmt="^-", color=color_quantum,
+                        linewidth=2.0, markersize=6, capsize=4,
+                        label=f"Quantum steps (N_QUBITS, {error_label})")
+
+    ax.set_xlabel("INTRA_NEURO / N_QUBITS", fontsize=14)
+    ax.set_ylabel("Passos até a parada (média)", fontsize=14)
     ax.set_xticks(sorted(all_widths))
     ax.set_title(f"T = {Tfin}", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
@@ -1510,30 +1768,33 @@ def compute_classical_error_stats_vs_collocation(t_dir, model_cls, nu, collocati
             n_samples, Tfin)
 
 
-def plot_classical_error_vs_collocation(n_collocation, mse_mean, mse_var, Tfin, save_path,
-                                         color_mse="#2a78d6"):
-    """MSE (mean +/- variance across seeds) between the classical PINN and
-    the FDM reference, plotted against N_COLLOCATION. Points sit at equally
-    spaced positions on the x-axis regardless of the actual gap between
-    consecutive N_COLLOCATION values (e.g. 100 -> 250 -> 500) -- only the
-    tick label at each position shows the real value -- so the sampling
-    density along the sweep doesn't visually distort the curve. Companion
-    plot for `compute_classical_error_stats_vs_collocation`."""
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    positions = np.arange(len(n_collocation))
-    ax.errorbar(positions, mse_mean, yerr=mse_var, fmt="o-", color=color_mse,
-                linewidth=2.0, markersize=6, capsize=4, label="MSE (mean +/- variance)")
-    ax.set_xlabel("N_COLLOCATION", fontsize=14)
-    ax.set_ylabel("MSE", fontsize=14)
-    ax.set_yscale("log")
-    ax.set_xticks(positions)
-    ax.set_xticklabels([str(n) for n in n_collocation])
-    ax.set_title(f"Classical PINN: MSE vs N_COLLOCATION (T = {Tfin})", fontsize=13)
-    ax.grid(True, which="both", linestyle="--", alpha=0.6)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=150)
-    plt.close(fig)
+# UNUSED (not called anywhere in the codebase -- only mentioned in a docstring;
+# plote_classico_vs_collocation.py defines its own local plot function instead)
+# -- commented out 2026-09-03.
+# def plot_classical_error_vs_collocation(n_collocation, mse_mean, mse_var, Tfin, save_path,
+#                                          color_mse="#2a78d6"):
+#     """MSE (mean +/- variance across seeds) between the classical PINN and
+#     the FDM reference, plotted against N_COLLOCATION. Points sit at equally
+#     spaced positions on the x-axis regardless of the actual gap between
+#     consecutive N_COLLOCATION values (e.g. 100 -> 250 -> 500) -- only the
+#     tick label at each position shows the real value -- so the sampling
+#     density along the sweep doesn't visually distort the curve. Companion
+#     plot for `compute_classical_error_stats_vs_collocation`."""
+#     fig, ax = plt.subplots(figsize=(9, 4.5))
+#     positions = np.arange(len(n_collocation))
+#     ax.errorbar(positions, mse_mean, yerr=mse_var, fmt="o-", color=color_mse,
+#                 linewidth=2.0, markersize=6, capsize=4, label="MSE (mean +/- variance)")
+#     ax.set_xlabel("N_COLLOCATION", fontsize=14)
+#     ax.set_ylabel("MSE", fontsize=14)
+#     ax.set_yscale("log")
+#     ax.set_xticks(positions)
+#     ax.set_xticklabels([str(n) for n in n_collocation])
+#     ax.set_title(f"Classical PINN: MSE vs N_COLLOCATION (T = {Tfin})", fontsize=13)
+#     ax.grid(True, which="both", linestyle="--", alpha=0.6)
+#     ax.legend()
+#     fig.tight_layout()
+#     fig.savefig(save_path, dpi=150)
+#     plt.close(fig)
 
 
 def compute_classical_stopping_stats_vs_collocation(t_dir, collocation_distribution, intra_neuron=None):
@@ -1577,199 +1838,210 @@ def compute_classical_stopping_stats_vs_collocation(t_dir, collocation_distribut
     return n_collocation_list, steps_mean, steps_std, steps_var, target_reached_frac, n_samples, Tfin
 
 
-def plot_classical_stopping_steps_vs_collocation(n_collocation, steps_mean, steps_var, Tfin, save_path,
-                                                   color_mean="#2a78d6", color_var="#e34948"):
-    """Number of training steps (AdamW + L-BFGS) until the stopping
-    criterion was hit, vs N_COLLOCATION -- mean on the left axis, variance
-    across the run_id seeds on the right axis (plotted separately, not as an
-    error bar: mean and variance of a step *count* live on very different
-    scales -- steps vs steps^2 -- so overlaying them as mean +/- variance
-    would put the whisker far outside the visible range). Points sit at
-    equally spaced x positions, same convention as
-    `plot_classical_error_vs_collocation`. Companion plot for
-    `compute_classical_stopping_stats_vs_collocation`."""
-    fig, ax1 = plt.subplots(figsize=(9, 4.5))
-    positions = np.arange(len(n_collocation))
-
-    line_mean = ax1.plot(positions, steps_mean, "o-", color=color_mean, linewidth=2.0,
-                          markersize=6, label="Média de passos")
-    ax1.set_xlabel("N_COLLOCATION", fontsize=14)
-    ax1.set_ylabel("Passos até a parada (média)", fontsize=14, color=color_mean)
-    ax1.tick_params(axis="y", labelcolor=color_mean)
-    ax1.set_xticks(positions)
-    ax1.set_xticklabels([str(n) for n in n_collocation])
-    ax1.grid(True, linestyle="--", alpha=0.6)
-
-    ax2 = ax1.twinx()
-    line_var = ax2.plot(positions, steps_var, "s--", color=color_var, linewidth=2.0,
-                         markersize=6, label="Variância de passos")
-    ax2.set_ylabel("Variância dos passos", fontsize=14, color=color_var)
-    ax2.tick_params(axis="y", labelcolor=color_var)
-
-    lines = line_mean + line_var
-    ax1.legend(lines, [l.get_label() for l in lines], loc="best")
-    #ax1.set_yscale("log")
-    #ax1.set_title(f"Classical PINN: passos até a parada vs N_COLLOCATION (T = {Tfin})", fontsize=13)
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=150)
-    plt.close(fig)
-
-
-def compute_quantum_error_stats_std(t_dir, model_cls, nu, input_rotation_axis="ry"):
-    """Loads every quantum model in `t_dir`, evaluates each against the FDM
-    reference at t=Tfin, and returns per-(FIXED_LAYER, N_QUBITS) mean/std/
-    min/max MAE across the SEED samples. Returns (stats, Tfin), where stats
-    is {fixed_layer: (n_qubits, mae_mean, mae_std, mae_min, mae_max,
-    n_samples)}, one entry per FIXED_LAYER found. mae_min/mae_max (the
-    extremes actually observed across seeds) are what the plot uses for its
-    error bars -- unlike mean +/- std, they can never go negative on the
-    plot's log-scale y-axis. Used by `plote_quantico_std.py`."""
-    entries = find_quantum_configs(t_dir, input_rotation_axis=input_rotation_axis)
-    if not entries:
-        return {}, None
-
-    first_model = model_cls.load(entries[0][3])
-    L, Tfin = first_model.L, first_model.Tfin
-
-    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
-    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
-    u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
-
-    errors_by_layer = {}
-    for fixed_layer, n_qubits, _seed, pt_path in entries:
-        model = model_cls.load(pt_path)
-        u_pred = predict(model, x_plot, Tfin)
-        by_n_qubits = errors_by_layer.setdefault(fixed_layer, {})
-        by_n_qubits.setdefault(n_qubits, []).append(float(np.mean(np.abs(u_pred - u_ref))))
-
-    stats = {}
-    for fixed_layer, by_n_qubits in errors_by_layer.items():
-        n_qubits_list = sorted(by_n_qubits)
-        mae_mean = [float(np.mean(by_n_qubits[n])) for n in n_qubits_list]
-        mae_std = [float(np.std(by_n_qubits[n])) for n in n_qubits_list]
-        mae_min = [float(np.min(by_n_qubits[n])) for n in n_qubits_list]
-        mae_max = [float(np.max(by_n_qubits[n])) for n in n_qubits_list]
-        n_samples = [len(by_n_qubits[n]) for n in n_qubits_list]
-        stats[fixed_layer] = (n_qubits_list, mae_mean, mae_std, mae_min, mae_max, n_samples)
-    return stats, Tfin
+# UNUSED (not called anywhere in the codebase) -- commented out 2026-09-03.
+# def plot_classical_stopping_steps_vs_collocation(n_collocation, steps_mean, steps_var, Tfin, save_path,
+#                                                    color_mean="#2a78d6", color_var="#e34948"):
+#     """Number of training steps (AdamW + L-BFGS) until the stopping
+#     criterion was hit, vs N_COLLOCATION -- mean on the left axis, variance
+#     across the run_id seeds on the right axis (plotted separately, not as an
+#     error bar: mean and variance of a step *count* live on very different
+#     scales -- steps vs steps^2 -- so overlaying them as mean +/- variance
+#     would put the whisker far outside the visible range). Points sit at
+#     equally spaced x positions, same convention as
+#     `plot_classical_error_vs_collocation`. Companion plot for
+#     `compute_classical_stopping_stats_vs_collocation`."""
+#     fig, ax1 = plt.subplots(figsize=(9, 4.5))
+#     positions = np.arange(len(n_collocation))
+# 
+#     line_mean = ax1.plot(positions, steps_mean, "o-", color=color_mean, linewidth=2.0,
+#                           markersize=6, label="Média de passos")
+#     ax1.set_xlabel("N_COLLOCATION", fontsize=14)
+#     ax1.set_ylabel("Passos até a parada (média)", fontsize=14, color=color_mean)
+#     ax1.tick_params(axis="y", labelcolor=color_mean)
+#     ax1.set_xticks(positions)
+#     ax1.set_xticklabels([str(n) for n in n_collocation])
+#     ax1.grid(True, linestyle="--", alpha=0.6)
+# 
+#     ax2 = ax1.twinx()
+#     line_var = ax2.plot(positions, steps_var, "s--", color=color_var, linewidth=2.0,
+#                          markersize=6, label="Variância de passos")
+#     ax2.set_ylabel("Variância dos passos", fontsize=14, color=color_var)
+#     ax2.tick_params(axis="y", labelcolor=color_var)
+# 
+#     lines = line_mean + line_var
+#     ax1.legend(lines, [l.get_label() for l in lines], loc="best")
+#     #ax1.set_yscale("log")
+#     #ax1.set_title(f"Classical PINN: passos até a parada vs N_COLLOCATION (T = {Tfin})", fontsize=13)
+#     fig.tight_layout()
+#     fig.savefig(save_path, dpi=150)
+#     plt.close(fig)
 
 
-def plot_quantum_errors_std(stats, Tfin, save_path, colors=None):
-    if colors is None:
-        colors = ["#2a78d6", "#e34948", "#eb6834", "#4a3aa7", "#1baf7a", "#e87ba4"]
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    all_n_qubits = set()
-    for (fixed_layer, (n_qubits, mae_mean, _mae_std, mae_min, mae_max, _n_samples)), color in zip(
-            sorted(stats.items()), colors):
-        all_n_qubits.update(n_qubits)
-        yerr = asymmetric_yerr(mae_mean, mae_min, mae_max)
-        ax.errorbar(n_qubits, mae_mean, yerr=yerr, fmt="o-", color=color,
-                    linewidth=2.0, markersize=6, capsize=4, label=fixed_layer)
-    ax.set_xlabel("Number of qubits", fontsize=14)
-    ax.set_ylabel("Error", fontsize=14)
-    ax.set_yscale("log")
-    ax.set_xticks(sorted(all_n_qubits))
-    #ax.set_title(f"Quantum PINN MAE vs number of qubits (T = {Tfin})", fontsize=13)
-    ax.grid(True, linestyle="--", alpha=0.6)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=150)
-    plt.close(fig)
+# UNUSED (only referenced by main/old/plote_quantico_std.py, not by any other file) --
+# commented out 2026-09-03.
+# def compute_quantum_error_stats_std(t_dir, model_cls, nu, input_rotation_axis="ry"):
+#     """Loads every quantum model in `t_dir`, evaluates each against the FDM
+#     reference at t=Tfin, and returns per-(FIXED_LAYER, N_QUBITS) mean/std/
+#     min/max MAE across the SEED samples. Returns (stats, Tfin), where stats
+#     is {fixed_layer: (n_qubits, mae_mean, mae_std, mae_min, mae_max,
+#     n_samples)}, one entry per FIXED_LAYER found. mae_min/mae_max (the
+#     extremes actually observed across seeds) are what the plot uses for its
+#     error bars -- unlike mean +/- std, they can never go negative on the
+#     plot's log-scale y-axis. Used by `plote_quantico_std.py`."""
+#     entries = find_quantum_configs(t_dir, input_rotation_axis=input_rotation_axis)
+#     if not entries:
+#         return {}, None
+# 
+#     first_model = model_cls.load(entries[0][3])
+#     L, Tfin = first_model.L, first_model.Tfin
+# 
+#     x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=nu)
+#     x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+#     u_ref, _ = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
+# 
+#     errors_by_layer = {}
+#     for fixed_layer, n_qubits, _seed, pt_path in entries:
+#         model = model_cls.load(pt_path)
+#         u_pred = predict(model, x_plot, Tfin)
+#         by_n_qubits = errors_by_layer.setdefault(fixed_layer, {})
+#         by_n_qubits.setdefault(n_qubits, []).append(float(np.mean(np.abs(u_pred - u_ref))))
+# 
+#     stats = {}
+#     for fixed_layer, by_n_qubits in errors_by_layer.items():
+#         n_qubits_list = sorted(by_n_qubits)
+#         mae_mean = [float(np.mean(by_n_qubits[n])) for n in n_qubits_list]
+#         mae_std = [float(np.std(by_n_qubits[n])) for n in n_qubits_list]
+#         mae_min = [float(np.min(by_n_qubits[n])) for n in n_qubits_list]
+#         mae_max = [float(np.max(by_n_qubits[n])) for n in n_qubits_list]
+#         n_samples = [len(by_n_qubits[n]) for n in n_qubits_list]
+#         stats[fixed_layer] = (n_qubits_list, mae_mean, mae_std, mae_min, mae_max, n_samples)
+#     return stats, Tfin
 
 
-def compute_quantum_errors_comparativo(t_dir, model_cls, x_plot, u_ref, Tfin,
-                                        input_rotation_axis, collocation_distribution):
-    """Per-(FIXED_LAYER, N_QUBITS) MSE/MAE stats against a caller-supplied
-    `u_ref` grid, used by `plote_comparativo.py` to compare quantum models
-    against the classical baseline on the same x_plot/u_ref/Tfin."""
-    entries = find_quantum_configs(
-        t_dir, input_rotation_axis=input_rotation_axis, collocation_distribution=collocation_distribution
-    )
-
-    errors_by_layer = {}
-    for fixed_layer, n_qubits, _seed, pt_path in entries:
-        model = model_cls.load(pt_path)
-        u_pred = predict(model, x_plot, Tfin)
-        by_n = errors_by_layer.setdefault(fixed_layer, {})
-        entry = by_n.setdefault(n_qubits, {"mse": [], "mae": []})
-        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
-        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
-
-    stats = {}
-    for fixed_layer, by_n in errors_by_layer.items():
-        n_list = sorted(by_n)
-        mse_mean = [float(np.mean(by_n[n]["mse"])) for n in n_list]
-        mse_std = [float(np.std(by_n[n]["mse"])) for n in n_list]
-        mse_min = [float(np.min(by_n[n]["mse"])) for n in n_list]
-        mse_max = [float(np.max(by_n[n]["mse"])) for n in n_list]
-        mae_mean = [float(np.mean(by_n[n]["mae"])) for n in n_list]
-        mae_std = [float(np.std(by_n[n]["mae"])) for n in n_list]
-        n_samples = [len(by_n[n]["mse"]) for n in n_list]
-        stats[fixed_layer] = (n_list, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples)
-    return stats
+# UNUSED (only referenced by main/old/plote_quantico_std.py, not by any other file) --
+# commented out 2026-09-03.
+# def plot_quantum_errors_std(stats, Tfin, save_path, colors=None):
+#     if colors is None:
+#         colors = ["#2a78d6", "#e34948", "#eb6834", "#4a3aa7", "#1baf7a", "#e87ba4"]
+#     fig, ax = plt.subplots(figsize=(9, 4.5))
+#     all_n_qubits = set()
+#     for (fixed_layer, (n_qubits, mae_mean, _mae_std, mae_min, mae_max, _n_samples)), color in zip(
+#             sorted(stats.items()), colors):
+#         all_n_qubits.update(n_qubits)
+#         yerr = asymmetric_yerr(mae_mean, mae_min, mae_max)
+#         ax.errorbar(n_qubits, mae_mean, yerr=yerr, fmt="o-", color=color,
+#                     linewidth=2.0, markersize=6, capsize=4, label=fixed_layer)
+#     ax.set_xlabel("Number of qubits", fontsize=14)
+#     ax.set_ylabel("Error", fontsize=14)
+#     ax.set_yscale("log")
+#     ax.set_xticks(sorted(all_n_qubits))
+#     #ax.set_title(f"Quantum PINN MAE vs number of qubits (T = {Tfin})", fontsize=13)
+#     ax.grid(True, linestyle="--", alpha=0.6)
+#     ax.legend()
+#     fig.tight_layout()
+#     fig.savefig(save_path, dpi=150)
+#     plt.close(fig)
 
 
-def compute_classical_errors_comparativo(t_dir, model_cls, x_plot, u_ref, Tfin, collocation_distribution):
-    """Per-INTRA_NEURO MSE/MAE stats against a caller-supplied `u_ref` grid,
-    used by `plote_comparativo.py` to compare classical models against the
-    quantum ones on the same x_plot/u_ref/Tfin."""
-    entries = find_classical_configs(t_dir, collocation_distribution=collocation_distribution)
-    if not entries:
-        return None
+# UNUSED (only referenced by main/old/plote_comparativo.py, not by any other file) --
+# commented out 2026-09-03.
+# def compute_quantum_errors_comparativo(t_dir, model_cls, x_plot, u_ref, Tfin,
+#                                         input_rotation_axis, collocation_distribution):
+#     """Per-(FIXED_LAYER, N_QUBITS) MSE/MAE stats against a caller-supplied
+#     `u_ref` grid, used by `plote_comparativo.py` to compare quantum models
+#     against the classical baseline on the same x_plot/u_ref/Tfin."""
+#     entries = find_quantum_configs(
+#         t_dir, input_rotation_axis=input_rotation_axis, collocation_distribution=collocation_distribution
+#     )
+# 
+#     errors_by_layer = {}
+#     for fixed_layer, n_qubits, _seed, pt_path in entries:
+#         model = model_cls.load(pt_path)
+#         u_pred = predict(model, x_plot, Tfin)
+#         by_n = errors_by_layer.setdefault(fixed_layer, {})
+#         entry = by_n.setdefault(n_qubits, {"mse": [], "mae": []})
+#         entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+#         entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+# 
+#     stats = {}
+#     for fixed_layer, by_n in errors_by_layer.items():
+#         n_list = sorted(by_n)
+#         mse_mean = [float(np.mean(by_n[n]["mse"])) for n in n_list]
+#         mse_std = [float(np.std(by_n[n]["mse"])) for n in n_list]
+#         mse_min = [float(np.min(by_n[n]["mse"])) for n in n_list]
+#         mse_max = [float(np.max(by_n[n]["mse"])) for n in n_list]
+#         mae_mean = [float(np.mean(by_n[n]["mae"])) for n in n_list]
+#         mae_std = [float(np.std(by_n[n]["mae"])) for n in n_list]
+#         n_samples = [len(by_n[n]["mse"]) for n in n_list]
+#         stats[fixed_layer] = (n_list, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples)
+#     return stats
 
-    errors_by_neuron = {}
-    for intra_neuron, _run_id, pt_path in entries:
-        model = model_cls.load(pt_path)
-        u_pred = predict(model, x_plot, Tfin)
-        entry = errors_by_neuron.setdefault(intra_neuron, {"mse": [], "mae": []})
-        entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
-        entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
 
-    intra_neurons = sorted(errors_by_neuron)
-    mse_mean = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
-    mse_std = [float(np.std(errors_by_neuron[n]["mse"])) for n in intra_neurons]
-    mse_min = [float(np.min(errors_by_neuron[n]["mse"])) for n in intra_neurons]
-    mse_max = [float(np.max(errors_by_neuron[n]["mse"])) for n in intra_neurons]
-    mae_mean = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
-    mae_std = [float(np.std(errors_by_neuron[n]["mae"])) for n in intra_neurons]
-    n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
-    return intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples
+# UNUSED (only referenced by main/old/plote_comparativo.py, not by any other file) --
+# commented out 2026-09-03.
+# def compute_classical_errors_comparativo(t_dir, model_cls, x_plot, u_ref, Tfin, collocation_distribution):
+#     """Per-INTRA_NEURO MSE/MAE stats against a caller-supplied `u_ref` grid,
+#     used by `plote_comparativo.py` to compare classical models against the
+#     quantum ones on the same x_plot/u_ref/Tfin."""
+#     entries = find_classical_configs(t_dir, collocation_distribution=collocation_distribution)
+#     if not entries:
+#         return None
+# 
+#     errors_by_neuron = {}
+#     for intra_neuron, _run_id, pt_path in entries:
+#         model = model_cls.load(pt_path)
+#         u_pred = predict(model, x_plot, Tfin)
+#         entry = errors_by_neuron.setdefault(intra_neuron, {"mse": [], "mae": []})
+#         entry["mse"].append(float(np.mean((u_pred - u_ref) ** 2)))
+#         entry["mae"].append(float(np.mean(np.abs(u_pred - u_ref))))
+# 
+#     intra_neurons = sorted(errors_by_neuron)
+#     mse_mean = [float(np.mean(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+#     mse_std = [float(np.std(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+#     mse_min = [float(np.min(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+#     mse_max = [float(np.max(errors_by_neuron[n]["mse"])) for n in intra_neurons]
+#     mae_mean = [float(np.mean(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+#     mae_std = [float(np.std(errors_by_neuron[n]["mae"])) for n in intra_neurons]
+#     n_samples = [len(errors_by_neuron[n]["mse"]) for n in intra_neurons]
+#     return intra_neurons, mse_mean, mse_std, mse_min, mse_max, mae_mean, mae_std, n_samples
 
 
-def plot_comparison(quantum_stats, classical_data, Tfin, save_path,
-                     color_classical="black", colors_quantum=None, fallback_colors=None):
-    if colors_quantum is None:
-        colors_quantum = {"cz_ring": "#2a78d6", "ring_cnot": "#1baf7a"}
-    if fallback_colors is None:
-        fallback_colors = ["#eb6834", "#4a3aa7", "#e87ba4"]
-
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    all_widths = set()
-
-    fallback = iter(fallback_colors)
-    for fixed_layer, (n_qubits, mse_mean, _mse_std, mse_min, mse_max, _mae_mean, _mae_std, _n_samples) in sorted(
-        quantum_stats.items()
-    ):
-        color = colors_quantum.get(fixed_layer, next(fallback, None))
-        all_widths.update(n_qubits)
-        yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
-        ax.errorbar(n_qubits, mse_mean, yerr=yerr, fmt="o-", color=color, linewidth=2.0,
-                    markersize=6, capsize=4, label=f"Quantum PINN ({fixed_layer})")
-
-    if classical_data is not None:
-        intra_neurons, mse_mean, _mse_std, mse_min, mse_max, _mae_mean, _mae_std, _n_samples = classical_data
-        all_widths.update(intra_neurons)
-        yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
-        ax.errorbar(intra_neurons, mse_mean, yerr=yerr, fmt="s--", color=color_classical,
-                    linewidth=2.0, markersize=6, capsize=4, label="Classical PINN")
-
-    ax.set_xlabel("Width (N_QUBITS / INTRA_NEURO)", fontsize=14)
-    ax.set_ylabel("MSE", fontsize=14)
-    ax.set_yscale("log")
-    ax.set_xticks(sorted(all_widths))
-    #ax.set_title(f"Quantum vs classical PINN mean MSE vs width (T = {Tfin})", fontsize=13)
-    ax.grid(True, linestyle="--", alpha=0.6)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(save_path, dpi=250)
-    plt.close(fig)
+# UNUSED (only referenced by main/old/plote_comparativo.py, not by any other file) --
+# commented out 2026-09-03.
+# def plot_comparison(quantum_stats, classical_data, Tfin, save_path,
+#                      color_classical="black", colors_quantum=None, fallback_colors=None):
+#     if colors_quantum is None:
+#         colors_quantum = {"cz_ring": "#2a78d6", "ring_cnot": "#1baf7a"}
+#     if fallback_colors is None:
+#         fallback_colors = ["#eb6834", "#4a3aa7", "#e87ba4"]
+# 
+#     fig, ax = plt.subplots(figsize=(9, 4.5))
+#     all_widths = set()
+# 
+#     fallback = iter(fallback_colors)
+#     for fixed_layer, (n_qubits, mse_mean, _mse_std, mse_min, mse_max, _mae_mean, _mae_std, _n_samples) in sorted(
+#         quantum_stats.items()
+#     ):
+#         color = colors_quantum.get(fixed_layer, next(fallback, None))
+#         all_widths.update(n_qubits)
+#         yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
+#         ax.errorbar(n_qubits, mse_mean, yerr=yerr, fmt="o-", color=color, linewidth=2.0,
+#                     markersize=6, capsize=4, label=f"Quantum PINN ({fixed_layer})")
+# 
+#     if classical_data is not None:
+#         intra_neurons, mse_mean, _mse_std, mse_min, mse_max, _mae_mean, _mae_std, _n_samples = classical_data
+#         all_widths.update(intra_neurons)
+#         yerr = asymmetric_yerr(mse_mean, mse_min, mse_max)
+#         ax.errorbar(intra_neurons, mse_mean, yerr=yerr, fmt="s--", color=color_classical,
+#                     linewidth=2.0, markersize=6, capsize=4, label="Classical PINN")
+# 
+#     ax.set_xlabel("Width (N_QUBITS / INTRA_NEURO)", fontsize=14)
+#     ax.set_ylabel("MSE", fontsize=14)
+#     ax.set_yscale("log")
+#     ax.set_xticks(sorted(all_widths))
+#     #ax.set_title(f"Quantum vs classical PINN mean MSE vs width (T = {Tfin})", fontsize=13)
+#     ax.grid(True, linestyle="--", alpha=0.6)
+#     ax.legend()
+#     fig.tight_layout()
+#     fig.savefig(save_path, dpi=250)
+#     plt.close(fig)
