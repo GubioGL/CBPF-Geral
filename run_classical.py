@@ -2,6 +2,7 @@ import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 import torch as tc
+from tqdm import tqdm
 from main.functions import (
     plot_loss,
     plot_solution,
@@ -145,23 +146,23 @@ if __name__ == "__main__":
 
     # Bloco A: varredura de N_COLLOCATION com intra_neuro fixo em 3 e 10
     # (refaz/estende o que ja existia com seed 0-9).
-    block_A = [
-        (n_col, intra_neuro, Tfin, run_id)
-        for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-        for intra_neuro in [3, 10]
-        for Tfin in [0.1, 1]
-        for run_id in SEEDS_REDO
-    ]
-
-    # # Bloco B: varredura de intra_neuro com N_COLLOCATION fixo em 10 e 100
-    # # (refaz/estende o que ja existia com seed 0-9).
-    # block_B = [
+    # block_A = [
     #     (n_col, intra_neuro, Tfin, run_id)
-    #     for n_col in [10, 100]
-    #     for intra_neuro in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    #     for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    #     for intra_neuro in [3, 10]
     #     for Tfin in [0.1, 1]
     #     for run_id in SEEDS_REDO
     # ]
+
+    # Bloco B: varredura de intra_neuro com N_COLLOCATION fixo em 10 e 100
+    # (refaz/estende o que ja existia com seed 0-9).
+    block_B = [
+        (n_col, intra_neuro, Tfin, run_id)
+        for n_col in [10, 100]
+        for intra_neuro in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        for Tfin in [0.1, 1]
+        for run_id in SEEDS_REDO
+    ]
 
     # # Bloco C: analise de aumento de N_COLLOCATION para intra_neuro
     # # 3, 5, 7, 15 -- dados novos, seed 0-49 completo.
@@ -177,7 +178,7 @@ if __name__ == "__main__":
     # cobre integralmente o intra_neuro=3 do bloco A (seed 0-49 >= seed
     # 10-49), entao essas entradas colapsam aqui sem rodar em dobro.
     jobs_by_key = {}
-    for block in (block_A):#, block_B, block_C):
+    for block in (block_B,):#, block_B, block_C):
         for job in block:
             jobs_by_key[job] = job
     jobs = list(jobs_by_key.values())
@@ -192,11 +193,19 @@ if __name__ == "__main__":
 
     with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
         futures = {executor.submit(run_one, *job): job for job in jobs}
-        for future in as_completed(futures):
+        progress = tqdm(as_completed(futures), total=len(jobs), desc="runs", unit="run")
+        n_failed = 0
+        for future in progress:
             n_col, intra_neuro, Tfin, run_id = futures[future]
             try:
                 future.result()
-                print(f"done: N_COLLOCATION={n_col} intra_neuro={intra_neuro} Tfin={Tfin} run_id={run_id}")
             except Exception as exc:
-                print(f"FAILED: N_COLLOCATION={n_col} intra_neuro={intra_neuro} Tfin={Tfin} run_id={run_id} -> {exc!r}")
+                n_failed += 1
+                progress.write(
+                    f"FAILED: N_COLLOCATION={n_col} intra_neuro={intra_neuro} "
+                    f"Tfin={Tfin} run_id={run_id} -> {exc!r}"
+                )
+            progress.set_postfix(failed=n_failed)
+        if n_failed:
+            print(f"{n_failed} run(s) failed -- see FAILED lines above.")
 

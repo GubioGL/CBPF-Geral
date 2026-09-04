@@ -603,7 +603,7 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
     best_loss = float("inf")
     target_reached = False
 
-    for _ in tqdm(range(epochs), desc="AdamW"):
+    for _ in range(epochs):#tqdm(range(epochs), desc="AdamW"):
         model.train()
 
         if resample_fn is not None:
@@ -675,7 +675,7 @@ def train(model, x_f, t_f, loss_kwargs, epochs, lr, grad_clip=1.0,
             return loss
 
         stall_count = 0
-        for _ in tqdm(range(lbfgs_epochs), desc="L-BFGS"):
+        for _ in range(lbfgs_epochs):#tqdm(range(lbfgs_epochs), desc="L-BFGS"):
             model.train()
 
             if lbfgs_resample_fn is not None:
