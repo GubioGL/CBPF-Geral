@@ -156,34 +156,34 @@ if __name__ == "__main__":
 
     # Bloco B: varredura de intra_neuro com N_COLLOCATION fixo em 10 e 100
     # (refaz/estende o que ja existia com seed 0-9).
-    block_B = [
-        (n_col, intra_neuro, Tfin, run_id)
-        for n_col in [10, 100]
-        for intra_neuro in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        for Tfin in [0.1, 1]
-        for run_id in SEEDS_REDO
-    ]
-
-    # # Bloco C: analise de aumento de N_COLLOCATION para intra_neuro
-    # # 3, 5, 7, 15 -- dados novos, seed 0-49 completo.
-    # block_C = [
+    # block_B = [
     #     (n_col, intra_neuro, Tfin, run_id)
-    #     for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-    #     for intra_neuro in [3, 5, 7, 15]
+    #     for n_col in [10, 100]
+    #     for intra_neuro in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     #     for Tfin in [0.1, 1]
-    #     for run_id in SEEDS_NEW
+    #     for run_id in SEEDS_REDO
     # ]
+
+    # Bloco C: analise de aumento de N_COLLOCATION para intra_neuro
+    # 3, 5, 7, 15 -- dados novos, seed 0-49 completo.
+    block_C = [
+        (n_col, intra_neuro, Tfin, run_id)
+        for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        for intra_neuro in [3, 5, 7, 15]
+        for Tfin in [0.1, 1]
+        for run_id in SEEDS_NEW
+    ]
 
     # Dedup pela chave (N_COLLOCATION, intra_neuro, Tfin, run_id): o bloco C
     # cobre integralmente o intra_neuro=3 do bloco A (seed 0-49 >= seed
     # 10-49), entao essas entradas colapsam aqui sem rodar em dobro.
     jobs_by_key = {}
-    for block in (block_B,):#, block_B, block_C):
+    for block in (block_C,):#, block_B, block_C):
         for job in block:
             jobs_by_key[job] = job
     jobs = list(jobs_by_key.values())
 
-    print(f"Bloco A (N_COLLOCATION x intra_neuro 3/10, seed 10-49): {len(block_A)} runs")
+    print(f"Bloco A (N_COLLOCATION x intra_neuro 3/10, seed 10-49): {len(block_C)} runs")
     # print(f"Bloco B (intra_neuro x N_COLLOCATION 10/100, seed 10-49): {len(block_B)} runs")
     # print(f"Bloco C (N_COLLOCATION x intra_neuro 3/5/7/15, seed 0-49): {len(block_C)} runs")
     print(f"Total apos dedup (uniao dos 3 blocos): {len(jobs)} runs")
