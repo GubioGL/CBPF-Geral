@@ -146,23 +146,23 @@ if __name__ == "__main__":
 
     # Bloco A: varredura de N_COLLOCATION com intra_neuro fixo em 3 e 10
     # (refaz/estende o que ja existia com seed 0-9).
-    # block_A = [
-    #     (n_col, intra_neuro, Tfin, run_id)
-    #     for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-    #     for intra_neuro in [3, 10]
-    #     for Tfin in [0.1, 1]
-    #     for run_id in SEEDS_REDO
-    # ]
+    block_A = [
+        (n_col, intra_neuro, Tfin, run_id)
+        for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        for intra_neuro in [3, 10]
+        for Tfin in [0.1, 1]
+        for run_id in SEEDS_REDO
+    ]
 
     # Bloco B: varredura de intra_neuro com N_COLLOCATION fixo em 10 e 100
     # (refaz/estende o que ja existia com seed 0-9).
-    # block_B = [
-    #     (n_col, intra_neuro, Tfin, run_id)
-    #     for n_col in [10, 100]
-    #     for intra_neuro in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    #     for Tfin in [0.1, 1]
-    #     for run_id in SEEDS_REDO
-    # ]
+    block_B = [
+        (n_col, intra_neuro, Tfin, run_id)
+        for n_col in [10, 100]
+        for intra_neuro in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        for Tfin in [0.1, 1]
+        for run_id in SEEDS_REDO
+    ]
 
     # Bloco C: analise de aumento de N_COLLOCATION para intra_neuro
     # 3, 5, 7, 15 -- dados novos, seed 0-49 completo.
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     # cobre integralmente o intra_neuro=3 do bloco A (seed 0-49 >= seed
     # 10-49), entao essas entradas colapsam aqui sem rodar em dobro.
     jobs_by_key = {}
-    for block in (block_C,):#, block_B, block_C):
+    for block in (block_A, block_B, block_C):
         for job in block:
             jobs_by_key[job] = job
     jobs = list(jobs_by_key.values())
@@ -187,6 +187,20 @@ if __name__ == "__main__":
     # print(f"Bloco B (intra_neuro x N_COLLOCATION 10/100, seed 10-49): {len(block_B)} runs")
     # print(f"Bloco C (N_COLLOCATION x intra_neuro 3/5/7/15, seed 0-49): {len(block_C)} runs")
     print(f"Total apos dedup (uniao dos 3 blocos): {len(jobs)} runs")
+
+    # Retomada apos interrupcao: pula jobs cujo checkpoint (.pt) ja existe em
+    # disco, para nao re-treinar o que ja foi concluido antes do PC desligar.
+    def _output_path(job):
+        n_col, intra_neuro, Tfin, run_id = job
+        return (
+            f"data/classical/T_{Tfin}/Cmodel_{COLLOCATION_DISTRIBUTION}_{n_col}"
+            f"_NEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.pt"
+        )
+
+    jobs_done = [job for job in jobs if os.path.exists(_output_path(job))]
+    jobs = [job for job in jobs if not os.path.exists(_output_path(job))]
+    print(f"Ja concluidos (pulados): {len(jobs_done)} runs")
+    print(f"Faltando (serao rodados agora): {len(jobs)} runs")
 
     for _, _, Tfin, _ in jobs:
         os.makedirs(f"data/classical/T_{Tfin}", exist_ok=True)

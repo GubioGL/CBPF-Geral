@@ -1,0 +1,33 @@
+{
+  "class_name": "ClassicalPINN2",
+  "config": {
+    "pre_neurons": 10,
+    "pre_depth": 1,
+    "intra_neuron": 15,
+    "intra_neurons": 10,
+    "intra_depth": 1,
+    "post_neurons": 10,
+    "post_depth": 1,
+    "L": 1.0,
+    "Tfin": 1
+  },
+  "training_params": {
+    "NU": 0.01,
+    "HX": 0.001953125,
+    "HT": 0.001,
+    "N_COLLOCATION": 20,
+    "SEED": 12,
+    "COLLOCATION_DISTRIBUTION": "random",
+    "EPOCHS": 20000,
+    "LR": 0.001,
+    "LBFGS_EPOCHS": 1000,
+    "LBFGS_LR": 0.5,
+    "HIDDEN_NEURONS": 10,
+    "HIDDEN_DEPTH": 1,
+    "STOPPING_DISTRIBUTION": "uniform_exact",
+    "TARGET_LOSS": 0.00014432708887381914,
+    "TARGET_REACHED": false,
+    "STOPPED_AT_STEP": 20050,
+    "STOPPING_LOSS_VALUE": 0.017479246482253075
+  }
+}
