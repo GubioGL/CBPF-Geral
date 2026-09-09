@@ -1419,14 +1419,20 @@ def load_quantum_sweep_summary(csv_path):
     return rows
 
 
-def quantum_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_collocation, Tfin):
+def quantum_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_collocation, Tfin,
+                                      model_family=None):
     """Filters a qubit_sweep_summary.csv (see `load_quantum_sweep_summary`)
     down to the rows matching `network`, `n_cnot_layers`, `n_collocation`,
     and `Tfin`, and returns (n_qubits, mse_mean, mse_std, mse_var, mse_min,
     mse_max) sorted by n_qubits -- one point per N_QUBITS, in the same shape
     `plot_classical_vs_quantum_std` expects (it picks whichever of
-    std/var/min-max the caller asked for via `error_type`). Returns
-    ([], [], [], [], [], []) if no rows match."""
+    std/var/min-max the caller asked for via `error_type`). Some sweep
+    summaries (e.g. the "fixed_validation" ones) carry both a quantum_exact
+    and a classical_mlp row per N_QUBITS in a `model_family` column -- pass
+    `model_family` (e.g. "quantum_exact") to keep only one of them; leave as
+    None for files with a single row per N_QUBITS (no model_family column,
+    or only one family present). Returns ([], [], [], [], [], []) if no rows
+    match."""
     rows = load_quantum_sweep_summary(csv_path)
     matches = [
         row for row in rows
@@ -1434,6 +1440,7 @@ def quantum_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_colloca
         and int(row["n_cnot_layers"]) == n_cnot_layers
         and int(row["n_collocation"]) == n_collocation
         and math.isclose(row["Tfin"], Tfin, rel_tol=1e-9, abs_tol=1e-9)
+        and (model_family is None or row.get("model_family") == model_family)
     ]
     matches.sort(key=lambda row: row["n_qubits"])
     n_qubits = [int(row["n_qubits"]) for row in matches]
@@ -1501,6 +1508,67 @@ def quantum_exact_stats_vs_collocation(csv_path, Tfin, network=None, n_cnot_laye
             target_reached_frac, n_samples)
 
 
+def _quantum_exact_rows_by_n_qubits(csv_path_by_n_qubits, Tfin, n_collocation, network=None,
+                                     n_cnot_layers=None):
+    """Shared lookup for `quantum_exact_stats_vs_n_qubits` and
+    `quantum_steps_stats_vs_n_qubits`: for each N_QUBITS in
+    `csv_path_by_n_qubits` ({n_qubits: csv_path}, one quantum_exact_summary.csv
+    per N_QUBITS -- see `load_quantum_exact_summary`), keeps the single row
+    matching `Tfin` and `n_collocation` (and, when given, `network` and
+    `n_cnot_layers`). N_QUBITS whose file is missing or has no matching row
+    are skipped. Returns [(n_qubits, row), ...] sorted by n_qubits."""
+    matches = []
+    for n_qubits, csv_path in csv_path_by_n_qubits.items():
+        for row in load_quantum_exact_summary(csv_path):
+            if (math.isclose(row["Tfin"], Tfin, rel_tol=1e-9, abs_tol=1e-9)
+                    and int(row["n_collocation"]) == n_collocation
+                    and (network is None or row.get("network") == network)
+                    and (n_cnot_layers is None or int(row["n_cnot_layers"]) == n_cnot_layers)):
+                matches.append((n_qubits, row))
+                break
+    matches.sort(key=lambda item: item[0])
+    return matches
+
+
+def quantum_exact_stats_vs_n_qubits(csv_path_by_n_qubits, Tfin, n_collocation, network=None,
+                                     n_cnot_layers=None):
+    """Companion to `quantum_exact_stats_vs_collocation`, but assembles an
+    N_QUBITS sweep at a *fixed* `n_collocation` out of several
+    quantum_exact_summary.csv files -- one per N_QUBITS (see
+    `csv_path_by_n_qubits`, e.g. QUANTUM_EXACT_CSV_BY_N_QUBITS in
+    plote_classico_vs_Intra.py). Returns (n_qubits, mse_mean, mse_std,
+    mse_var, mse_min, mse_max) sorted by n_qubits -- the shape
+    `plot_classical_vs_quantum_std` expects. Sibling of
+    `quantum_steps_stats_vs_n_qubits`; used by `plote_classico_vs_Intra.py`."""
+    matches = _quantum_exact_rows_by_n_qubits(csv_path_by_n_qubits, Tfin, n_collocation,
+                                               network=network, n_cnot_layers=n_cnot_layers)
+    n_qubits = [n for n, _ in matches]
+    mse_mean = [row["mse_mean"] for _, row in matches]
+    mse_std = [row["mse_std"] for _, row in matches]
+    mse_var = [row["mse_variance"] for _, row in matches]
+    mse_min = [row["mse_min"] for _, row in matches]
+    mse_max = [row["mse_max"] for _, row in matches]
+    return n_qubits, mse_mean, mse_std, mse_var, mse_min, mse_max
+
+
+def quantum_steps_stats_vs_n_qubits(csv_path_by_n_qubits, Tfin, n_collocation, network=None,
+                                     n_cnot_layers=None):
+    """Steps counterpart of `quantum_exact_stats_vs_n_qubits`: same
+    per-N_QUBITS lookup, but returns the training-cost columns instead of
+    MSE: (n_qubits, steps_mean, steps_std, steps_var, steps_min, steps_max)
+    sorted by n_qubits -- the shape `plot_classical_vs_quantum_steps_std`
+    expects."""
+    matches = _quantum_exact_rows_by_n_qubits(csv_path_by_n_qubits, Tfin, n_collocation,
+                                               network=network, n_cnot_layers=n_cnot_layers)
+    n_qubits = [n for n, _ in matches]
+    steps_mean = [row["steps_mean"] for _, row in matches]
+    steps_std = [row["steps_std"] for _, row in matches]
+    steps_var = [row["steps_variance"] for _, row in matches]
+    steps_min = [row["steps_min"] for _, row in matches]
+    steps_max = [row["steps_max"] for _, row in matches]
+    return n_qubits, steps_mean, steps_std, steps_var, steps_min, steps_max
+
+
 def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, save_path,
                                    color_mse="b", color_quantum="#000000", dist_styles=None,
                                    error_type="desvio_padrao"):
@@ -1512,8 +1580,9 @@ def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, sa
     (intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max) -- the
     full tuple `compute_classical_error_stats_std` returns for MSE.
     `quantum_stats` is (n_qubits, mse_mean, mse_std, mse_var, mse_min,
-    mse_max), e.g. from `quantum_stats_from_sweep_summary`; pass
-    ([], [], [], [], [], []) (or None) to skip the quantum curve.
+    mse_max), e.g. from `quantum_stats_from_sweep_summary` or
+    `quantum_exact_stats_vs_n_qubits`; pass ([], [], [], [], [], []) (or
+    None) to skip the quantum curve.
 
     `error_type` selects what the error bars show, both for the classical
     and the quantum curve -- one of `ERROR_BAR_TYPES`:
@@ -1557,7 +1626,7 @@ def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, sa
     ax.set_yscale("log")
     ax.set_xticks(sorted(all_widths))
     ax.set_title(f"T = {Tfin}", fontsize=13)
-    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.grid(True, which="both", linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()
     fig.savefig(save_path, dpi=150)
@@ -1611,13 +1680,16 @@ def compute_classical_stopping_stats_std(t_dir, collocation_distribution, n_coll
             target_reached_frac, n_samples, Tfin)
 
 
-def quantum_steps_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_collocation, Tfin):
+def quantum_steps_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_collocation, Tfin,
+                                            model_family=None):
     """Like `quantum_stats_from_sweep_summary`, but returns the training-cost
     columns (steps until the stopping criterion was hit) instead of MSE:
     (n_qubits, steps_mean, steps_std, steps_var, steps_min, steps_max),
     sorted by n_qubits -- one point per N_QUBITS, in the shape
-    `plot_classical_vs_quantum_steps_std` expects. Returns
-    ([], [], [], [], [], []) if no rows match."""
+    `plot_classical_vs_quantum_steps_std` expects. `model_family` behaves as
+    in `quantum_stats_from_sweep_summary` -- pass e.g. "quantum_exact" for a
+    sweep summary that also carries a classical_mlp row per N_QUBITS.
+    Returns ([], [], [], [], [], []) if no rows match."""
     rows = load_quantum_sweep_summary(csv_path)
     matches = [
         row for row in rows
@@ -1625,6 +1697,7 @@ def quantum_steps_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_c
         and int(row["n_cnot_layers"]) == n_cnot_layers
         and int(row["n_collocation"]) == n_collocation
         and math.isclose(row["Tfin"], Tfin, rel_tol=1e-9, abs_tol=1e-9)
+        and (model_family is None or row.get("model_family") == model_family)
     ]
     matches.sort(key=lambda row: row["n_qubits"])
     n_qubits = [int(row["n_qubits"]) for row in matches]
@@ -1645,8 +1718,9 @@ def plot_classical_vs_quantum_steps_std(stats_by_distribution, quantum_stats, Tf
     steps_mean, steps_std, steps_var, steps_min, steps_max) -- the step
     portion of what `compute_classical_stopping_stats_std` returns.
     `quantum_stats` is (n_qubits, steps_mean, steps_std, steps_var,
-    steps_min, steps_max), e.g. from `quantum_steps_stats_from_sweep_summary`;
-    pass ([], [], [], [], [], []) (or None) to skip the quantum curve.
+    steps_min, steps_max), e.g. from `quantum_steps_stats_from_sweep_summary`
+    or `quantum_steps_stats_vs_n_qubits`; pass ([], [], [], [], [], []) (or
+    None) to skip the quantum curve.
     `error_type` selects what the error bars show, same convention as
     `plot_classical_vs_quantum_std` -- one of `ERROR_BAR_TYPES`. Used by
     `plote_classico_vs_Intra.py`."""

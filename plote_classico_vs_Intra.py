@@ -10,31 +10,33 @@ from main.functions import (
 )
 from main.models import ClassicalPINN2
 
-CLASSICAL_DIR = "data/classical2"
+CLASSICAL_DIR = "data/classical"
 T_LABELS = ["0.1", "1"]
 COLLOCATION_DISTRIBUTIONS = ["random"]
 
-CLASSICAL_N_COLLOCATION = 10
+CLASSICAL_N_COLLOCATION = 100
 
-# One of ERROR_BAR_TYPES:
-# "minimo_maximo" (observed min/max),
-# "desvio_padrao" (+/-std), or
-# "variancia" (+/-variance).
+# Classical curves only plot up to this INTRA_NEURO
+CLASSICAL_MAX_INTRA_NEURON = 10
 ERROR_BAR_TYPE = "variancia"
-
-# Passos ate a parada sao uma contagem (unidade "passos"), entao sua variancia
-# vive em passos^2 -- bem maior que a media e estoura a escala do eixo y.
-# Desvio padrao tem a mesma unidade da media, entao mantem o eixo legivel.
 STEPS_ERROR_BAR_TYPE = "desvio_padrao"
 
 # Quantum N_QUBITS sweep, read from qubit_sweep_summary.csv (already aggregated
-# mean/min/max/std per network/n_cnot_layers/n_qubits/Tfin/n_collocation -- see
-# `qubit_sweep_runs.csv` for the raw per-seed rows it was built from).
-QUBIT_SWEEP_SUMMARY_CSV = "qubit_sweep_summary.csv"
+# mean/min/max/std per network/n_cnot_layers/n_qubits/Tfin/n_collocation --
+QUBIT_SWEEP_SUMMARY_CSV = "data/CBPF_qubit_sweep_quantum_classical_fixed_validation_results/qubit_sweep_summary.csv"
+QUANTUM_MODEL_FAMILY = "quantum_exact"
 QUANTUM_NETWORK = "brickwork_cnot"
-QUANTUM_N_QUBITS = 4
 QUANTUM_N_CNOT_LAYERS = 1
 QUANTUM_N_COLLOCATION = CLASSICAL_N_COLLOCATION
+
+
+def _limit_to_max_intra_neuron(intra_neurons, *parallel_lists, max_intra_neuron):
+    """Trims `intra_neurons` and every same-indexed list in `parallel_lists`
+    down to the entries where INTRA_NEURO <= max_intra_neuron."""
+    keep = [i for i, n in enumerate(intra_neurons) if n <= max_intra_neuron]
+    trimmed_neurons = [intra_neurons[i] for i in keep]
+    trimmed_lists = tuple([lst[i] for i in keep] for lst in parallel_lists)
+    return (trimmed_neurons,) + trimmed_lists
 
 
 if __name__ == "__main__":
@@ -48,6 +50,13 @@ if __name__ == "__main__":
                 (intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max, mae_mean, mae_std,
                 mae_var, mae_min, mae_max, n_samples, dist_Tfin) = compute_classical_error_stats_std(
                     t_dir, ClassicalPINN2, NU, distribution, n_collocation=CLASSICAL_N_COLLOCATION
+                )
+                if not intra_neurons:
+                    continue
+                (intra_neurons, mse_mean, mse_std, mse_var, mse_min,
+                mse_max) = _limit_to_max_intra_neuron(
+                    intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max,
+                    max_intra_neuron=CLASSICAL_MAX_INTRA_NEURON
                 )
                 if not intra_neurons:
                     continue
@@ -66,9 +75,15 @@ if __name__ == "__main__":
                 n_cnot_layers=QUANTUM_N_CNOT_LAYERS,
                 n_collocation=QUANTUM_N_COLLOCATION,
                 Tfin=float(t_label),
+                model_family=QUANTUM_MODEL_FAMILY,
             )
             if not quantum_stats[0]:
                 print(f"  no quantum sweep rows found for T={t_label} in {QUBIT_SWEEP_SUMMARY_CSV}")
+            else:
+                quantum_stats = _limit_to_max_intra_neuron(
+                    quantum_stats[0], *quantum_stats[1:],
+                    max_intra_neuron=CLASSICAL_MAX_INTRA_NEURON
+                )
 
             save_path = f"Error_std_vs_IntraNeuro_T_{t_label}_NCOL{CLASSICAL_N_COLLOCATION}.png"
             plot_classical_vs_quantum_std(
@@ -82,6 +97,13 @@ if __name__ == "__main__":
                 (intra_neurons, steps_mean, steps_std, steps_var, steps_min, steps_max,
                 target_reached_frac, n_samples, dist_Tfin) = compute_classical_stopping_stats_std(
                     t_dir, distribution, n_collocation=CLASSICAL_N_COLLOCATION
+                )
+                if not intra_neurons:
+                    continue
+                (intra_neurons, steps_mean, steps_std, steps_var, steps_min,
+                steps_max) = _limit_to_max_intra_neuron(
+                    intra_neurons, steps_mean, steps_std, steps_var, steps_min, steps_max,
+                    max_intra_neuron=CLASSICAL_MAX_INTRA_NEURON
                 )
                 if not intra_neurons:
                     continue
@@ -100,9 +122,15 @@ if __name__ == "__main__":
                 n_cnot_layers=QUANTUM_N_CNOT_LAYERS,
                 n_collocation=QUANTUM_N_COLLOCATION,
                 Tfin=float(t_label),
+                model_family=QUANTUM_MODEL_FAMILY,
             )
             if not quantum_steps_stats[0]:
                 print(f"  no quantum sweep rows found for T={t_label} in {QUBIT_SWEEP_SUMMARY_CSV}")
+            else:
+                quantum_steps_stats = _limit_to_max_intra_neuron(
+                    quantum_steps_stats[0], *quantum_steps_stats[1:],
+                    max_intra_neuron=CLASSICAL_MAX_INTRA_NEURON
+                )
 
             steps_save_path = f"Steps_vs_IntraNeuro_T_{t_label}_NCOL{CLASSICAL_N_COLLOCATION}.png"
             plot_classical_vs_quantum_steps_std(
