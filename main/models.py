@@ -105,18 +105,25 @@ class ClassicalPINN(PINNBase):
         """Hard-imposes the initial condition at tau=0 by construction."""
         return initial_condition(x, L=self.L) + tau * output_nn
 
+class SIN(tc.nn.Module):
+    def __init__(self): 
+        super(SIN, self).__init__() 
+    def forward(self, x):
+        return tc.sin(x)
+
 class ClassicalPINN2(PINNBase):
 
     def __init__(self,
                  pre_neurons, pre_depth,
                  intra_neuron, intra_neurons, intra_depth,
                  post_neurons, post_depth, 
-                 L=1.0, Tfin=0.1):
+                 L=1.0, Tfin=0.1,
+                 seno=False):
         super().__init__()
         self.config = dict(pre_neurons=pre_neurons, pre_depth=pre_depth,
                          intra_neuron=intra_neuron, intra_neurons=intra_neurons, intra_depth=intra_depth,
                          post_neurons=post_neurons, post_depth=post_depth,
-                           L=L, Tfin=Tfin)
+                           L=L, Tfin=Tfin, seno=seno)
         self.L, self.Tfin = float(L), float(Tfin)
 
 
@@ -128,11 +135,18 @@ class ClassicalPINN2(PINNBase):
         self.pre = nn.Sequential(*pre_layers)
 
         # Intra layers
-        layers = [nn.Linear(intra_neuron, intra_neurons), nn.Tanh()]
-        for _ in range(intra_depth - 1):
-            layers += [nn.Linear(intra_neurons, intra_neurons), nn.Tanh()]
-        layers += [nn.Linear(intra_neurons, intra_neuron)]
-        self.net = nn.Sequential(*layers)
+        if seno==True:
+            layers = [nn.Linear(intra_neuron, intra_neurons), SIN()]
+            for _ in range(intra_depth - 1):
+                layers += [nn.Linear(intra_neurons, intra_neurons), SIN()]
+            layers += [nn.Linear(intra_neurons, intra_neuron)]
+            self.net = nn.Sequential(*layers)
+        else:
+            layers = [nn.Linear(intra_neuron, intra_neurons), nn.Tanh()]
+            for _ in range(intra_depth - 1):
+                layers += [nn.Linear(intra_neurons, intra_neurons), nn.Tanh()]
+            layers += [nn.Linear(intra_neurons, intra_neuron)]
+            self.net = nn.Sequential(*layers)
 
         # Pós layers
         post_layers = [nn.Linear(intra_neuron, post_neurons), nn.Tanh()]

@@ -10,6 +10,10 @@ from main.functions import (
 from main.models import ClassicalPINN2
 
 CLASSICAL_DIR = "data/classical"
+# Mesma varredura, mas com ClassicalPINN2(seno=True) (SIN em vez de Tanh nas
+# camadas intra, ver run_classical.py) -- plotada como uma terceira curva
+# ("Classical (seno)") ao lado da classica padrao e da quantica.
+CLASSICAL_SENO_DIR = "data/classical_seno"
 T_LABELS = ["0.1", "1"]
 COLLOCATION_DISTRIBUTION = "random"  # deve bater com o usado em run_classical.py
 INTRA_NEURO_LIST = [3,5, 7, 10, 15]  # arquiteturas comparadas no mesmo grafico
@@ -23,13 +27,6 @@ INTRA_NEURO_COLORS = {
 MAX_N_COLLOCATION = 100  # corta os pontos do sweep (o quantico vai ate 500)
 
 # Resultados quanticos exatos (run_quantumExact.ipynb), um diretorio por
-# N_QUBITS -- mesma largura de rede que INTRA_NEURO no classico (o circuito
-# brickwork_cnot usa n_qubits no lugar de intra_neuron). Ha resultados
-# quanticos para todo INTRA_NEURO_LIST (N_QUBITS em {3, 5, 7, 10, 15}); os
-# nomes das pastas nao seguem um padrao unico (rodadas geradas em momentos
-# diferentes), entao mapeamos explicitamente em vez de um template. As
-# curvas quanticas sao sempre pretas (para nao competir com as cores do
-# classico), distintas entre si por estilo de linha/marcador.
 QUANTUM_EXACT_DIR_BY_N_QUBITS = {
     3: "data/CBPF_quantum_exact_results_Brickwork3",
     5: "data/CBPF_quantum_exact_results__Brickwork5",
@@ -58,14 +55,14 @@ def _limit_n_collocation(n_collocation, *value_lists, max_n=MAX_N_COLLOCATION):
 
 def plot_error_comparison(series, Tfin, save_path):
     """series: lista de (kind, param, n_collocation, mse_mean, mse_var), kind
-    em {"Classical", "Quantum"} e param = INTRA_NEURO (classico) ou N_QUBITS
-    (quantico). Uma curva por (kind, param): marcador fixo por param
-    (MARKER_BY_PARAM), classico colorido por param com linha solida
-    (INTRA_NEURO_COLORS), quantico sempre preto com linha
-    tracejada/pontilhada (QUANTUM_LINESTYLES) -- so cor/traço distinguem
-    classico de quantico. Posicoes no eixo x sao igualmente espacadas (uniao
-    dos N_COLLOCATION de todas as series), mesma convencao de
-    plot_classical_error_vs_collocation."""
+    em {"Classical", "Classical (seno)", "Quantum"} e param = INTRA_NEURO
+    (classico) ou N_QUBITS (quantico). Uma curva por (kind, param): marcador
+    fixo por param (MARKER_BY_PARAM), classico colorido por param
+    (INTRA_NEURO_COLORS) com linha solida ("Classical", Tanh) ou tracejada
+    ("Classical (seno)", SIN -- mesma cor do param, so o traço muda), quantico
+    sempre preto com linha tracejada/pontilhada propria (QUANTUM_LINESTYLES).
+    Posicoes no eixo x sao igualmente espacadas (uniao dos N_COLLOCATION de
+    todas as series), mesma convencao de plot_classical_error_vs_collocation."""
     fig, ax = plt.subplots(figsize=(9, 4.5))
     all_n = sorted({n for _, _, n_list, _, _ in series for n in n_list})
     positions = {n: i for i, n in enumerate(all_n)}
@@ -73,11 +70,14 @@ def plot_error_comparison(series, Tfin, save_path):
     for kind, param, n_collocation, mse_mean, mse_var in series:
         pos = [positions[n] for n in n_collocation]
         marker = MARKER_BY_PARAM.get(param, "o")
-        is_quantum = kind == "Quantum"
-        if is_quantum:
+        if kind == "Quantum":
             linestyle = QUANTUM_LINESTYLES.get(param, "--")
             color = QUANTUM_COLOR
             label = f"Quantum ({param} qubits)"
+        elif kind == "Classical (seno)":
+            linestyle = "--"
+            color = INTRA_NEURO_COLORS.get(param)
+            label = f"Classical seno ({param})"
         else:
             linestyle = "-"
             color = INTRA_NEURO_COLORS.get(param)
@@ -109,11 +109,14 @@ def plot_steps_comparison(series, Tfin, save_path):
     for kind, param, n_collocation, steps_mean in series:
         pos = [positions[n] for n in n_collocation]
         marker = MARKER_BY_PARAM.get(param, "o")
-        is_quantum = kind == "Quantum"
-        if is_quantum:
+        if kind == "Quantum":
             linestyle = QUANTUM_LINESTYLES.get(param, "--")
             color = QUANTUM_COLOR
             label = f"Quantum ({param} qubits)"
+        elif kind == "Classical (seno)":
+            linestyle = "--"
+            color = INTRA_NEURO_COLORS.get(param)
+            label = f"Classical seno ({param})"
         else:
             linestyle = "-"
             color = INTRA_NEURO_COLORS.get(param)
@@ -169,6 +172,32 @@ if __name__ == "__main__":
                     # for n, s_mean, s_std, reached in zip(n_stop, steps_mean, steps_std, target_reached_frac):
                     #     print(f"  N_COLLOCATION={n:4d}  passos_ate_parar={s_mean:8.1f} +/- {s_std:6.1f}  "
                     #           f"target_reached={reached:.0%}")
+
+            # Mesma varredura em data/classical_seno (ClassicalPINN2(seno=True)),
+            # sobreposta a curva classica padrao acima.
+            seno_t_dir = os.path.join(CLASSICAL_SENO_DIR, f"T_{t_label}")
+            (n_collocation_seno, mse_mean_seno, mse_std_seno, mse_var_seno, mae_mean_seno,
+             mae_std_seno, mae_var_seno, n_samples_seno, Tfin_seno) = compute_classical_error_stats_vs_collocation(
+                seno_t_dir, ClassicalPINN2, NU, COLLOCATION_DISTRIBUTION, intra_neuron=intra_neuron
+            )
+
+            (n_stop_seno, steps_mean_seno, steps_std_seno, steps_var_seno, target_reached_frac_seno,
+             n_samples_stop_seno, Tfin_stop_seno) = compute_classical_stopping_stats_vs_collocation(
+                seno_t_dir, COLLOCATION_DISTRIBUTION, intra_neuron=intra_neuron
+            )
+
+            if not n_collocation_seno and not n_stop_seno:
+                print(f"No classical (seno) models found in {seno_t_dir} for INTRA_NEURO={intra_neuron}, skipping.")
+            else:
+                if n_collocation_seno:
+                    error_series.append(
+                        ("Classical (seno)", intra_neuron, n_collocation_seno, mse_mean_seno, mse_var_seno)
+                    )
+                    Tfin_error = Tfin_error or Tfin_seno
+
+                if n_stop_seno:
+                    steps_series.append(("Classical (seno)", intra_neuron, n_stop_seno, steps_mean_seno))
+                    Tfin_steps = Tfin_steps or Tfin_stop_seno
 
             # Curva quantica exata (run_quantumExact.ipynb) com a mesma largura
             # de rede (N_QUBITS == intra_neuron), sobreposta a classica acima.

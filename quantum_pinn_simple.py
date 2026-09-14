@@ -1,3 +1,4 @@
+import json
 import math
 import os
 
@@ -9,24 +10,25 @@ import torch.nn as nn
 from tqdm import tqdm
 
 # ---- physical parameters ---------------------------------------------------
-L, TFIN, NU = 1.0, 0.1, 0.1
-NU_INIT = np.random.random()   # initial guess for the learned viscosity (inverse problem)
+L, TFIN, NU = 1.0, 0.1, 0.01
 # ---- discretization (used in the PDE residual loss and collocation sampling)
 HX, HT = L / 512, 1.0e-3
 # ---- collocation sampling ---------------------------------------------------
 N_COLLOCATION = 100
 N_DATA = 100  # fixed data points at t=Tfin, needed to identify nu
 SEED = 42
+COLLOCATION_DISTRIBUTION = "random"        # training collocation points
+STOPPING_DISTRIBUTION = "uniform_exact"    # fixed grid used for the stopping/monitor loss
 # ---- training ---------------------------------------------------------------
-EPOCHS, LR = 5000, 1.0e-2
-LBFGS_EPOCHS, LBFGS_LR = 5000, 1
+EPOCHS, LR = 20000, 1.0e-2
+LBFGS_EPOCHS, LBFGS_LR = 1000, .5
 # ---- architecture -------------------------------------------------------------
 # pre -> quantum -> post, same 3-block shape as classical_pinn_simple.py's
 # pre -> net -> post, but the trainable "net" bottleneck is replaced by a
 # fixed (parameter-free) quantum feature map: N_QUBITS plays the role
 # INTRA_NEURON played there.
 PRE_NEURONS, PRE_DEPTH = 10, 1
-N_QUBITS = 3               # bottleneck width, quantum analogue of INTRA_NEURON
+N_QUBITS = 2               # bottleneck width, quantum analogue of INTRA_NEURON
 POST_NEURONS, POST_DEPTH = 10, 1
 ANGLE_SCALE = math.pi
 FIXED_LAYER = "linear_cnot"        # see FIXED_LAYERS below for every option
@@ -128,7 +130,7 @@ def reference_pde_residual(x_f, t_f, x_ref, t_ref, U_ref, L, nu, hx, ht):
     u_t = (u_tp - u_tm) / (2.0 * ht)
     u_x = (u_xp - u_xm) / (2.0 * hx)
     u_xx = (u_xp - 2.0 * u_0 + u_xm) / (hx**2)
-    return float(np.mean((u_t + u_0 * u_x - nu * u_xx) ** 2))
+    return float(np.mean( (u_t + u_0 * u_x - nu * u_xx)**2 ))
 
 # ----------------------------------------------------------------------
 # Collocation points
@@ -258,6 +260,15 @@ class QuantumPINN(nn.Module):
         super().__init__()
         self.L, self.Tfin = float(L), float(Tfin)
         self.angle_scale = float(angle_scale)
+        # Kwargs needed to reconstruct this model (cls(**config) must work);
+        # `nu_init` is left out on purpose -- it only seeds the training run,
+        # the loaded state_dict overwrites `learnable_parameter` anyway.
+        self.config = dict(
+            pre_neurons=pre_neurons, pre_depth=pre_depth, n_qubits=n_qubits,
+            post_neurons=post_neurons, post_depth=post_depth, L=self.L, Tfin=self.Tfin,
+            angle_scale=self.angle_scale, fixed_layer=fixed_layer,
+            fixed_layer_repeats=fixed_layer_repeats, input_rotation_axis=input_rotation_axis,
+        )
 
         def mlp(n_in, hidden, depth, n_out):
             layers = [nn.Linear(n_in, hidden), nn.Tanh()]
@@ -289,6 +300,37 @@ class QuantumPINN(nn.Module):
     def show_circuit(self):
         dummy = tc.zeros(1, self.quantum.n_qubits)
         return qml.draw_mpl(self.quantum.circuit)(dummy)
+
+    def save(self, path, training_params=None):
+        """Saves weights + config to `path` (state_dict + reconstruction
+        kwargs), plus a human-readable `<path>_config.json` alongside it so
+        the run configuration can be inspected without loading torch.
+
+        `training_params` is optional extra metadata (e.g. NU, HX, HT,
+        N_COLLOCATION, SEED, EPOCHS, LR, the initial/final learned nu) recorded
+        for bookkeeping only -- it is not part of `config` and is never passed
+        to `cls(**config)` on load."""
+        path = str(path)
+        payload = {"class_name": type(self).__name__, "config": self.config, "state_dict": self.state_dict()}
+        if training_params is not None:
+            payload["training_params"] = training_params
+        tc.save(payload, path)
+
+        config_path = os.path.splitext(path)[0] + "_config.json"
+        json_payload = {"class_name": type(self).__name__, "config": self.config}
+        if training_params is not None:
+            json_payload["training_params"] = training_params
+        with open(config_path, "w") as f:
+            json.dump(json_payload, f, indent=2)
+
+    @classmethod
+    def load(cls, path, map_location="cpu"):
+        """Reconstructs the model from a checkpoint saved with `save`, ready
+        for further training or inference."""
+        checkpoint = tc.load(path, map_location=map_location, weights_only=False)
+        model = cls(**checkpoint["config"])
+        model.load_state_dict(checkpoint["state_dict"])
+        return model
 
 def stencil(x, t, L, hx, ht):
     """Shifted neighbor points x+-hx, t+-ht for the centered-difference stencil."""
@@ -332,7 +374,7 @@ def train(model, x_f, t_f, epochs, lr, resample_fn=None,
         if data_points is None:
             return 0.0
         x_data, t_data, u_data = data_points
-        return tc.mean((model(tc.cat([x_data, t_data], dim=1)) - u_data) ** 2)
+        return tc.mean(abs(model(tc.cat([x_data, t_data], dim=1)) - u_data))
 
     def monitor(train_stencil):
         model.eval()
@@ -358,7 +400,7 @@ def train(model, x_f, t_f, epochs, lr, resample_fn=None,
             x_p, x_m, t_p, t_m = stencil(x_f, t_f, L, hx, ht)
 
         residual = pde_residual(model, x_f, x_p, x_m, t_f, t_p, t_m, hx, ht)
-        loss = tc.mean(residual ** 2) + data_loss()
+        loss = tc.mean(abs(residual)) + data_loss()
         opt.zero_grad()
         loss.backward()
         tc.nn.utils.clip_grad_norm_(params, 1.0)
@@ -389,12 +431,12 @@ def train(model, x_f, t_f, epochs, lr, resample_fn=None,
 
         lbfgs_opt = tc.optim.LBFGS(
             lbfgs_params, lr=lbfgs_lr, max_iter=300, history_size=100, line_search_fn="strong_wolfe")
-        patience, tol, stall = 50, 1.0e-9, 0
+        patience, tol, stall = 500, 1.0e-9, 0
 
         def closure():
             lbfgs_opt.zero_grad()
             residual = pde_residual(model, x_f, x_p, x_m, t_f, t_p, t_m, hx, ht)
-            loss = tc.mean(abs(residual)) + data_loss() * 0.1
+            loss = tc.mean((residual)**2) + data_loss()
             loss.backward()
             return loss
 
@@ -501,76 +543,114 @@ def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="",
 # Run
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    set_seed(SEED)
-    os.makedirs(OUT_DIR, exist_ok=True)
+    
+    for SEED in [10,11,12,13,14,15,16,17,18,19]:  # run multiple seeds to check robustness
+        set_seed(SEED)
+        NU_INIT = np.random.random()   # initial guess for the learned viscosity (inverse problem)
+        
+        os.makedirs(OUT_DIR, exist_ok=True)
 
-    # Reference solution, used only for comparison/plots, never for training.
-    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=TFIN, nu=NU)
-    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
+        # Reference solution, used only for comparison/plots, never for training.
+        x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=TFIN, nu=NU)
+        x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
 
-    model = QuantumPINN(
-        pre_neurons=PRE_NEURONS, pre_depth=PRE_DEPTH,
-        n_qubits=N_QUBITS, post_neurons=POST_NEURONS, post_depth=POST_DEPTH,
-        L=L, Tfin=TFIN, nu_init=NU_INIT, angle_scale=ANGLE_SCALE,
-        fixed_layer=FIXED_LAYER, fixed_layer_repeats=FIXED_LAYER_REPEATS,
-        input_rotation_axis=INPUT_ROTATION_AXIS,
-    )
+        model = QuantumPINN(
+            pre_neurons=PRE_NEURONS, pre_depth=PRE_DEPTH,
+            n_qubits=N_QUBITS, post_neurons=POST_NEURONS, post_depth=POST_DEPTH,
+            L=L, Tfin=TFIN, nu_init=NU_INIT, angle_scale=ANGLE_SCALE,
+            fixed_layer=FIXED_LAYER, fixed_layer_repeats=FIXED_LAYER_REPEATS,
+            input_rotation_axis=INPUT_ROTATION_AXIS,
+        )
 
-    x_f, t_f = sample_collocation_points(N_COLLOCATION, L, TFIN, HT, seed=SEED, distribution="random")
-    resample_fn = lambda: sample_collocation_points(N_COLLOCATION, L, TFIN, HT, distribution="random")
-    x_val, t_val = sample_collocation_points(N_COLLOCATION, L, TFIN, HT, distribution="uniform_exact")
+        x_f, t_f = sample_collocation_points(
+            N_COLLOCATION, L, TFIN, HT, seed=SEED, distribution=COLLOCATION_DISTRIBUTION)
+        resample_fn = lambda: sample_collocation_points(
+            N_COLLOCATION, L, TFIN, HT, distribution=COLLOCATION_DISTRIBUTION)
+        x_val, t_val = sample_collocation_points(
+            N_COLLOCATION, L, TFIN, HT, distribution=STOPPING_DISTRIBUTION)
 
-    # Inverse-problem data: the reference solution at the final time, on a
-    # fixed subset of points -- unlike x_f, t_f, this set never changes
-    # across epochs. Together with the hard-imposed initial condition, this
-    # is what makes nu identifiable (the PDE residual alone can't pin it down).
-    data_idx = np.linspace(0, len(x_ref) - 1, N_DATA).astype(int)
-    to_tensor = lambda a: tc.tensor(a, dtype=tc.get_default_dtype())
-    x_data = to_tensor(x_ref[data_idx].reshape(-1, 1))
-    t_data = tc.full_like(x_data, float(t_ref[-1]))
-    u_data = to_tensor(U_ref[-1][data_idx].reshape(-1, 1))
+        # Inverse-problem data: the reference solution at the final time, on a
+        # fixed subset of points -- unlike x_f, t_f, this set never changes
+        # across epochs. Together with the hard-imposed initial condition, this
+        # is what makes nu identifiable (the PDE residual alone can't pin it down).
+        data_idx = np.linspace(0, len(x_ref) - 1, N_DATA).astype(int)
+        to_tensor = lambda a: tc.tensor(a, dtype=tc.get_default_dtype())
+        x_data = to_tensor(x_ref[data_idx].reshape(-1, 1))
+        t_data = tc.full_like(x_data, float(t_ref[-1]))
+        u_data = to_tensor(U_ref[-1][data_idx].reshape(-1, 1))
 
-    # Stop once the PINN's residual matches the reference's own discretization
-    # error at these points -- pushing it lower would just chase FD noise.
-    target_loss = reference_pde_residual(x_val, t_val, x_ref, t_ref, U_ref, L=L, nu=NU, hx=HX, ht=HT)
+        # Stop once the PINN's residual matches the reference's own discretization
+        # error at these points -- pushing it lower would just chase FD noise.
+        target_loss = reference_pde_residual(x_val, t_val, x_ref, t_ref, U_ref, L=L, nu=NU, hx=HX, ht=HT)
 
-    model, hist = train(
-        model, x_f, t_f, epochs=EPOCHS, lr=LR, resample_fn=resample_fn,
-        lbfgs_epochs=LBFGS_EPOCHS, lbfgs_lr=LBFGS_LR,
-        target_loss=target_loss, validation_points=(x_val, t_val),
-        data_points=(x_data, t_data, u_data), L=L, hx=HX, ht=HT,
-    )
+        model, hist = train(
+            model, x_f, t_f, epochs=EPOCHS, lr=LR, resample_fn=resample_fn,
+            lbfgs_epochs=LBFGS_EPOCHS, lbfgs_lr=LBFGS_LR,
+            target_loss=target_loss, validation_points=(x_val, t_val),
+            data_points=(x_data, t_data, u_data), L=L, hx=HX, ht=HT,
+        )
 
-    nu_learned = float(model.learnable_parameter.detach())
-    nu_tol = 0.01 * NU  # within 1% of the true value counts as "reached"
-    print(
-        f"Stopped after {len(hist['loss'])} steps "
-        f"(target {'reached' if hist['target_reached'] else 'NOT reached'}, "
-        f"loss={hist['loss'][-1]:.3e}, target={target_loss:.3e})"
-    )
-    if abs(nu_learned - NU) <= nu_tol:
-        print(f"True nu reached: learned nu={nu_learned:.6f}, true nu={NU:.6f} (tol={nu_tol:.1e}).")
-    else:
-        print(f"True nu NOT reached: learned nu={nu_learned:.6f}, true nu={NU:.6f} (tol={nu_tol:.1e}).")
+        nu_learned = float(model.learnable_parameter.detach())
+        nu_tol = 0.01 * NU  # within 1% of the true value counts as "reached"
+        print(
+            f"[seed {SEED}] Stopped after {len(hist['loss'])} steps "
+            f"(target {'reached' if hist['target_reached'] else 'NOT reached'}, "
+            f"loss={hist['loss'][-1]:.3e}, target={target_loss:.3e}), "
+            f"nu: {NU_INIT:.6f} -> {nu_learned:.6f} (true={NU:.6f})"
+        )
 
-    # tc.save({"state_dict": model.state_dict(), "hist": hist}, os.path.join(OUT_DIR, "model.pt"))
+        # Every artifact for this run shares this prefix, so a later analysis
+        # can glob "inverse_Qmodel_*" and match up checkpoint/history/plots.
+        ident = f"inverse_Qmodel_{FIXED_LAYER}_{N_QUBITS}q_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_{SEED}"
 
-    plot_loss(
-        {"Quantum PINN": hist["loss"]}, title="Quantum PINN training loss",
-        save_path=os.path.join(OUT_DIR, "loss.png"),
-    )
-    plot_parameter_history(
-        hist["nu"], NU, title="Learned viscosity nu vs training steps",
-        save_path=os.path.join(OUT_DIR, "nu_history.png"),
-    )
+        # Full network (pre + quantum + post + learned nu), reconstructible
+        # with QuantumPINN.load(...) for later prediction -- plus a
+        # human-readable "<...>_config.json" alongside it (class_name/config/
+        # training_params), so the run configuration can be inspected without
+        # loading torch.
+        model.save(
+            os.path.join(OUT_DIR, f"{ident}.pt"),
+            training_params=dict(
+                NU=NU, HX=HX, HT=HT, N_COLLOCATION=N_COLLOCATION, N_DATA=N_DATA, SEED=SEED,
+                COLLOCATION_DISTRIBUTION=COLLOCATION_DISTRIBUTION,
+                EPOCHS=EPOCHS, LR=LR, LBFGS_EPOCHS=LBFGS_EPOCHS, LBFGS_LR=LBFGS_LR,
+                STOPPING_DISTRIBUTION=STOPPING_DISTRIBUTION,
+                TARGET_LOSS=target_loss, TARGET_REACHED=hist["target_reached"],
+                STOPPED_AT_STEP=len(hist["loss"]),
+                STOPPING_LOSS_VALUE=hist["loss"][-1] if hist["loss"] else None,
+                # Inverse-problem bookkeeping: initial guess, final learned
+                # value, and the true target nu being identified.
+                NU_INIT=float(NU_INIT), NU_LEARNED=nu_learned, NU_TARGET=NU,
+                NU_TOL=nu_tol, NU_WITHIN_TOL=abs(nu_learned - NU) <= nu_tol,
+            ),
+        )
 
-    u_pred = predict(model, x_plot, TFIN)
-    u_ref = reference_at_time(TFIN, t_ref, x_ref, U_ref, x_plot, L=L)
-    plot_solution(
-        x_plot, {"Quantum PINN": u_pred}, ref=u_ref,
-        title=f"Quantum PINN vs FDM reference at T={TFIN}",
-        save_path=os.path.join(OUT_DIR, "solution.png"),
-        collocation_x=x_f.numpy(),
-    )
+        # Full loss/nu history (every AdamW + L-BFGS step), kept separate from
+        # the checkpoint's compact JSON so that stays lightweight and readable.
+        np.savez(
+            os.path.join(OUT_DIR, f"{ident}_history.npz"),
+            loss=np.array(hist["loss"]),
+            nu=np.array(hist["nu"]),
+            target_loss=target_loss,
+            target_reached=hist["target_reached"],
+        )
 
-    # print(f"Relative L2 error at T={TFIN}: {relative_l2_error(u_pred, u_ref):.6e}")
+        plot_loss(
+            {"Quantum PINN": hist["loss"]}, title="Quantum PINN training loss",
+            save_path=os.path.join(OUT_DIR, f"{ident}_loss.png"),
+        )
+        plot_parameter_history(
+            hist["nu"], NU, title="Learned viscosity nu vs training steps",
+            save_path=os.path.join(OUT_DIR, f"{ident}_nu_history.png"),
+        )
+
+        u_pred = predict(model, x_plot, TFIN)
+        u_ref = reference_at_time(TFIN, t_ref, x_ref, U_ref, x_plot, L=L)
+        plot_solution(
+            x_plot, {"Quantum PINN": u_pred}, ref=u_ref,
+            title=f"Quantum PINN vs FDM reference at T={TFIN}",
+            save_path=os.path.join(OUT_DIR, f"{ident}_solution.png"),
+            collocation_x=x_f.numpy(),
+        )
+
+        print(f"[seed {SEED}] Relative L2 error at T={TFIN}: {relative_l2_error(u_pred, u_ref):.6e}")

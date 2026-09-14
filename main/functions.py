@@ -1419,6 +1419,105 @@ def load_quantum_sweep_summary(csv_path):
     return rows
 
 
+SWEEP_SUMMARY_FIELDS = (
+    "protocol_version", "model_family", "network", "n_cnot_layers", "n_qubits",
+    "internal_width", "Tfin", "n_collocation", "mse_mean", "mse_min", "mse_max",
+    "mse_std", "mse_variance", "steps_mean", "steps_std", "steps_variance",
+    "steps_min", "steps_max", "target_reached_fraction", "early_target_fraction",
+    "adam_target_missed_fraction", "adam_epoch_limit", "trainable_parameters", "n_samples",
+)
+
+
+def summarize_raw_runs(raw_rows):
+    """Aggregates raw per-seed run rows -- the schema of qubit_sweep_runs.csv,
+    or a single-N_QUBITS export like Dados1Qubit.csv: one row per
+    model_family/network/n_cnot_layers/n_qubits/Tfin/n_collocation/seed, with
+    mse/target_reached/stopped_at_step/adam_steps/trainable_parameters
+    columns -- into one summary row per model_family/network/n_cnot_layers/
+    n_qubits/Tfin/n_collocation combo, shaped like a qubit_sweep_summary.csv
+    row (`SWEEP_SUMMARY_FIELDS`, see `load_quantum_sweep_summary`). A run
+    counts toward `early_target_fraction` if it reached target_loss without
+    needing the L-BFGS refinement stage (stopped_at_step <= adam_steps);
+    `adam_target_missed_fraction` is the complement of that fraction (runs
+    that needed L-BFGS, or never reached target, to stop). Returns a list of
+    summary dicts sorted by the grouping key."""
+    grouped = {}
+    for row in raw_rows:
+        key = (
+            str(row.get("model_family", "quantum_exact")), str(row["network"]),
+            int(float(row["n_cnot_layers"])), int(float(row.get("internal_width", row["n_qubits"]))),
+            float(row["Tfin"]), int(float(row["n_collocation"])),
+        )
+        grouped.setdefault(key, []).append(row)
+
+    summary = []
+    for (model_family, network, layers, n_qubits, tfin, n_collocation), group in sorted(grouped.items()):
+        mse = np.asarray([float(r["mse"]) for r in group], dtype=np.float64)
+        steps = np.asarray([float(r["stopped_at_step"]) for r in group], dtype=np.float64)
+        adam_steps = np.asarray([float(r["adam_steps"]) for r in group], dtype=np.float64)
+        reached = np.asarray([str(r["target_reached"]).strip().lower() == "true" for r in group])
+        early = reached & (steps <= adam_steps)
+        summary.append({
+            "protocol_version": group[0].get("protocol_version", ""),
+            "model_family": model_family, "network": network, "n_cnot_layers": layers,
+            "n_qubits": n_qubits, "internal_width": n_qubits, "Tfin": tfin,
+            "n_collocation": n_collocation,
+            "mse_mean": float(np.mean(mse)), "mse_min": float(np.min(mse)),
+            "mse_max": float(np.max(mse)), "mse_std": float(np.std(mse)),
+            "mse_variance": float(np.var(mse)),
+            "steps_mean": float(np.mean(steps)), "steps_std": float(np.std(steps)),
+            "steps_variance": float(np.var(steps)), "steps_min": int(np.min(steps)),
+            "steps_max": int(np.max(steps)),
+            "target_reached_fraction": float(np.mean(reached)),
+            "early_target_fraction": float(np.mean(early)),
+            "adam_target_missed_fraction": float(1.0 - np.mean(early)),
+            "adam_epoch_limit": int(np.max(adam_steps)),
+            "trainable_parameters": int(float(group[0]["trainable_parameters"])),
+            "n_samples": len(group),
+        })
+    return summary
+
+
+def merge_raw_runs_into_sweep_summary(raw_csv_path, summary_csv_path):
+    """Aggregates the raw per-seed rows in `raw_csv_path` (see
+    `summarize_raw_runs`) and merges them into `summary_csv_path` (a
+    qubit_sweep_summary.csv, created if it doesn't exist yet): new
+    model_family/network/n_cnot_layers/n_qubits/Tfin/n_collocation combos are
+    appended, existing ones are overwritten with the freshly computed
+    aggregate. Rows untouched by the merge are written back exactly as read,
+    so this doesn't reformat the rest of the file. Used to fold extra raw
+    exports (e.g. a single-N_QUBITS Dados1Qubit.csv) into the summary the
+    plotting scripts (`plote_classico_vs_Intra.py`) read. Returns the merged
+    list of summary rows, sorted by the grouping key."""
+    with open(raw_csv_path, newline="") as f:
+        new_rows = summarize_raw_runs(list(csv.DictReader(f)))
+
+    if os.path.exists(summary_csv_path):
+        with open(summary_csv_path, newline="") as f:
+            existing_rows = list(csv.DictReader(f))
+    else:
+        existing_rows = []
+
+    def group_key(row):
+        return (
+            str(row["model_family"]), str(row["network"]), int(float(row["n_cnot_layers"])),
+            int(float(row["n_qubits"])), float(row["Tfin"]), int(float(row["n_collocation"])),
+        )
+
+    merged_by_key = {group_key(row): row for row in existing_rows}
+    for row in new_rows:
+        merged_by_key[group_key(row)] = row
+    merged = [merged_by_key[key] for key in sorted(merged_by_key)]
+
+    os.makedirs(os.path.dirname(summary_csv_path) or ".", exist_ok=True)
+    with open(summary_csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=SWEEP_SUMMARY_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        for row in merged:
+            writer.writerow(row)
+    return merged
+
+
 def quantum_stats_from_sweep_summary(csv_path, network, n_cnot_layers, n_collocation, Tfin,
                                       model_family=None):
     """Filters a qubit_sweep_summary.csv (see `load_quantum_sweep_summary`)
@@ -1578,7 +1677,11 @@ def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, sa
     `stats_by_distribution`/`dist_styles` behave exactly as in
     `plot_classical_errors_std`, except each distribution maps to
     (intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max) -- the
-    full tuple `compute_classical_error_stats_std` returns for MSE.
+    full tuple `compute_classical_error_stats_std` returns for MSE. Each
+    `dist_styles` entry may also set a "color" key to override `color_mse`
+    for that one distribution -- e.g. to plot two classical sources (a
+    Tanh run and a SIN/"seno" run, see `ClassicalPINN2`) as distinct
+    colored curves on the same axes.
     `quantum_stats` is (n_qubits, mse_mean, mse_std, mse_var, mse_min,
     mse_max), e.g. from `quantum_stats_from_sweep_summary` or
     `quantum_exact_stats_vs_n_qubits`; pass ([], [], [], [], [], []) (or
@@ -1608,7 +1711,8 @@ def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, sa
         all_widths.update(intra_neurons)
         style = dist_styles.get(distribution, dict(fmt="o-", markerfacecolor=None))
         mse_yerr = error_bar_yerr(error_type, mse_mean, mse_std, mse_var, mse_min, mse_max)
-        ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"], color=color_mse,
+        ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"],
+                    color=style.get("color", color_mse),
                     markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
                     capsize=4, label=f"Classical MSE ({distribution}, {error_label})")
 
@@ -1716,7 +1820,9 @@ def plot_classical_vs_quantum_steps_std(stats_by_distribution, quantum_stats, Tf
     until the stopping criterion was hit) instead of MSE against INTRA_NEURO
     / N_QUBITS. `stats_by_distribution` maps distribution -> (intra_neurons,
     steps_mean, steps_std, steps_var, steps_min, steps_max) -- the step
-    portion of what `compute_classical_stopping_stats_std` returns.
+    portion of what `compute_classical_stopping_stats_std` returns. Each
+    `dist_styles` entry may also set a "color" key to override `color_steps`
+    for that one distribution, same convention as `plot_classical_vs_quantum_std`.
     `quantum_stats` is (n_qubits, steps_mean, steps_std, steps_var,
     steps_min, steps_max), e.g. from `quantum_steps_stats_from_sweep_summary`
     or `quantum_steps_stats_vs_n_qubits`; pass ([], [], [], [], [], []) (or
@@ -1743,7 +1849,8 @@ def plot_classical_vs_quantum_steps_std(stats_by_distribution, quantum_stats, Tf
         all_widths.update(intra_neurons)
         style = dist_styles.get(distribution, dict(fmt="o-", markerfacecolor=None))
         steps_yerr = error_bar_yerr(error_type, steps_mean, steps_std, steps_var, steps_min, steps_max)
-        ax.errorbar(intra_neurons, steps_mean, yerr=steps_yerr, fmt=style["fmt"], color=color_steps,
+        ax.errorbar(intra_neurons, steps_mean, yerr=steps_yerr, fmt=style["fmt"],
+                    color=style.get("color", color_steps),
                     markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
                     capsize=4, label=f"Classical steps ({distribution}, {error_label})")
 

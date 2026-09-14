@@ -59,7 +59,8 @@ def run_one(N_COLLOCATION, intra_neuro, Tfin, run_id):
         post_neurons = POST_NEURONS,
         post_depth = POST_DEPTH,
         L = L,
-        Tfin = Tfin)
+        Tfin = Tfin,
+        seno=True)
     x_f, t_f = sample_collocation_points(
         N_COLLOCATION, L, Tfin, HT,
         seed = SEED, distribution = COLLOCATION_DISTRIBUTION)
@@ -91,7 +92,7 @@ def run_one(N_COLLOCATION, intra_neuro, Tfin, run_id):
 
     if SAVE_EXTRAS:
         model.save(
-            f"data/classical/T_{Tfin}/Cmodel_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_NEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.pt",
+            f"data/classical_seno/T_{Tfin}/Cmodel_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_NEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.pt",
             training_params=dict(
                 NU = NU, HX = HX, HT = HT, N_COLLOCATION = N_COLLOCATION, SEED = SEED,
                 COLLOCATION_DISTRIBUTION = COLLOCATION_DISTRIBUTION,
@@ -110,7 +111,7 @@ def run_one(N_COLLOCATION, intra_neuro, Tfin, run_id):
         # Historico completo da funcao custo (todos os passos, AdamW + L-BFGS),
         # salvo a parte do checkpoint para nao inchar o json legivel do model.save.
         np.savez(
-            f"data/classical/T_{Tfin}/losshist_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.npz",
+            f"data/classical_seno/T_{Tfin}/losshist_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.npz",
             loss=np.array(hist["loss"]),
             residual_rms=np.array(hist["residual_rms"]),
             target_loss=target_loss,
@@ -118,7 +119,7 @@ def run_one(N_COLLOCATION, intra_neuro, Tfin, run_id):
         )
 
     plot_loss({"Classical PINN": hist["loss"]}, title="Classical PINN training loss",
-                save_path=f"data/classical/T_{Tfin}/loss_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.png"
+                save_path=f"data/classical_seno/T_{Tfin}/loss_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.png"
                 )
 
     u_pred = predict(model, x_plot, Tfin)
@@ -126,7 +127,7 @@ def run_one(N_COLLOCATION, intra_neuro, Tfin, run_id):
     plot_solution(
         x_plot, {"Classical PINN": u_pred}, ref=u_ref,
         title= f"Classical PINN vs FDM reference at T={Tfin}",
-        save_path = f"data/classical/T_{Tfin}/model_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.png",
+        save_path = f"data/classical_seno/T_{Tfin}/model_{COLLOCATION_DISTRIBUTION}_{N_COLLOCATION}_CNEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.png",
         show_cond = False,
         collocation_x = x_f.numpy(),
     )
@@ -137,21 +138,17 @@ def run_one(N_COLLOCATION, intra_neuro, Tfin, run_id):
 
 if __name__ == "__main__":
     ################# PARALELIZAÇAO ######################################
-    # Uniao de tres blocos de varredura. Cada job e' uma chave unica
-    # (N_COLLOCATION, intra_neuro, Tfin, run_id) -- blocos que se sobrepoem
-    # (mesma chave) colapsam automaticamente no dedup abaixo, entao nenhum
-    # treino roda duas vezes.
-    SEEDS_REDO = range(10, 50)  # seeds novas para os blocos A/B (seed 0-9 ja existe)
-    SEEDS_NEW = range(0, 50)    # seeds completas para o bloco C (analise nova)
+    SEEDS_NEW = range(0, 10)    # seeds completas para o bloco C (analise nova)
 
-    # Bloco A: varredura de N_COLLOCATION com intra_neuro fixo em 3 e 10
-    # (refaz/estende o que ja existia com seed 0-9).
+    # Bloco A: varredura de N_COLLOCATION com intra_neuro em [3, 5, 7, 10, 15]
+    # (mesmos valores usados em plote_classico_vs_collocation.py, para que a
+    # curva "Classical (seno)" tenha o sweep completo igual a "Classical").
     block_A = [
         (n_col, intra_neuro, Tfin, run_id)
         for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-        for intra_neuro in [3, 10]
+        for intra_neuro in [3, 5, 7, 10, 15]
         for Tfin in [0.1, 1]
-        for run_id in SEEDS_REDO
+        for run_id in SEEDS_NEW
     ]
 
     # Bloco B: varredura de intra_neuro com N_COLLOCATION fixo em 10 e 100
@@ -159,41 +156,23 @@ if __name__ == "__main__":
     block_B = [
         (n_col, intra_neuro, Tfin, run_id)
         for n_col in [10, 100]
-        for intra_neuro in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        for Tfin in [0.1, 1]
-        for run_id in SEEDS_REDO
-    ]
-
-    # Bloco C: analise de aumento de N_COLLOCATION para intra_neuro
-    # 3, 5, 7, 15 -- dados novos, seed 0-49 completo.
-    block_C = [
-        (n_col, intra_neuro, Tfin, run_id)
-        for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-        for intra_neuro in [3, 5, 7, 15]
+        for intra_neuro in [1, 2, 4, 5, 6, 7, 8, 9]
         for Tfin in [0.1, 1]
         for run_id in SEEDS_NEW
     ]
 
-    # Dedup pela chave (N_COLLOCATION, intra_neuro, Tfin, run_id): o bloco C
-    # cobre integralmente o intra_neuro=3 do bloco A (seed 0-49 >= seed
-    # 10-49), entao essas entradas colapsam aqui sem rodar em dobro.
     jobs_by_key = {}
-    for block in (block_A, block_B, block_C):
+    for block in (block_A, block_B):
         for job in block:
             jobs_by_key[job] = job
     jobs = list(jobs_by_key.values())
-
-    print(f"Bloco A (N_COLLOCATION x intra_neuro 3/10, seed 10-49): {len(block_C)} runs")
-    # print(f"Bloco B (intra_neuro x N_COLLOCATION 10/100, seed 10-49): {len(block_B)} runs")
-    # print(f"Bloco C (N_COLLOCATION x intra_neuro 3/5/7/15, seed 0-49): {len(block_C)} runs")
-    print(f"Total apos dedup (uniao dos 3 blocos): {len(jobs)} runs")
 
     # Retomada apos interrupcao: pula jobs cujo checkpoint (.pt) ja existe em
     # disco, para nao re-treinar o que ja foi concluido antes do PC desligar.
     def _output_path(job):
         n_col, intra_neuro, Tfin, run_id = job
         return (
-            f"data/classical/T_{Tfin}/Cmodel_{COLLOCATION_DISTRIBUTION}_{n_col}"
+            f"data/classical_seno/T_{Tfin}/Cmodel_{COLLOCATION_DISTRIBUTION}_{n_col}"
             f"_NEURO{INTRA_DEPTH}{INTRA_NEUROS}{intra_neuro}_{run_id}.pt"
         )
 
@@ -203,7 +182,7 @@ if __name__ == "__main__":
     print(f"Faltando (serao rodados agora): {len(jobs)} runs")
 
     for _, _, Tfin, _ in jobs:
-        os.makedirs(f"data/classical/T_{Tfin}", exist_ok=True)
+        os.makedirs(f"data/classical_seno/T_{Tfin}", exist_ok=True)
 
     with ProcessPoolExecutor(max_workers=N_WORKERS) as executor:
         futures = {executor.submit(run_one, *job): job for job in jobs}
