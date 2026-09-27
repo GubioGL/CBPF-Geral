@@ -48,6 +48,8 @@ COLOR_TARGET = "#C44E52"
 COLOR_OK = "#55A868"
 COLOR_BAD = "#C44E52"
 
+NU_TOL = 0.001
+
 
 def load_runs():
     runs = []
@@ -106,7 +108,7 @@ def plot_init_vs_learned(runs, save_path):
     seeds = [r["seed"] for r in runs]
     inits = [r["nu_init"] for r in runs]
     learned = [r["nu_learned"] for r in runs]
-    within = [r["within_tol"] for r in runs]
+    within = [abs(r["nu_learned"] - r["nu_target"]) <= NU_TOL for r in runs]
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.axhline(target, color=COLOR_TARGET, linestyle="--", linewidth=2.0,
@@ -143,7 +145,7 @@ def _plot_error_bar(runs, save_path, kind):
     scalar parameter, nu).
     """
     target = runs[0]["nu_target"]
-    tol = runs[0]["nu_tol"]
+    tol = NU_TOL
 
     def error_of(r):
         diff = r["nu_learned"] - r["nu_target"]
@@ -154,7 +156,7 @@ def _plot_error_bar(runs, save_path, kind):
     runs_sorted = sorted(runs, key=error_of)
     seeds = [r["seed"] for r in runs_sorted]
     errors = [error_of(r) for r in runs_sorted]
-    within = [r["within_tol"] for r in runs_sorted]
+    within = [e <= tol_line for e in errors]
     colors = [COLOR_OK if ok else COLOR_BAD for ok in within]
 
     if kind == "mse":

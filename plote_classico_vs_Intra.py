@@ -10,23 +10,16 @@ from main.functions import (
 )
 from main.models import ClassicalPINN2
 
-# Duas fontes de checkpoints classicos, mesma varredura de INTRA_NEURO:
-# data/classical usa Tanh nas camadas intra, data/classical_seno usa SIN
-# (ClassicalPINN2(seno=True), ver run_classical.py). Plotadas como duas
-# curvas distintas sobre os mesmos eixos.
 CLASSICAL_DIR = "data/classical"
-CLASSICAL_SENO_DIR = "data/classical_seno"
 T_LABELS = ["0.1", "1"]
-COLLOCATION_DISTRIBUTION = "random"  # deve bater com o usado em run_classical.py
+COLLOCATION_DISTRIBUTION = "random"  # must match the one used in run_classical.py
 CLASSICAL_SOURCES = {
     "random": CLASSICAL_DIR,
-    "random (seno)": CLASSICAL_SENO_DIR,
 }
-# Estilo/cor por fonte -- "color" aqui sobrescreve o color_mse/color_steps
-# default de plot_classical_vs_quantum_std/_steps_std (ver docstrings).
+# Style/color per source -- "color" here overrides the color_mse/color_steps
+# default of plot_classical_vs_quantum_std/_steps_std (see docstrings).
 CLASSICAL_DIST_STYLES = {
     "random": dict(fmt="o-", markerfacecolor=None, color="b"),
-    "random (seno)": dict(fmt="^--", markerfacecolor="none", color="#e34948"),
 }
 
 CLASSICAL_N_COLLOCATION = 100

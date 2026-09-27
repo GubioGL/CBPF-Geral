@@ -1671,27 +1671,7 @@ def quantum_steps_stats_vs_n_qubits(csv_path_by_n_qubits, Tfin, n_collocation, n
 def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, save_path,
                                    color_mse="b", color_quantum="#000000", dist_styles=None,
                                    error_type="desvio_padrao"):
-    """Like `plot_classical_errors_std`, but overlays a quantum PINN
-    N_QUBITS-sweep curve in `color_quantum` on the same axes so it can be
-    compared directly against the classical INTRA_NEURO curve(s).
-    `stats_by_distribution`/`dist_styles` behave exactly as in
-    `plot_classical_errors_std`, except each distribution maps to
-    (intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse_max) -- the
-    full tuple `compute_classical_error_stats_std` returns for MSE. Each
-    `dist_styles` entry may also set a "color" key to override `color_mse`
-    for that one distribution -- e.g. to plot two classical sources (a
-    Tanh run and a SIN/"seno" run, see `ClassicalPINN2`) as distinct
-    colored curves on the same axes.
-    `quantum_stats` is (n_qubits, mse_mean, mse_std, mse_var, mse_min,
-    mse_max), e.g. from `quantum_stats_from_sweep_summary` or
-    `quantum_exact_stats_vs_n_qubits`; pass ([], [], [], [], [], []) (or
-    None) to skip the quantum curve.
-
-    `error_type` selects what the error bars show, both for the classical
-    and the quantum curve -- one of `ERROR_BAR_TYPES`:
-    "minimo_maximo" (whiskers reaching the observed min/max), "desvio_padrao"
-    (+/-std), or "variancia" (+/-variance). See `error_bar_yerr`. Used by
-    `plote_classico_vs_Intra.py`."""
+    """Plots classical MSE vs INTRA_NEURO for each COLLOCATION_DISTRIBUTION in"""
     if dist_styles is None:
         dist_styles = {
             "uniform": dict(fmt="o-", markerfacecolor=None),
@@ -1714,7 +1694,7 @@ def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, sa
         ax.errorbar(intra_neurons, mse_mean, yerr=mse_yerr, fmt=style["fmt"],
                     color=style.get("color", color_mse),
                     markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
-                    capsize=4, label=f"Classical MSE ({distribution}, {error_label})")
+                    capsize=4, label=f"Classical {error_label})")
 
     if quantum_stats is not None:
         n_qubits, q_mse_mean, q_mse_std, q_mse_var, q_mse_min, q_mse_max = quantum_stats
@@ -1723,9 +1703,9 @@ def plot_classical_vs_quantum_std(stats_by_distribution, quantum_stats, Tfin, sa
             q_yerr = error_bar_yerr(error_type, q_mse_mean, q_mse_std, q_mse_var, q_mse_min, q_mse_max)
             ax.errorbar(n_qubits, q_mse_mean, yerr=q_yerr, fmt="^-", color=color_quantum,
                         linewidth=2.0, markersize=6, capsize=4,
-                        label=f"Quantum MSE (N_QUBITS, {error_label})")
+                        label=f"Quantum {error_label})")
 
-    ax.set_xlabel("INTRA_NEURO / N_QUBITS", fontsize=14)
+    ax.set_xlabel("N° of Neurons / N° of Qubits", fontsize=14)
     ax.set_ylabel("MSE", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(sorted(all_widths))
@@ -1852,7 +1832,7 @@ def plot_classical_vs_quantum_steps_std(stats_by_distribution, quantum_stats, Tf
         ax.errorbar(intra_neurons, steps_mean, yerr=steps_yerr, fmt=style["fmt"],
                     color=style.get("color", color_steps),
                     markerfacecolor=style["markerfacecolor"], linewidth=2.0, markersize=6,
-                    capsize=4, label=f"Classical steps ({distribution}, {error_label})")
+                    capsize=4, label=f"Classical {error_label})")
 
     if quantum_stats is not None:
         n_qubits, q_steps_mean, q_steps_std, q_steps_var, q_steps_min, q_steps_max = quantum_stats
@@ -1862,10 +1842,10 @@ def plot_classical_vs_quantum_steps_std(stats_by_distribution, quantum_stats, Tf
                                      q_steps_min, q_steps_max)
             ax.errorbar(n_qubits, q_steps_mean, yerr=q_yerr, fmt="^-", color=color_quantum,
                         linewidth=2.0, markersize=6, capsize=4,
-                        label=f"Quantum steps (N_QUBITS, {error_label})")
+                        label=f"Quantum  {error_label})")
 
-    ax.set_xlabel("INTRA_NEURO / N_QUBITS", fontsize=14)
-    ax.set_ylabel("Passos até a parada (média)", fontsize=14)
+    ax.set_xlabel("N° of Neurons / N° of Qubits", fontsize=14)
+    ax.set_ylabel("Steps of train", fontsize=14)
     ax.set_xticks(sorted(all_widths))
     ax.set_title(f"T = {Tfin}", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.6)
@@ -2225,4 +2205,165 @@ def compute_classical_stopping_stats_vs_collocation(t_dir, collocation_distribut
 #     ax.legend()
 #     fig.tight_layout()
 #     fig.savefig(save_path, dpi=250)
-#     plt.close(fig)
+
+
+# ----------------------------------------------------------------------
+# Inverse-problem (nu estimation) classical PINN sweeps -- checkpoints
+# written by Inverser_classical_pinn_paralelo.py as
+# data/classical_inverse/T_<Tfin>/model_<n_col>_INTRA<intra_neuron>_<run_id>.pt,
+# each holding its own "training_params" dict (NU, NU_LEARNED, N_COLLOCATION,
+# INTRA_NEURON, TFIN, ...) -- unlike the forward-problem checkpoints above,
+# there is no companion `_config.json`.
+# ----------------------------------------------------------------------
+
+def find_classical_inverse_configs(t_dir, n_collocation=None, intra_neuron=None):
+    """Returns [(n_collocation, intra_neuron, run_id, training_params), ...]
+    for every `model_<n_col>_INTRA<intra_neuron>_<run_id>.pt` checkpoint in
+    `t_dir`, optionally filtered to a fixed `n_collocation` and/or
+    `intra_neuron`. `training_params` is the dict saved inside the
+    checkpoint itself (no model weights are loaded -- only the small
+    metadata dict, via `tc.load(..., map_location="cpu")`)."""
+    entries = []
+    for pt_path in glob.glob(os.path.join(t_dir, "model_*_INTRA*_*.pt")):
+        name = os.path.basename(pt_path)[: -len(".pt")]
+        body = name[len("model_"):]
+        n_col_str, rest = body.split("_INTRA", 1)
+        intra_str, run_id_str = rest.rsplit("_", 1)
+        n_col, intra, run_id = int(n_col_str), int(intra_str), int(run_id_str)
+        if n_collocation is not None and n_col != n_collocation:
+            continue
+        if intra_neuron is not None and intra != intra_neuron:
+            continue
+        checkpoint = tc.load(pt_path, map_location="cpu", weights_only=False)
+        training_params = checkpoint["training_params"]
+        entries.append((n_col, intra, run_id, training_params))
+    return sorted(entries, key=lambda e: (e[0], e[1], e[2]))
+
+
+def _nu_error_stats_by_key(entries, key_index):
+    """Shared aggregation for the two functions below: groups `entries`
+    (as returned by `find_classical_inverse_configs`) by
+    `entries[i][key_index]` and returns per-key mean/std/var/min/max of the
+    squared and absolute nu-estimation error (NU_LEARNED vs NU), plus
+    n_samples and Tfin."""
+    errors_by_key = {}
+    Tfin = None
+    for n_col, intra, _run_id, training_params in entries:
+        key = n_col if key_index == 0 else intra
+        nu_true = training_params["NU"]
+        nu_learned = training_params["NU_LEARNED"]
+        Tfin = training_params.get("TFIN", Tfin)
+        entry = errors_by_key.setdefault(key, {"mse": [], "abs": []})
+        entry["mse"].append((nu_learned - nu_true) ** 2)
+        entry["abs"].append(abs(nu_learned - nu_true))
+
+    keys = sorted(errors_by_key)
+    mse_mean = [float(np.mean(errors_by_key[k]["mse"])) for k in keys]
+    mse_std = [float(np.std(errors_by_key[k]["mse"])) for k in keys]
+    mse_var = [float(np.var(errors_by_key[k]["mse"])) for k in keys]
+    mse_min = [float(np.min(errors_by_key[k]["mse"])) for k in keys]
+    mse_max = [float(np.max(errors_by_key[k]["mse"])) for k in keys]
+    abs_mean = [float(np.mean(errors_by_key[k]["abs"])) for k in keys]
+    abs_std = [float(np.std(errors_by_key[k]["abs"])) for k in keys]
+    abs_var = [float(np.var(errors_by_key[k]["abs"])) for k in keys]
+    abs_min = [float(np.min(errors_by_key[k]["abs"])) for k in keys]
+    abs_max = [float(np.max(errors_by_key[k]["abs"])) for k in keys]
+    n_samples = [len(errors_by_key[k]["mse"]) for k in keys]
+    return (keys, mse_mean, mse_std, mse_var, mse_min, mse_max, abs_mean, abs_std,
+            abs_var, abs_min, abs_max, n_samples, Tfin)
+
+
+def compute_classical_inverse_nu_error_stats_vs_intra(t_dir, n_collocation=None):
+    """Groups every classical inverse-problem checkpoint in `t_dir` (whose
+    N_COLLOCATION matches `n_collocation`, when given) by INTRA_NEURON and
+    returns per-INTRA_NEURON mean/std/variance/min/max of the squared and
+    absolute nu-estimation error (NU_LEARNED vs the true NU). Returns
+    (intra_neurons, nu_mse_mean, nu_mse_std, nu_mse_var, nu_mse_min,
+    nu_mse_max, nu_abs_mean, nu_abs_std, nu_abs_var, nu_abs_min, nu_abs_max,
+    n_samples, Tfin), one point per INTRA_NEURON found. Mirrors
+    `compute_classical_error_stats_std`, but the metric is nu-estimation
+    error instead of solution MSE/MAE against the FDM reference. Used by
+    `plote_inverse_classico_vs_Intra.py`."""
+    entries = find_classical_inverse_configs(t_dir, n_collocation=n_collocation)
+    if not entries:
+        return [], [], [], [], [], [], [], [], [], [], [], [], None
+    return _nu_error_stats_by_key(entries, key_index=1)
+
+
+def compute_classical_inverse_nu_error_stats_vs_collocation(t_dir, intra_neuron=None):
+    """Groups every classical inverse-problem checkpoint in `t_dir` (whose
+    INTRA_NEURON matches `intra_neuron`, when given) by N_COLLOCATION and
+    returns per-N_COLLOCATION mean/std/variance/min/max of the squared and
+    absolute nu-estimation error (NU_LEARNED vs the true NU). Returns
+    (n_collocation, nu_mse_mean, nu_mse_std, nu_mse_var, nu_mse_min,
+    nu_mse_max, nu_abs_mean, nu_abs_std, nu_abs_var, nu_abs_min, nu_abs_max,
+    n_samples, Tfin), one point per N_COLLOCATION value found. Mirrors
+    `compute_classical_error_stats_vs_collocation`, but the metric is
+    nu-estimation error instead of solution MSE/MAE against the FDM
+    reference. Used by `plote_inverse_classico_vs_collocation.py`."""
+    entries = find_classical_inverse_configs(t_dir, intra_neuron=intra_neuron)
+    if not entries:
+        return [], [], [], [], [], [], [], [], [], [], [], [], None
+    return _nu_error_stats_by_key(entries, key_index=0)
+
+
+# ----------------------------------------------------------------------
+# Inverse-problem (nu estimation) quantum PINN sweeps -- checkpoints
+# written by Inverser_quantum_pinn_paralelo.py as
+# data/quantum_inverse/T_<Tfin>/model_<n_col>_NQ<n_qubits>_<run_id>.pt.
+# Mirrors the classical inverse-problem helpers above exactly, with
+# N_QUBITS in place of INTRA_NEURON.
+# ----------------------------------------------------------------------
+
+def find_quantum_inverse_configs(t_dir, n_collocation=None, n_qubits=None):
+    """Returns [(n_collocation, n_qubits, run_id, training_params), ...]
+    for every `model_<n_col>_NQ<n_qubits>_<run_id>.pt` checkpoint in
+    `t_dir`, optionally filtered to a fixed `n_collocation` and/or
+    `n_qubits`. Mirrors `find_classical_inverse_configs`."""
+    entries = []
+    for pt_path in glob.glob(os.path.join(t_dir, "model_*_NQ*_*.pt")):
+        name = os.path.basename(pt_path)[: -len(".pt")]
+        body = name[len("model_"):]
+        n_col_str, rest = body.split("_NQ", 1)
+        nq_str, run_id_str = rest.rsplit("_", 1)
+        n_col, nq, run_id = int(n_col_str), int(nq_str), int(run_id_str)
+        if n_collocation is not None and n_col != n_collocation:
+            continue
+        if n_qubits is not None and nq != n_qubits:
+            continue
+        checkpoint = tc.load(pt_path, map_location="cpu", weights_only=False)
+        training_params = checkpoint["training_params"]
+        entries.append((n_col, nq, run_id, training_params))
+    return sorted(entries, key=lambda e: (e[0], e[1], e[2]))
+
+
+def compute_quantum_inverse_nu_error_stats_vs_intra(t_dir, n_collocation=None):
+    """Groups every quantum inverse-problem checkpoint in `t_dir` (whose
+    N_COLLOCATION matches `n_collocation`, when given) by N_QUBITS and
+    returns per-N_QUBITS mean/std/variance/min/max of the squared and
+    absolute nu-estimation error (NU_LEARNED vs the true NU). Returns
+    (n_qubits, nu_mse_mean, nu_mse_std, nu_mse_var, nu_mse_min, nu_mse_max,
+    nu_abs_mean, nu_abs_std, nu_abs_var, nu_abs_min, nu_abs_max, n_samples,
+    Tfin), one point per N_QUBITS found. Mirrors
+    `compute_classical_inverse_nu_error_stats_vs_intra`. Used by
+    `plote_inverse_classico_vs_Intra.py`."""
+    entries = find_quantum_inverse_configs(t_dir, n_collocation=n_collocation)
+    if not entries:
+        return [], [], [], [], [], [], [], [], [], [], [], [], None
+    return _nu_error_stats_by_key(entries, key_index=1)
+
+
+def compute_quantum_inverse_nu_error_stats_vs_collocation(t_dir, n_qubits=None):
+    """Groups every quantum inverse-problem checkpoint in `t_dir` (whose
+    N_QUBITS matches `n_qubits`, when given) by N_COLLOCATION and returns
+    per-N_COLLOCATION mean/std/variance/min/max of the squared and absolute
+    nu-estimation error (NU_LEARNED vs the true NU). Returns (n_collocation,
+    nu_mse_mean, nu_mse_std, nu_mse_var, nu_mse_min, nu_mse_max, nu_abs_mean,
+    nu_abs_std, nu_abs_var, nu_abs_min, nu_abs_max, n_samples, Tfin), one
+    point per N_COLLOCATION value found. Mirrors
+    `compute_classical_inverse_nu_error_stats_vs_collocation`. Used by
+    `plote_inverse_classico_vs_collocation.py`."""
+    entries = find_quantum_inverse_configs(t_dir, n_qubits=n_qubits)
+    if not entries:
+        return [], [], [], [], [], [], [], [], [], [], [], [], None
+    return _nu_error_stats_by_key(entries, key_index=0)
