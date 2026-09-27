@@ -15,3 +15,8 @@ tmp/
 
 # Optional: compiled C extensions
 *.so
+
+# Environment files
+*.dev
+*.env
+env/
