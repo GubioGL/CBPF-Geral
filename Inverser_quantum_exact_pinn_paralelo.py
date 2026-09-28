@@ -1005,13 +1005,13 @@ if __name__ == "__main__":
         device_for = lambda job_index: "cpu"
         device_summary = "cpu"
 
-    SEEDS_NEW = range(10, 50)  # 10 seeds
+    SEEDS_NEW = range(0, 50)  # 10 seeds
 
     # Bloco A: varredura de N_COLLOCATION com N_QUBITS em [3, 7, 15]
     block_A = [
         (n_col, n_qubits, Tfin, run_id)
         for n_col in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-        for n_qubits in [3, 7]
+        for n_qubits in [15]
         for Tfin in [0.1, 1]
         for run_id in SEEDS_NEW
     ]
@@ -1020,7 +1020,7 @@ if __name__ == "__main__":
     block_B = [
         (n_col, n_qubits, Tfin, run_id)
         for n_col in [10, 100]
-        for n_qubits in range(1, 11)
+        for n_qubits in range(11,16)
         for Tfin in [0.1, 1]
         for run_id in SEEDS_NEW
     ]
