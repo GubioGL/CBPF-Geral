@@ -324,17 +324,99 @@ def stencil(x, t, L, hx, ht):
     """Shifted neighbor points x+-hx, t+-ht for the centered-difference stencil."""
     return tc.remainder(x + hx, L), tc.remainder(x - hx, L), t + ht, t - ht
 
-def pde_residual(model, x, xp, xm, t, tp, tm, hx, ht):
-    """u_t + u*u_x - nu*u_xx at (x, t), with nu = model.learnable_parameter."""
-    u0 = model(tc.cat([x, t], dim=1))
-    uxp = model(tc.cat([xp, t], dim=1))
-    uxm = model(tc.cat([xm, t], dim=1))
-    utp = model(tc.cat([x, tp], dim=1))
-    utm = model(tc.cat([x, tm], dim=1))
+def stencil_inputs(x, t, L, hx, ht):
+    """The 5 stencil points (x,t), (x+-hx,t), (x,t+-ht) stacked into a single
+    (5N, 2) batch, so the network runs one forward pass instead of five --
+    with networks this small the cost is per-call overhead, not arithmetic.
+    Also accepts (S, N, 1) inputs (one point set per run) -> (S, 5N, 2)."""
+    xp, xm, tp, tm = stencil(x, t, L, hx, ht)
+    return tc.cat([tc.cat(pair, dim=-1) for pair in ((x, t), (xp, t), (xm, t), (x, tp), (x, tm))], dim=-2)
+
+def residual_terms(u, n, hx, ht):
+    """Splits a forward pass over `stencil_inputs` (first 5n rows of u, along
+    the points axis) into (A, B), with the PDE residual
+    u_t + u*u_x - nu*u_xx = A - nu*B."""
+    u0, uxp, uxm, utp, utm = u.narrow(-2, 0, 5 * n).split(n, dim=-2)
     u_t = (utp - utm) / (2.0 * ht)
     u_x = (uxp - uxm) / (2.0 * hx)
     u_xx = (uxp - 2.0 * u0 + uxm) / hx**2
-    return u_t + u0 * u_x - model.learnable_parameter * u_xx
+    return u_t + u0 * u_x, u_xx
+
+def pde_residual(model, xt_stencil, n, hx, ht):
+    """u_t + u*u_x - nu*u_xx at the n points stacked in `xt_stencil`, with
+    nu = model.learnable_parameter."""
+    a, b = residual_terms(model(xt_stencil), n, hx, ht)
+    return a - model.learnable_parameter * b
+
+def lbfgs_refine(model, xt_f, n_f, hist, best_state, best_loss, target_reached,
+                 lbfgs_epochs, lbfgs_lr, target_loss=None, xt_val=None, n_val=None,
+                 xt_data=None, u_data=None, hx=1.0e-3, ht=1.0e-3):
+    """L-BFGS phase of `train`, run after AdamW on a single model: starts from
+    `best_state` (the best AdamW snapshot) on the points AdamW ended on
+    (xt_f, stacked by `stencil_inputs`), appends to `hist` and loads the best
+    state found into `model`. Returns (best_loss, target_reached)."""
+
+    def monitor():
+        with tc.no_grad():
+            if xt_val is not None:
+                return float(tc.mean(pde_residual(model, xt_val, n_val, hx, ht) ** 2))
+            return float(tc.mean(pde_residual(model, xt_f, n_f, hx, ht) ** 2))
+
+    def snapshot():
+        return {k: v.detach().clone() for k, v in model.state_dict().items()}
+
+    params = [p for p in model.parameters() if p.requires_grad]
+    model.load_state_dict(best_state)  # hand L-BFGS the best basin Adam found
+
+    # Once u(x,t) already matches the reference's own precision, freeze
+    # it and let L-BFGS refine only nu, to sharpen its last digits --
+    # otherwise (target not yet reached) L-BFGS still refines everything.
+    only_nu = target_reached
+    if only_nu:
+        for p in params:
+            p.requires_grad_(p is model.learnable_parameter)
+        lbfgs_params = [model.learnable_parameter]
+    else:
+        lbfgs_params = params
+
+    lbfgs_opt = tc.optim.LBFGS(
+        lbfgs_params, lr=lbfgs_lr, max_iter=300, history_size=100, line_search_fn="strong_wolfe")
+    patience, tol, stall = 50, 1.0e-9, 0
+
+    def closure():
+        lbfgs_opt.zero_grad()
+        # One forward pass over the stencil and data points together.
+        u = model(xt_f if xt_data is None else tc.cat([xt_f, xt_data], dim=0))
+        a, b = residual_terms(u, n_f, hx, ht)
+        loss = tc.mean((a - model.learnable_parameter * b) ** 2)
+        if xt_data is not None:
+            loss = loss + tc.mean(abs(u[5 * n_f:] - u_data))
+        loss.backward()
+        return loss
+
+    for _ in range(lbfgs_epochs):
+        lbfgs_opt.step(closure)
+        loss_value = monitor()
+        hist["loss"].append(loss_value)
+        hist["nu"].append(float(model.learnable_parameter.detach()))
+        if loss_value < best_loss - tol:
+            best_loss, best_state, stall = loss_value, snapshot(), 0
+        else:
+            stall += 1
+        # In nu-only mode, u is already at the target precision, so this
+        # would trip on the very first iteration and cut the refinement
+        # short -- only apply it while still refining the whole network.
+        if not only_nu and target_loss is not None and loss_value <= target_loss:
+            target_reached = True
+            break
+        if stall >= patience:
+            break
+
+    for p in params:
+        p.requires_grad_(True)  # restore full trainability before returning
+
+    model.load_state_dict(best_state)  # never return worse than the best point found
+    return best_loss, target_reached
 
 def train(model, x_f, t_f, epochs, lr, resample_fn=None,
           lbfgs_epochs=1000, lbfgs_lr=0.5, target_loss=None,
@@ -344,7 +426,7 @@ def train(model, x_f, t_f, epochs, lr, resample_fn=None,
     validation_points: optional fixed (x, t) used to monitor/stop training
     instead of the (possibly resampled) training points.
     data_points: optional fixed (x_data, t_data, u_data) supervised targets,
-    added to the training loss as MSE(model(x_data, t_data), u_data). Kept
+    added to the training loss as MAE(model(x_data, t_data), u_data). Kept
     fixed across epochs, unlike x_f, t_f which may change every epoch.
     target_loss: stop as soon as the monitored (PDE-residual-only) loss
     reaches this value.
@@ -355,25 +437,32 @@ def train(model, x_f, t_f, epochs, lr, resample_fn=None,
     on the same device as `model` -- this function performs no device
     transfers itself."""
 
-    x_p, x_m, t_p, t_m = stencil(x_f, t_f, L, hx, ht)
-    val_stencil = None
+    n_f, xt_f = x_f.shape[0], stencil_inputs(x_f, t_f, L, hx, ht)
+    xt_val = n_val = None
     if validation_points is not None:
         x_val, t_val = validation_points
-        val_p, val_m, val_tp, val_tm = stencil(x_val, t_val, L, hx, ht)
-        val_stencil = (x_val, val_p, val_m, t_val, val_tp, val_tm)
+        n_val, xt_val = x_val.shape[0], stencil_inputs(x_val, t_val, L, hx, ht)
 
-    def data_loss():
-        if data_points is None:
-            return 0.0
+    xt_data = u_data = None
+    if data_points is not None:
         x_data, t_data, u_data = data_points
-        return tc.mean(abs(model(tc.cat([x_data, t_data], dim=1)) - u_data))
+        xt_data = tc.cat([x_data, t_data], dim=1)
 
-    def monitor(train_stencil):
-        model.eval()
-        with tc.no_grad():
-            loss = float(tc.mean(pde_residual(model, *(val_stencil or train_stencil), hx, ht) ** 2))
-        model.train()
+    def train_loss():
+        """PDE-residual MAE + data MAE, from one forward pass over the stencil
+        and data points together."""
+        u = model(xt_f if xt_data is None else tc.cat([xt_f, xt_data], dim=0))
+        a, b = residual_terms(u, n_f, hx, ht)
+        loss = tc.mean(abs(a - model.learnable_parameter * b))
+        if xt_data is not None:
+            loss = loss + tc.mean(abs(u[5 * n_f:] - u_data))
         return loss
+
+    def monitor():
+        with tc.no_grad():
+            if xt_val is not None:
+                return float(tc.mean(pde_residual(model, xt_val, n_val, hx, ht) ** 2))
+            return float(tc.mean(pde_residual(model, xt_f, n_f, hx, ht) ** 2))
 
     def snapshot():
         return {k: v.detach().clone() for k, v in model.state_dict().items()}
@@ -386,19 +475,17 @@ def train(model, x_f, t_f, epochs, lr, resample_fn=None,
     target_reached = False
 
     for _ in range(epochs):
-        model.train()
         if resample_fn is not None:
             x_f, t_f = resample_fn()
-            x_p, x_m, t_p, t_m = stencil(x_f, t_f, L, hx, ht)
+            xt_f = stencil_inputs(x_f, t_f, L, hx, ht)
 
-        residual = pde_residual(model, x_f, x_p, x_m, t_f, t_p, t_m, hx, ht)
-        loss = tc.mean(abs(residual)) + data_loss()
+        loss = train_loss()
         opt.zero_grad()
         loss.backward()
         tc.nn.utils.clip_grad_norm_(params, 1.0)
         opt.step()
 
-        loss_value = monitor((x_f, x_p, x_m, t_f, t_p, t_m))
+        loss_value = monitor()
         hist["loss"].append(loss_value)
         hist["nu"].append(float(model.learnable_parameter.detach()))
         if loss_value < best_loss:
@@ -408,56 +495,194 @@ def train(model, x_f, t_f, epochs, lr, resample_fn=None,
             break
 
     if lbfgs_epochs > 0:
-        model.load_state_dict(best_state)  # hand L-BFGS the best basin Adam found
-
-        # Once u(x,t) already matches the reference's own precision, freeze
-        # it and let L-BFGS refine only nu, to sharpen its last digits --
-        # otherwise (target not yet reached) L-BFGS still refines everything.
-        only_nu = target_reached
-        if only_nu:
-            for p in params:
-                p.requires_grad_(p is model.learnable_parameter)
-            lbfgs_params = [model.learnable_parameter]
-        else:
-            lbfgs_params = params
-
-        lbfgs_opt = tc.optim.LBFGS(
-            lbfgs_params, lr=lbfgs_lr, max_iter=300, history_size=100, line_search_fn="strong_wolfe")
-        patience, tol, stall = 500, 1.0e-9, 0
-
-        def closure():
-            lbfgs_opt.zero_grad()
-            residual = pde_residual(model, x_f, x_p, x_m, t_f, t_p, t_m, hx, ht)
-            loss = tc.mean((residual)**2) + data_loss()
-            loss.backward()
-            return loss
-
-        for _ in range(lbfgs_epochs):
-            model.train()
-            lbfgs_opt.step(closure)
-            loss_value = monitor((x_f, x_p, x_m, t_f, t_p, t_m))
-            hist["loss"].append(loss_value)
-            hist["nu"].append(float(model.learnable_parameter.detach()))
-            if loss_value < best_loss - tol:
-                best_loss, best_state, stall = loss_value, snapshot(), 0
-            else:
-                stall += 1
-            # In nu-only mode, u is already at the target precision, so this
-            # would trip on the very first iteration and cut the refinement
-            # short -- only apply it while still refining the whole network.
-            if not only_nu and target_loss is not None and loss_value <= target_loss:
-                target_reached = True
-                break
-            if stall >= patience:
-                break
-
-        for p in params:
-            p.requires_grad_(True)  # restore full trainability before returning
-
-    model.load_state_dict(best_state)  # never return worse than the best point found
+        best_loss, target_reached = lbfgs_refine(
+            model, xt_f, n_f, hist, best_state, best_loss, target_reached,
+            lbfgs_epochs, lbfgs_lr, target_loss=target_loss, xt_val=xt_val, n_val=n_val,
+            xt_data=xt_data, u_data=u_data, hx=hx, ht=ht,
+        )
+    else:
+        model.load_state_dict(best_state)  # never return worse than the best point found
     hist["target_reached"] = target_reached
     hist["best_loss"] = best_loss
     return model, hist
+
+# ----------------------------------------------------------------------
+# Batched AdamW phase: several independent runs trained together
+# ----------------------------------------------------------------------
+class BatchedQuantumExactPINN(nn.Module):
+    """S independent QuantumExactInversePINNs (same architecture), evaluated
+    together. Each Linear layer's weights are stacked along a leading run
+    axis, so one batched matmul per layer serves all S networks; the fixed
+    CNOT-cosine layer has no parameters and is the same for every run. Every
+    run keeps its own weights and its own nu and still takes only (x, t) as
+    input -- nothing is shared between runs. With networks this small the
+    cost is per-call overhead, so S runs together cost little more than one."""
+
+    def __init__(self, models):
+        super().__init__()
+        ref = models[0]
+        self.L, self.Tfin, self.angle_scale = ref.L, ref.Tfin, ref.angle_scale
+        self.register_buffer("cnot_matrix", ref.quantum.cnot_matrix.clone())
+        self.linear_names, self.weights, self.biases = {}, nn.ParameterList(), nn.ParameterList()
+        for block in ("pre", "post"):
+            # (name in QuantumExactInversePINN, tanh after it?) for every Linear
+            layers = []
+            seq = getattr(ref, block)
+            for i, layer in enumerate(seq):
+                if not isinstance(layer, nn.Linear):
+                    continue
+                name = f"{block}.{i}"
+                layers.append((name, len(self.weights), i + 1 < len(seq) and isinstance(seq[i + 1], nn.Tanh)))
+                linears = [m.get_submodule(name) for m in models]
+                self.weights.append(nn.Parameter(tc.stack([lin.weight.detach().T for lin in linears])))  # (S, in, out)
+                self.biases.append(nn.Parameter(tc.stack([lin.bias.detach()[None, :] for lin in linears])))  # (S, 1, out)
+            self.linear_names[block] = layers
+        self.learnable_parameter = nn.Parameter(
+            tc.stack([m.learnable_parameter.detach() for m in models]).view(-1, 1, 1))  # (S, 1, 1)
+
+    def _mlp(self, block, h):
+        for _, k, tanh_after in self.linear_names[block]:
+            h = tc.baddbmm(self.biases[k], h, self.weights[k])
+            if tanh_after:
+                h = tc.tanh(h)
+        return h
+
+    def forward(self, xt):
+        """xt: (S, M, 2) -- M points (x, t) for each of the S runs. Same
+        computation as QuantumExactInversePINN.forward, run by run."""
+        x, t = xt[..., 0:1], xt[..., 1:2]
+        features = tc.cat(
+            [tc.sin(2.0 * math.pi * x / self.L), tc.cos(2.0 * math.pi * x / self.L), t / self.Tfin],
+            dim=-1,
+        )
+        angles = self.angle_scale * tc.tanh(self._mlp("pre", features))
+        S, M, n_qubits = angles.shape
+        q = cnot_cosine_expectations(angles.reshape(S * M, n_qubits), self.cnot_matrix)
+        out = self._mlp("post", q.reshape(S, M, n_qubits).to(dtype=self.weights[-1].dtype))
+        return initial_condition(x, L=self.L) + (t / self.Tfin) * out  # hard-constrains u(x,0)=u0(x)
+
+    def run_state_dict(self, i):
+        """Run i's state in QuantumExactInversePINN's state_dict format, on the CPU."""
+        sd = {
+            "learnable_parameter": self.learnable_parameter[i, 0, 0].detach().cpu().clone(),
+            "quantum.cnot_matrix": self.cnot_matrix.cpu().clone(),
+        }
+        for layers in self.linear_names.values():
+            for name, k, _ in layers:
+                sd[f"{name}.weight"] = self.weights[k][i].detach().T.contiguous().cpu()
+                sd[f"{name}.bias"] = self.biases[k][i, 0].detach().cpu().clone()
+        return sd
+
+def train_batched_adam(model, x_f, t_f, epochs, lr, resample_fn=None, target_loss=None,
+                       validation_points=None, data_points=None, L=1.0, hx=1.0e-3, ht=1.0e-3,
+                       check_every=50):
+    """AdamW phase of `train` for a BatchedQuantumExactPINN, applied to every
+    run independently. Summing the per-run losses gives each run exactly its
+    own gradient, and AdamW acts elementwise, so each run follows its own
+    optimization. What `train` does globally is done per run here: gradient
+    clipping, the best snapshot and early stopping (a run that reached
+    `target_loss` stops recording and keeps its best state and the points it
+    stopped on). The L-BFGS phase is not batched -- its line search and
+    curvature history would couple the runs -- see `lbfgs_refine`.
+
+    x_f, t_f: (S, N, 1), one point set per run; resample_fn returns the same
+    shape. validation_points and data_points are shared by all runs, (N, 1).
+    check_every: how often (steps) to check whether every run has already
+    stopped, to end early -- only saves time, results don't depend on it.
+    Returns (model, runs): `model` holds each run's best AdamW state, and
+    runs[i] = dict(hist, best_loss, target_reached, stop_x, stop_t) with
+    stop_x/stop_t (N, 1) the points run i ended on."""
+    nu = model.learnable_parameter
+    S, device = nu.shape[0], nu.device
+    params = list(model.parameters())
+    per_run = lambda p: (-1,) + (1,) * (p.dim() - 1)  # view to broadcast a (S,) tensor over p
+    per_run_mean = lambda r: tc.mean(r, dim=(1, 2))  # (S, M, 1) -> (S,)
+
+    n_f, xt_f = x_f.shape[-2], stencil_inputs(x_f, t_f, L, hx, ht)
+    xt_val = n_val = None
+    if validation_points is not None:
+        x_val, t_val = validation_points
+        n_val, xt_val = x_val.shape[-2], stencil_inputs(x_val, t_val, L, hx, ht).expand(S, -1, -1)
+
+    xt_data = u_data = None
+    if data_points is not None:
+        x_data, t_data, u_data = data_points
+        xt_data = tc.cat([x_data, t_data], dim=-1).expand(S, -1, -1)
+
+    def train_loss():
+        u = model(xt_f if xt_data is None else tc.cat([xt_f, xt_data], dim=1))
+        a, b = residual_terms(u, n_f, hx, ht)
+        loss = per_run_mean(abs(a - nu * b))
+        if xt_data is not None:
+            loss = loss + per_run_mean(abs(u[:, 5 * n_f:] - u_data))
+        return loss.sum()
+
+    def monitor():
+        with tc.no_grad():
+            xt, n = (xt_val, n_val) if xt_val is not None else (xt_f, n_f)
+            a, b = residual_terms(model(xt), n, hx, ht)
+            return per_run_mean((a - nu * b) ** 2)
+
+    def clip_grad_norm_per_run(max_norm=1.0):
+        """tc.nn.utils.clip_grad_norm_(max_norm), on each run's own gradient."""
+        norms = tc.sqrt(sum(p.grad.pow(2).flatten(1).sum(1) for p in params))
+        coef = tc.clamp(max_norm / (norms + 1.0e-6), max=1.0)
+        for p in params:
+            p.grad.mul_(coef.view(per_run(p)))
+
+    opt = tc.optim.AdamW(params, lr=lr, weight_decay=1.0e-4)
+
+    best_params = [p.detach().clone() for p in params]
+    best_loss = tc.full((S,), float("inf"), device=device)
+    active = tc.ones(S, dtype=tc.bool, device=device)  # still training
+    n_steps = tc.full((S,), epochs, dtype=tc.long, device=device)  # steps taken
+    stop_xt = xt_f.clone()  # each run's points at the step it stopped on
+    loss_hist = tc.zeros(epochs, S, device=device)
+    nu_hist = tc.zeros(epochs, S, device=device)
+
+    for step in range(epochs):
+        if resample_fn is not None:
+            x_f, t_f = resample_fn()
+            xt_f = stencil_inputs(x_f, t_f, L, hx, ht)
+
+        loss = train_loss()
+        opt.zero_grad()
+        loss.backward()
+        clip_grad_norm_per_run(1.0)
+        opt.step()
+
+        loss_value = monitor()
+        loss_hist[step], nu_hist[step] = loss_value, nu.detach().view(-1)
+        improved = active & (loss_value < best_loss)
+        best_loss = tc.where(improved, loss_value, best_loss)
+        for bp, p in zip(best_params, params):
+            bp.copy_(tc.where(improved.view(per_run(p)), p.detach(), bp))
+
+        if target_loss is not None:
+            reached = active & (loss_value <= target_loss)
+            n_steps = tc.where(reached, step + 1, n_steps)
+            stop_xt = tc.where(reached.view(-1, 1, 1), xt_f, stop_xt)
+            active = active & ~reached
+            if (step + 1) % check_every == 0 and not bool(active.any()):
+                break
+    target_reached = ~active
+    stop_xt = tc.where(active.view(-1, 1, 1), xt_f, stop_xt)  # runs that never stopped: last points
+
+    with tc.no_grad():
+        for bp, p in zip(best_params, params):
+            p.copy_(bp)  # best AdamW state of every run
+
+    loss_hist, nu_hist = loss_hist.cpu().numpy(), nu_hist.cpu().numpy()
+    n_steps, target_reached, best_loss = n_steps.tolist(), target_reached.tolist(), best_loss.tolist()
+    runs = [
+        dict(
+            hist={"loss": loss_hist[:k, i].tolist(), "nu": nu_hist[:k, i].tolist()},
+            best_loss=best_loss[i], target_reached=target_reached[i],
+            stop_x=stop_xt[i, :n_f, 0:1], stop_t=stop_xt[i, :n_f, 1:2],
+        )
+        for i, k in enumerate(n_steps)
+    ]
+    return model, runs
 
 def predict(model, x, t_val):
     """Evaluates the model on a spatial grid x at a fixed time t_val, on
@@ -534,39 +759,23 @@ def plot_solution(x, curves, ref=None, ref_label="FDM reference", title="",
     plt.close(fig)
 
 # ----------------------------------------------------------------------
-# One run of the inverse problem (one worker job)
+# Runs of the inverse problem (worker jobs)
 # ----------------------------------------------------------------------
-def run_one(n_col, n_qubits, Tfin, run_id, device_str="cpu"):
-    tc.set_num_threads(2)
-    device = tc.device(device_str)
-
-    SEED = run_id
-    set_seed(SEED)
-    # Drawn *after* set_seed so it is reproducible per (run_id) -- unlike the
-    # serial script, where NU_INIT was drawn once at import time.
-    nu_init = float(np.random.random())
-
-    # Reference solution, used only for comparison/plots and for the fixed
-    # data points at t=Tfin, never for the PDE-residual part of training.
-    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=NU)
-    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
-
-    # Model weights are initialized on CPU (so init RNG is reproducible
-    # regardless of `device`), then moved to the target device.
-    model = QuantumExactInversePINN(
+def build_model(n_qubits, Tfin, nu_init):
+    return QuantumExactInversePINN(
         pre_neurons=PRE_NEURONS, pre_depth=PRE_DEPTH,
         n_qubits=n_qubits, post_neurons=POST_NEURONS, post_depth=POST_DEPTH,
         L=L, Tfin=Tfin, nu_init=nu_init, angle_scale=ANGLE_SCALE,
         fixed_layer=FIXED_LAYER, fixed_layer_repeats=FIXED_LAYER_REPEATS,
         input_rotation_axis=INPUT_ROTATION_AXIS,
-    ).to(device)
-
-    x_f, t_f = sample_collocation_points(
-        n_col, L, Tfin, HT, seed=SEED, distribution=COLLOCATION_DISTRIBUTION)
-    resample_fn = lambda: tuple(
-        tensor.to(device) for tensor in sample_collocation_points(
-            n_col, L, Tfin, HT, distribution=COLLOCATION_DISTRIBUTION)
     )
+
+def problem_setup(n_col, Tfin, device):
+    """What a run needs that doesn't depend on its seed. Returns
+    (ref, validation_points, data_points, target_loss), ref = (x_ref, t_ref,
+    U_ref) the FDM reference, used only for comparison/plots and for the
+    fixed data points at t=Tfin, never for the PDE-residual part of training."""
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=Tfin, nu=NU)
     x_val, t_val = sample_collocation_points(
         n_col, L, Tfin, HT, distribution=STOPPING_DISTRIBUTION)
 
@@ -575,7 +784,7 @@ def run_one(n_col, n_qubits, Tfin, run_id, device_str="cpu"):
     # across epochs. Together with the hard-imposed initial condition, this
     # is what makes nu identifiable (the PDE residual alone can't pin it down).
     data_idx = np.linspace(0, len(x_ref) - 1, N_DATA).astype(int)
-    to_tensor = lambda a: tc.tensor(a, dtype=tc.get_default_dtype())
+    to_tensor = lambda a: tc.tensor(a, dtype=tc.get_default_dtype(), device=device)
     x_data = to_tensor(x_ref[data_idx].reshape(-1, 1))
     t_data = tc.full_like(x_data, float(t_ref[-1]))
     u_data = to_tensor(U_ref[-1][data_idx].reshape(-1, 1))
@@ -585,30 +794,24 @@ def run_one(n_col, n_qubits, Tfin, run_id, device_str="cpu"):
     # Computed on CPU (numpy), before anything is moved to `device`.
     target_loss = reference_pde_residual(x_val, t_val, x_ref, t_ref, U_ref, L=L, nu=NU, hx=HX, ht=HT)
 
-    x_f, t_f = x_f.to(device), t_f.to(device)
-    x_val, t_val = x_val.to(device), t_val.to(device)
-    x_data, t_data, u_data = x_data.to(device), t_data.to(device), u_data.to(device)
+    return ((x_ref, t_ref, U_ref), (x_val.to(device), t_val.to(device)),
+            (x_data, t_data, u_data), target_loss)
 
-    model, hist = train(
-        model, x_f, t_f, epochs=EPOCHS, lr=LR, resample_fn=resample_fn,
-        lbfgs_epochs=LBFGS_EPOCHS, lbfgs_lr=LBFGS_LR,
-        target_loss=target_loss, validation_points=(x_val, t_val),
-        data_points=(x_data, t_data, u_data), L=L, hx=HX, ht=HT,
-    )
-
-    # Move back to CPU: checkpoints stay loadable without a GPU, and every
-    # plot/prediction below is small enough that CPU is plenty fast.
-    model = model.to("cpu")
+def save_run(model, hist, n_col, n_qubits, Tfin, seed, nu_init, target_loss, x_f, ref, device_str):
+    """Checkpoint, loss/nu history and plots of one trained run (`model` on
+    the CPU). x_f: the run's first collocation draw (drawn on the solution
+    plot). Returns the learned nu."""
+    x_ref, t_ref, U_ref = ref
     nu_learned = float(model.learnable_parameter.detach())
 
     out_dir = os.path.join(OUT_DIR, f"T_{Tfin}")
-    tag = f"{n_col}_NQ{n_qubits}_{run_id}"
+    tag = f"{n_col}_NQ{n_qubits}_{seed}"
 
     model.save(
         os.path.join(out_dir, f"model_{tag}.pt"),
         training_params=dict(
             L=L, TFIN=Tfin, NU=NU, HX=HX, HT=HT,
-            N_COLLOCATION=n_col, N_DATA=N_DATA, SEED=SEED,
+            N_COLLOCATION=n_col, N_DATA=N_DATA, SEED=seed,
             COLLOCATION_DISTRIBUTION=COLLOCATION_DISTRIBUTION,
             STOPPING_DISTRIBUTION=STOPPING_DISTRIBUTION,
             EPOCHS=EPOCHS, LR=LR, LBFGS_EPOCHS=LBFGS_EPOCHS, LBFGS_LR=LBFGS_LR,
@@ -643,6 +846,7 @@ def run_one(n_col, n_qubits, Tfin, run_id, device_str="cpu"):
         save_path=os.path.join(out_dir, f"nu_history_{tag}.png"),
     )
 
+    x_plot = np.linspace(0.0, L, 200).reshape(-1, 1)
     u_pred = predict(model, x_plot, Tfin)
     u_ref = reference_at_time(Tfin, t_ref, x_ref, U_ref, x_plot, L=L)
     plot_solution(
@@ -651,8 +855,111 @@ def run_one(n_col, n_qubits, Tfin, run_id, device_str="cpu"):
         save_path=os.path.join(out_dir, f"solution_{tag}.png"),
         collocation_x=x_f.detach().cpu().numpy(),
     )
+    return nu_learned
 
+def run_one(n_col, n_qubits, Tfin, run_id, device_str="cpu"):
+    """A single run, trained on its own with `train`. The sweep below uses
+    `run_group` (much faster); this is kept for single-run checks."""
+    tc.set_num_threads(2)
+    device = tc.device(device_str)
+
+    SEED = run_id
+    set_seed(SEED)
+    # Drawn *after* set_seed so it is reproducible per (run_id) -- unlike the
+    # serial script, where NU_INIT was drawn once at import time.
+    nu_init = float(np.random.random())
+
+    # Model weights are initialized on CPU (so init RNG is reproducible
+    # regardless of `device`), then moved to the target device.
+    model = build_model(n_qubits, Tfin, nu_init).to(device)
+
+    x_f, t_f = sample_collocation_points(
+        n_col, L, Tfin, HT, seed=SEED, distribution=COLLOCATION_DISTRIBUTION)
+    resample_fn = lambda: tuple(
+        tensor.to(device) for tensor in sample_collocation_points(
+            n_col, L, Tfin, HT, distribution=COLLOCATION_DISTRIBUTION)
+    )
+    ref, validation_points, data_points, target_loss = problem_setup(n_col, Tfin, device)
+
+    model, hist = train(
+        model, x_f.to(device), t_f.to(device), epochs=EPOCHS, lr=LR, resample_fn=resample_fn,
+        lbfgs_epochs=LBFGS_EPOCHS, lbfgs_lr=LBFGS_LR,
+        target_loss=target_loss, validation_points=validation_points,
+        data_points=data_points, L=L, hx=HX, ht=HT,
+    )
+
+    # Move back to CPU: checkpoints stay loadable without a GPU, and every
+    # plot/prediction below is small enough that CPU is plenty fast.
+    nu_learned = save_run(model.to("cpu"), hist, n_col, n_qubits, Tfin, SEED, nu_init,
+                          target_loss, x_f, ref, device_str)
     return n_col, n_qubits, Tfin, run_id, nu_learned
+
+def run_group(n_col, n_qubits, Tfin, run_ids, device_str="cpu"):
+    """Every seed in `run_ids` of one (n_col, n_qubits, Tfin) configuration
+    (one worker job): the AdamW phase trains them all together as one
+    BatchedQuantumExactPINN, then each run goes through the same L-BFGS
+    phase as `train`, on its own. Per seed, the initial network, nu_init and
+    first collocation draw are the same as run_one's. The points re-drawn
+    every AdamW epoch come from one generator for the whole group (seeded
+    with its first seed), so they are reproducible for the same group of
+    seeds, not seed by seed. Returns [(run_id, nu_learned), ...]."""
+    tc.set_num_threads(2)
+    device = tc.device(device_str)
+
+    nu_inits, models, x_first, t_first = [], [], [], []
+    for seed in run_ids:
+        set_seed(seed)
+        nu_inits.append(float(np.random.random()))
+        models.append(build_model(n_qubits, Tfin, nu_inits[-1]))  # initialized on CPU
+        x, t = sample_collocation_points(
+            n_col, L, Tfin, HT, seed=seed, distribution=COLLOCATION_DISTRIBUTION)
+        x_first.append(x)
+        t_first.append(t)
+    model = BatchedQuantumExactPINN(models).to(device)
+    x_f, t_f = tc.stack(x_first).to(device), tc.stack(t_first).to(device)  # (S, n_col, 1)
+
+    if COLLOCATION_DISTRIBUTION == "random":
+        generator = tc.Generator(device=device).manual_seed(run_ids[0])
+        shape = (len(run_ids), n_col, 1)
+        resample_fn = lambda: (
+            tc.rand(shape, generator=generator, device=device) * L,
+            HT + tc.rand(shape, generator=generator, device=device) * (Tfin - 2.0 * HT),
+        )
+    else:  # a fixed grid: re-drawing gives the same points every epoch
+        resample_fn = None
+
+    ref, validation_points, data_points, target_loss = problem_setup(n_col, Tfin, device)
+    model, runs = train_batched_adam(
+        model, x_f, t_f, epochs=EPOCHS, lr=LR, resample_fn=resample_fn,
+        target_loss=target_loss, validation_points=validation_points,
+        data_points=data_points, L=L, hx=HX, ht=HT,
+    )
+
+    x_val, t_val = validation_points
+    xt_val = stencil_inputs(x_val, t_val, L, HX, HT)
+    x_data, t_data, u_data = data_points
+    xt_data = tc.cat([x_data, t_data], dim=1)
+
+    results = []
+    for i, (seed, run) in enumerate(zip(run_ids, runs)):
+        run_model = build_model(n_qubits, Tfin, nu_inits[i])
+        run_model.load_state_dict(model.run_state_dict(i))
+        run_model = run_model.to(device)
+        hist, best_loss, target_reached = run["hist"], run["best_loss"], run["target_reached"]
+        if LBFGS_EPOCHS > 0:
+            best_state = {k: v.detach().clone() for k, v in run_model.state_dict().items()}
+            best_loss, target_reached = lbfgs_refine(
+                run_model, stencil_inputs(run["stop_x"], run["stop_t"], L, HX, HT), n_col,
+                hist, best_state, best_loss, target_reached, LBFGS_EPOCHS, LBFGS_LR,
+                target_loss=target_loss, xt_val=xt_val, n_val=x_val.shape[0],
+                xt_data=xt_data, u_data=u_data, hx=HX, ht=HT,
+            )
+        hist["target_reached"], hist["best_loss"] = target_reached, best_loss
+
+        nu_learned = save_run(run_model.to("cpu"), hist, n_col, n_qubits, Tfin, seed, nu_inits[i],
+                              target_loss, x_first[i], ref, device_str)
+        results.append((seed, nu_learned))
+    return results
 
 
 if __name__ == "__main__":
@@ -698,7 +1005,7 @@ if __name__ == "__main__":
         device_for = lambda job_index: "cpu"
         device_summary = "cpu"
 
-    SEEDS_NEW = range(0, 10)  # 10 seeds
+    SEEDS_NEW = range(10, 50)  # 10 seeds
 
     # Bloco A: varredura de N_COLLOCATION com N_QUBITS em [3, 7, 15]
     block_A = [
@@ -740,23 +1047,32 @@ if __name__ == "__main__":
     for _, _, Tfin, _ in jobs:
         os.makedirs(os.path.join(OUT_DIR, f"T_{Tfin}"), exist_ok=True)
 
+    # Em lote: as seeds que faltam de cada configuracao (n_col, n_qubits,
+    # Tfin) sao treinadas juntas, num unico job (ver run_group).
+    groups = {}
+    for n_col, n_qubits, Tfin, run_id in jobs:
+        groups.setdefault((n_col, n_qubits, Tfin), []).append(run_id)
+    print(f"{len(groups)} grupos (n_col, n_qubits, Tfin)")
+
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = {
-            executor.submit(run_one, *job, device_for(i)): job
-            for i, job in enumerate(jobs)
+            executor.submit(run_group, n_col, n_qubits, Tfin, run_ids, device_for(i)): ((n_col, n_qubits, Tfin), run_ids)
+            for i, ((n_col, n_qubits, Tfin), run_ids) in enumerate(groups.items())
         }
-        progress = tqdm(as_completed(futures), total=len(jobs), desc="runs", unit="run")
+        progress = tqdm(total=len(jobs), desc="runs", unit="run")
         n_failed = 0
-        for future in progress:
-            n_col, n_qubits, Tfin, run_id = futures[future]
+        for future in as_completed(futures):
+            (n_col, n_qubits, Tfin), run_ids = futures[future]
             try:
                 future.result()
             except Exception as exc:
-                n_failed += 1
+                n_failed += len(run_ids)
                 progress.write(
                     f"FAILED: N_COLLOCATION={n_col} N_QUBITS={n_qubits} "
-                    f"Tfin={Tfin} run_id={run_id} -> {exc!r}"
+                    f"Tfin={Tfin} run_ids={list(run_ids)} -> {exc!r}"
                 )
+            progress.update(len(run_ids))
             progress.set_postfix(failed=n_failed)
+        progress.close()
         if n_failed:
             print(f"{n_failed} run(s) failed -- see FAILED lines above.")

@@ -27,9 +27,9 @@ except Exception:
     plt.style.use("seaborn-v0_8-whitegrid")
 
 CLASSICAL_INVERSE_DIR = "data/classical_inverse"
-QUANTUM_INVERSE_DIR = "data/quantum_inverse"
+QUANTUM_INVERSE_DIR = "data/quantum_inverse_exact"
 T_LABELS = ["0.1", "1"]
-CLASSICAL_N_COLLOCATION = 10  # only N_COLLOCATION with the full INTRA_NEURO sweep
+CLASSICAL_N_COLLOCATION = 100  # only N_COLLOCATION with the full INTRA_NEURO sweep
 QUANTUM_N_COLLOCATION = CLASSICAL_N_COLLOCATION  # also has the full N_QUBITS sweep
 ERROR_BAR_TYPE = "variancia"
 COLOR_MSE = "b"

@@ -12,7 +12,7 @@ except Exception:
     plt.style.use("seaborn-v0_8-whitegrid")
 
 CLASSICAL_INVERSE_DIR = "data/classical_inverse"
-QUANTUM_INVERSE_DIR = "data/quantum_inverse"
+QUANTUM_INVERSE_DIR = "data/quantum_inverse_exact"
 T_LABELS = ["0.1", "1"]
 INTRA_NEURO_LIST = [3, 7, 15]  # widths with a full N_COLLOCATION sweep
 N_QUBITS_LIST = [3, 7]  # quantum widths with a full N_COLLOCATION sweep
