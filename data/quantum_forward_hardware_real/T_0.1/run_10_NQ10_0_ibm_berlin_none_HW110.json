@@ -1,0 +1,786 @@
+{
+  "started": "2026-10-08T12:47:55.744177",
+  "backend": "ibm_berlin",
+  "fake": false,
+  "instance": "PDE_Europe",
+  "seed": 0,
+  "n_qubits": 10,
+  "n_collocation": 10,
+  "Tfin": 0.1,
+  "nu": 0.01,
+  "network": "brickwork_cnot",
+  "n_cnot_layers": 1,
+  "cones": [
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      1,
+      2,
+      3
+    ],
+    [
+      0,
+      1,
+      2,
+      3
+    ],
+    [
+      2,
+      3,
+      4,
+      5
+    ],
+    [
+      2,
+      3,
+      4,
+      5
+    ],
+    [
+      4,
+      5,
+      6,
+      7
+    ],
+    [
+      4,
+      5,
+      6,
+      7
+    ],
+    [
+      6,
+      7,
+      8,
+      9
+    ],
+    [
+      6,
+      7,
+      8,
+      9
+    ],
+    [
+      8,
+      9
+    ]
+  ],
+  "architecture": {
+    "pre_neurons": 10,
+    "pre_depth": 1,
+    "post_neurons": 10,
+    "post_depth": 1,
+    "input_rotation_axis": "ry",
+    "angle_scale": null
+  },
+  "training_config": {
+    "epochs": 110,
+    "lr0": 0.1,
+    "lr_step": 0.01,
+    "lr_every": 10,
+    "lr_min": 0.01,
+    "weight_decay": 1e-06,
+    "grad_clip": 1.0,
+    "recal_every": 10,
+    "collocation_distribution": "random",
+    "n_evaluation_points": 200,
+    "L": 1.0,
+    "nu": 0.01,
+    "hx": 0.001953125,
+    "ht": 0.001
+  },
+  "mitigation": "none",
+  "mitigation_options": {
+    "resilience_level": 0
+  },
+  "chains": [
+    [
+      18,
+      17,
+      16,
+      15,
+      14,
+      13,
+      12,
+      11,
+      21,
+      31
+    ],
+    [
+      19,
+      9,
+      8,
+      7,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+    ],
+    [
+      0,
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90
+    ],
+    [
+      118,
+      117,
+      116,
+      115,
+      114,
+      113,
+      112,
+      111,
+      110,
+      100
+    ],
+    [
+      41,
+      51,
+      61,
+      71,
+      81,
+      91,
+      101,
+      102,
+      103,
+      104
+    ],
+    [
+      22,
+      32,
+      42,
+      52,
+      62,
+      72,
+      82,
+      92,
+      93,
+      94
+    ],
+    [
+      105,
+      95,
+      96,
+      106,
+      107,
+      108,
+      98,
+      88,
+      78,
+      68
+    ],
+    [
+      24,
+      25,
+      35,
+      45,
+      55,
+      65,
+      66,
+      67,
+      57,
+      58
+    ]
+  ],
+  "blocks": 8,
+  "shots": 1024,
+  "precision": 0.03125,
+  "cal_samples": 1024,
+  "max_chain_score": 0.5,
+  "chain_outlier": 3.0,
+  "isa": {
+    "depth": 12,
+    "two_qubit_gate": "cz",
+    "n_2q": 72,
+    "n_2q_expected": 72,
+    "qubits_used": 80
+  },
+  "jobs_planned": {
+    "calibration": {
+      "jobs": 1,
+      "parameter_sets": 128
+    },
+    "training": {
+      "jobs": 110,
+      "parameter_sets_per_job": 2
+    },
+    "validation": {
+      "jobs": 1,
+      "parameter_sets": 200,
+      "replicas": 8
+    },
+    "total_parameter_sets": 548,
+    "total_shots": 561152
+  },
+  "session": {
+    "use": true,
+    "max_time": "1h",
+    "ids": [
+      "c8927878-a4a9-4b03-8499-417b7d5564bb"
+    ],
+    "details": {
+      "id": "c8927878-a4a9-4b03-8499-417b7d5564bb",
+      "backend_name": "ibm_berlin",
+      "interactive_timeout": 60,
+      "max_time": 3600,
+      "active_timeout": 3600,
+      "state": "active",
+      "accepting_jobs": true,
+      "last_job_started": "2026-10-08T17:28:09.927Z",
+      "last_job_completed": null,
+      "started_at": "2026-10-08T16:50:08.725Z",
+      "closed_at": null,
+      "activated_at": "2026-10-08T16:50:08.725Z",
+      "mode": "dedicated",
+      "usage_time": null
+    },
+    "usage_s": null
+  },
+  "reference_fake_run": {
+    "file": "C:\\Users\\Gubio\\CODESACE\\CBPF-Geral\\data\\quantum_forward_hardware\\T_0.1\\run_10_NQ10_seeds0-4_fake_berlin_HW110.json",
+    "backend": "fake_berlin",
+    "seed": 0,
+    "index": 0,
+    "run": {
+      "seed": 0,
+      "mse": 0.0008055461293303999,
+      "mae": 0.024056222890911468,
+      "relative_l2": 0.04217412181076438,
+      "surrogate": {
+        "mse": 0.0007854596665590399,
+        "mae": 0.023659327594917432,
+        "relative_l2": 0.041644992183687356
+      },
+      "ideal_circuit": {
+        "mse": 0.0006510702821798646,
+        "mae": 0.02210396211851278,
+        "relative_l2": 0.03791532445722628
+      },
+      "rms_q_qpu_vs_surrogate": 0.01022591204420193,
+      "rms_q_qpu_vs_exact": 0.028261851299941087,
+      "final_loss_qpu": 0.10791858285665512,
+      "final_loss_monitor": 0.1854732781648636
+    },
+    "chains": [
+      [
+        18,
+        17,
+        16,
+        15,
+        14,
+        13,
+        12,
+        11,
+        21,
+        31
+      ],
+      [
+        19,
+        9,
+        8,
+        7,
+        6,
+        5,
+        4,
+        3,
+        2,
+        1
+      ],
+      [
+        0,
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        90
+      ],
+      [
+        41,
+        51,
+        61,
+        71,
+        81,
+        91,
+        101,
+        102,
+        103,
+        104
+      ],
+      [
+        118,
+        117,
+        116,
+        115,
+        114,
+        113,
+        112,
+        111,
+        110,
+        100
+      ],
+      [
+        105,
+        95,
+        96,
+        106,
+        107,
+        108,
+        98,
+        88,
+        78,
+        68
+      ],
+      [
+        24,
+        25,
+        35,
+        45,
+        55,
+        65,
+        66,
+        67,
+        57,
+        58
+      ],
+      [
+        22,
+        32,
+        42,
+        52,
+        62,
+        72,
+        82,
+        92,
+        93,
+        94
+      ],
+      [
+        56,
+        46,
+        47,
+        48,
+        38,
+        28,
+        27,
+        26,
+        36,
+        37
+      ]
+    ],
+    "training_config": {
+      "epochs": 110,
+      "lr0": 0.1,
+      "lr_step": 0.01,
+      "lr_every": 10,
+      "lr_min": 0.01,
+      "weight_decay": 1e-06,
+      "grad_clip": 1.0,
+      "recal_every": 10,
+      "collocation_distribution": "random",
+      "n_evaluation_points": 200,
+      "L": 1.0,
+      "nu": 0.01,
+      "hx": 0.001953125,
+      "ht": 0.001
+    },
+    "mse_all_seeds": {
+      "0": 0.0008055461293303999,
+      "1": 0.0021313256361796653,
+      "2": 0.0023490300817502474,
+      "3": 0.0029470448912009813,
+      "4": 0.0023963925985979284
+    },
+    "validation_file": "C:\\Users\\Gubio\\CODESACE\\CBPF-Geral\\data\\quantum_forward_hardware\\T_0.1\\validation_10_NQ10_0_fake_berlin_HW110.npz",
+    "losshist_file": "C:\\Users\\Gubio\\CODESACE\\CBPF-Geral\\data\\quantum_forward_hardware\\T_0.1\\losshist_10_NQ10_seeds0-4_fake_berlin_HW110.npz"
+  },
+  "job_ids": [
+    "db3sig9hpmgs73e929s0",
+    "db3snnqla55c73frfj7g",
+    "db3sns92p4ds73bj9t1g",
+    "db3so0jpvoos739cgb20",
+    "db3so4ila55c73frfjkg",
+    "db3so92la55c73frfjp0",
+    "db3sodbpvoos739cgbe0",
+    "db3soh92p4ds73bj9tl0",
+    "db3solhhpmgs73e92ffg",
+    "db3sop9hpmgs73e92fjg",
+    "db3sot9hpmgs73e92fn0",
+    "db3sp19hpmgs73e92frg",
+    "db3sp5hhpmgs73e92fv0",
+    "db3sp9ila55c73frfkmg",
+    "db3spdhhpmgs73e92g7g",
+    "db3sphphpmgs73e92gc0",
+    "db3splqla55c73frfl20",
+    "db3sppila55c73frfl6g",
+    "db3sptila55c73frflag",
+    "db3sq19hpmgs73e92gr0",
+    "db3sq59hpmgs73e92gug",
+    "db3sq92la55c73frflm0",
+    "db3sqd12p4ds73bj9vag",
+    "db3sqh2la55c73frflug",
+    "db3sql2la55c73frfm2g",
+    "db3sqp3pvoos739cgdjg",
+    "db3sqt1hpmgs73e92hkg",
+    "db3sr0p2p4ds73bj9vsg",
+    "db3sr4ila55c73frfmhg",
+    "db3sr8hhpmgs73e92hv0",
+    "db3srcqla55c73frfmp0",
+    "db3srgjpvoos739cgea0",
+    "db3srkala55c73frfn0g",
+    "db3sro3pvoos739cgeig",
+    "db3srs3pvoos739cgem0",
+    "db3ss02la55c73frfnb0",
+    "db3ss412p4ds73bja0sg",
+    "db3ss7p2p4ds73bja11g",
+    "db3ssbhhpmgs73e92j00",
+    "db3ssfala55c73frfnp0",
+    "db3ssjila55c73frfnt0",
+    "db3ssnala55c73frfo0g",
+    "db3ssrbpvoos739cgfi0",
+    "db3ssvbpvoos739cgfm0",
+    "db3st39hpmgs73e92jmg",
+    "db3st712p4ds73bja1u0",
+    "db3stap2p4ds73bja22g",
+    "db3steqla55c73frfong",
+    "db3stiila55c73frforg",
+    "db3stn2la55c73frfp00",
+    "db3stqp2p4ds73bja2h0",
+    "db3stuila55c73frfp7g",
+    "db3su2ila55c73frfpbg",
+    "db3su6ala55c73frfpg0",
+    "db3sua92p4ds73bja2vg",
+    "db3sue3pvoos739cgh00",
+    "db3sui3pvoos739cgh40",
+    "db3sum2la55c73frfpv0",
+    "db3suq3pvoos739cghbg",
+    "db3sutrpvoos739cghfg",
+    "db3sv1p2p4ds73bja3lg",
+    "db3sv5hhpmgs73e92lk0",
+    "db3sv9ila55c73frfqhg",
+    "db3svdjpvoos739cghu0",
+    "db3svhala55c73frfqp0",
+    "db3svl1hpmgs73e92m2g",
+    "db3svoqla55c73frfr00",
+    "db3svsp2p4ds73bja4f0",
+    "db3t00p2p4ds73bja4ig",
+    "db3t04jpvoos739cgikg",
+    "db3t08jpvoos739cgiog",
+    "db3t0cila55c73frfrig",
+    "db3t0gala55c73frfrm0",
+    "db3t0kbpvoos739cgj3g",
+    "db3t0o3pvoos739cgj7g",
+    "db3t0s12p4ds73bja5ag",
+    "db3t0vphpmgs73e92nag",
+    "db3t141hpmgs73e92ne0",
+    "db3t17phpmgs73e92ni0",
+    "db3t1bjpvoos739cgjpg",
+    "db3t1frpvoos739cgjug",
+    "db3t1jqla55c73frfsog",
+    "db3t1np2p4ds73bja64g",
+    "db3t1rqla55c73frft00",
+    "db3t1vphpmgs73e92o7g",
+    "db3t23p2p4ds73bja6gg",
+    "db3t2792p4ds73bja6k0",
+    "db3t2b2la55c73frfte0",
+    "db3t2f12p4ds73bja6s0",
+    "db3t2j3pvoos739cgktg",
+    "db3t2mrpvoos739cgl20",
+    "db3t2qp2p4ds73bja76g",
+    "db3t2up2p4ds73bja7ag",
+    "db3t3312p4ds73bja7fg",
+    "db3t3712p4ds73bja7j0",
+    "db3t3arpvoos739cglkg",
+    "db3t3eqla55c73frfuf0",
+    "db3t3ip2p4ds73bja7ug",
+    "db3t3mjpvoos739cglvg",
+    "db3t3qh2p4ds73bja860",
+    "db3t3uhhpmgs73e92q2g",
+    "db3t429hpmgs73e92q60",
+    "db3t46bpvoos739cgmf0",
+    "db3t4a1hpmgs73e92qdg",
+    "db3t4eala55c73frfvc0",
+    "db3t4i1hpmgs73e92qkg",
+    "db3t4mjpvoos739cgmtg",
+    "db3t4qila55c73frfvng",
+    "db3t4uala55c73frfvrg",
+    "db3t52jpvoos739cgn8g",
+    "db3t56hhpmgs73e92r8g",
+    "db3t5a9hpmgs73e92rc0"
+  ],
+  "recal": [
+    {
+      "epoch": 10,
+      "fit_rms": [
+        0.024767099158850232,
+        0.034149801750994344,
+        0.032025212145199385,
+        0.028791828228632504,
+        0.03175902021605031,
+        0.048082735768430744,
+        0.034046891430817884,
+        0.03082978182487898,
+        0.03537438627491811,
+        0.09453507700890161
+      ],
+      "n_samples": 1124
+    },
+    {
+      "epoch": 20,
+      "fit_rms": [
+        0.02472681429787603,
+        0.034767887938327476,
+        0.03222247131693574,
+        0.028810566053712412,
+        0.0319141212629969,
+        0.047691614520894036,
+        0.03426433197444557,
+        0.030862353530596808,
+        0.03545279251782694,
+        0.09363249336155623
+      ],
+      "n_samples": 1224
+    },
+    {
+      "epoch": 30,
+      "fit_rms": [
+        0.024903767747324945,
+        0.03519924888147457,
+        0.03249531502975994,
+        0.028875225643236562,
+        0.03170233831699003,
+        0.047489663982311005,
+        0.034255348812767386,
+        0.030917927415199938,
+        0.03527313692626732,
+        0.09604662125505302
+      ],
+      "n_samples": 1324
+    },
+    {
+      "epoch": 40,
+      "fit_rms": [
+        0.02529279212595705,
+        0.03535120435412404,
+        0.03259797864797334,
+        0.028779757293024268,
+        0.03172274716854272,
+        0.048129899636722186,
+        0.034454310402945776,
+        0.031015628575324358,
+        0.03522769298811179,
+        0.0951465047841676
+      ],
+      "n_samples": 1424
+    },
+    {
+      "epoch": 50,
+      "fit_rms": [
+        0.025439827821432462,
+        0.03543428195813615,
+        0.03261025226618545,
+        0.029170186276701544,
+        0.031957338393479404,
+        0.04909314445927976,
+        0.03496463854491618,
+        0.031192672965247255,
+        0.035153873663328006,
+        0.09393495152670564
+      ],
+      "n_samples": 1524
+    },
+    {
+      "epoch": 60,
+      "fit_rms": [
+        0.025856714642996194,
+        0.035282237348620064,
+        0.032787260752748716,
+        0.029452838243796076,
+        0.032238137180052646,
+        0.04964716382834379,
+        0.03518641275151319,
+        0.03133967423684293,
+        0.035157340319323944,
+        0.0936029479912827
+      ],
+      "n_samples": 1624
+    },
+    {
+      "epoch": 70,
+      "fit_rms": [
+        0.02604391245188012,
+        0.035391495012282455,
+        0.033134091331493816,
+        0.02957529322993619,
+        0.03204892258783673,
+        0.049526387843207745,
+        0.035385394249152914,
+        0.03158434846378919,
+        0.034930864801109025,
+        0.09331571869048269
+      ],
+      "n_samples": 1724
+    },
+    {
+      "epoch": 80,
+      "fit_rms": [
+        0.026003641049159164,
+        0.03531026674003504,
+        0.033269089803218854,
+        0.029738854375971135,
+        0.03207145941441175,
+        0.049924388879588756,
+        0.03549225089252249,
+        0.031449209542168906,
+        0.03486319110691418,
+        0.09254013084622893
+      ],
+      "n_samples": 1824
+    },
+    {
+      "epoch": 90,
+      "fit_rms": [
+        0.025922207557838833,
+        0.035434641212188187,
+        0.033264091792577014,
+        0.029867942656324305,
+        0.032088337654859043,
+        0.050260043108936295,
+        0.03580256484333885,
+        0.03181991644955478,
+        0.03496890844110534,
+        0.09334866833451709
+      ],
+      "n_samples": 1924
+    },
+    {
+      "epoch": 100,
+      "fit_rms": [
+        0.025774452537137126,
+        0.035626879937945305,
+        0.03340994319164004,
+        0.030045584244096563,
+        0.03217853243040208,
+        0.05065186635077597,
+        0.036108602041564145,
+        0.031763574046274605,
+        0.03534025998430805,
+        0.09326377941577535
+      ],
+      "n_samples": 2024
+    },
+    {
+      "epoch": 110,
+      "fit_rms": [
+        0.02578023906445031,
+        0.03592845898497745,
+        0.03352049234713998,
+        0.03032100442716644,
+        0.0321931854267823,
+        0.05087610992698417,
+        0.03620010795202217,
+        0.03181793595238425,
+        0.03552998156918011,
+        0.09387829359576427
+      ],
+      "n_samples": 2124
+    }
+  ],
+  "resumes": [],
+  "versions": {
+    "python": "3.10.22",
+    "platform": "Windows-10-10.0.26300-SP0",
+    "qiskit": "2.5.2",
+    "qiskit_ibm_runtime": "0.50.0",
+    "qiskit_aer": "0.17.2",
+    "torch": "2.14.1+cpu",
+    "numpy": "2.2.6"
+  },
+  "command": "run_quantum_hardware_real.py",
+  "calibration_file": "C:\\Users\\Gubio\\CODESACE\\CBPF-Geral\\data\\quantum_forward_hardware_real\\T_0.1\\calibration_10_NQ10_0_ibm_berlin_none_HW110.npz",
+  "calibration_time_s": 669.3185024261475,
+  "chain_misfit": [
+    0.0325827618546136,
+    0.035210349976721955,
+    0.033702773752125874,
+    0.03233658326035003,
+    0.046516342362287806,
+    0.03274971968270355,
+    0.03666445204114483,
+    0.07982007555815658
+  ],
+  "fit_rms": [
+    0.024802035641745584,
+    0.034332584643752335,
+    0.03218710681346009,
+    0.02884096707547133,
+    0.03147648887313928,
+    0.04889663639598959,
+    0.03342154334369809,
+    0.03085579321900897,
+    0.03522413190527284,
+    0.0945532856674879
+  ],
+  "contrast": [
+    0.9609585931150404,
+    0.909370807860457,
+    0.8926145660763092,
+    0.9290620148874866,
+    0.8947775368228537,
+    0.9099506531799122,
+    0.8828078688398859,
+    0.918006843838655,
+    0.8776848537495286,
+    0.8565356656969172
+  ],
+  "rms_hw_vs_exact": 0.06439766490874174,
+  "initial": {
+    "surrogate": {
+      "mse": 0.03902215116297557,
+      "mae": 0.17636045348650245,
+      "relative_l2": 0.29353266930253175
+    },
+    "ideal_circuit": {
+      "mse": 0.038840892245779586,
+      "mae": 0.17619370145845706,
+      "relative_l2": 0.2928501423112868
+    },
+    "monitor_loss": 0.04117593914270401
+  },
+  "training_time_s": 1741.3551590442657,
+  "mse": 0.0014541102919788744,
+  "mae": 0.031468515921907664,
+  "relative_l2": 0.05666299351429952,
+  "surrogate": {
+    "mse": 0.001352742942872102,
+    "mae": 0.030340531780671993,
+    "relative_l2": 0.05465230444458958
+  },
+  "ideal_circuit": {
+    "mse": 0.0016378345546985162,
+    "mae": 0.0341150236515947,
+    "relative_l2": 0.06013618250091995
+  },
+  "rms_q_qpu_vs_surrogate": 0.013230629036905979,
+  "rms_q_qpu_vs_exact": 0.051732810512759214,
+  "final_loss_qpu": 0.2915645241737366,
+  "final_loss_monitor": 0.35584646463394165,
+  "finished": "2026-10-08T13:42:06.664538",
+  "wall_time_s": 3250.790410041809,
+  "reference_fake_mse": 0.0008055461293303999
+}

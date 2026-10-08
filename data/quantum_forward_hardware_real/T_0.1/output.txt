@@ -1,0 +1,128 @@
+(qiskit) PS C:\Users\Gubio\CODESACE\CBPF-Geral> python run_quantum_hardware_real.py     
+8 de 12 cadeias de 10 qubits com nota ≤ 0.50 (descartadas: 0.508, 0.573, 1.271, 3.833)
+Backend: ibm_berlin | seed 0 (melhor do fake: MSE 8.055e-04)
+8 cadeias × 10 qubits = 80 de 120 qubits | profundidade ISA 12 | 72 portas cz | mitigação 'none' | 1024 shots
+Jobs: calibração 1 × 128 conjuntos | treino 110 × 2 conjuntos | validação 1 × 200 conjuntos (200 pontos × 8 réplicas) -> 112 jobs, 548 conjuntos × 1024 shots
+lr 0.1 -> 0.01 (−0.01 a cada 10 épocas), polinômio reajustado a cada 10 épocas | saída em C:\Users\Gubio\CODESACE\CBPF-Geral\data\quantum_forward_hardware_real\T_0.1
+Rede inicial (circuito ideal): MSE de u(x,0.1) 3.884e-02
+Session ID: c8927878-a4a9-4b03-8499-417b7d5564bb
+1/3 calibração: 1 job × 128 conjuntos...
+  job db3sig9hpmgs73e929s0 enviado (128 conjuntos de parâmetros)
+  669 s | ajuste: RMS do resíduo 0.0395 (ruído de shot ≈ 0.0312) | contraste do termo ideal 0.857–0.961 (ideal = 1) | RMS hardware − fórmula exata 0.0644
+  antes do treino: MSE de u(x,0.1) modelo medido 3.902e-02 | circuito ideal 3.884e-02 -> initial_10_NQ10_0_ibm_berlin_none_HW110.png
+2/3 treino: épocas 1–110, 1 job por época...
+  época 1/110 | lr 0.10 | loss QPU 5.5813e+00 | loss monitor 1.1495e+02 | job db3snnqla55c73frfj7g | 17.7 s, faltam ~32 min
+  época 2/110 | lr 0.10 | loss QPU 1.5638e+02 | loss monitor 2.9826e+01 | job db3sns92p4ds73bj9t1g | 16.8 s, faltam ~31 min
+  época 3/110 | lr 0.10 | loss QPU 3.1417e+01 | loss monitor 6.1903e-01 | job db3so0jpvoos739cgb20 | 16.5 s, faltam ~30 min
+  época 4/110 | lr 0.10 | loss QPU 4.2610e+00 | loss monitor 6.3540e+00 | job db3so4ila55c73frfjkg | 20.9 s, faltam ~32 min
+  época 5/110 | lr 0.10 | loss QPU 7.6994e+00 | loss monitor 4.6668e+00 | job db3so92la55c73frfjp0 | 16.8 s, faltam ~31 min
+  época 6/110 | lr 0.10 | loss QPU 5.2467e+00 | loss monitor 1.0185e+00 | job db3sodbpvoos739cgbe0 | 16.8 s, faltam ~31 min
+  época 7/110 | lr 0.10 | loss QPU 3.5770e+00 | loss monitor 3.3932e-01 | job db3soh92p4ds73bj9tl0 | 16.1 s, faltam ~30 min
+  época 8/110 | lr 0.10 | loss QPU 3.1346e+00 | loss monitor 1.6128e-01 | job db3solhhpmgs73e92ffg | 15.8 s, faltam ~29 min
+  época 9/110 | lr 0.10 | loss QPU 3.2436e+00 | loss monitor 2.8046e+00 | job db3sop9hpmgs73e92fjg | 15.8 s, faltam ~29 min
+  época 10/110 | lr 0.10 | loss QPU 6.6375e+00 | loss monitor 2.7662e+00 | job db3sot9hpmgs73e92fn0 | 16.2 s, faltam ~28 min
+  época 11/110 | lr 0.09 | loss QPU 4.4612e+00 | loss monitor 1.4734e+00 | job db3sp19hpmgs73e92frg | 16.2 s, faltam ~28 min
+  época 12/110 | lr 0.09 | loss QPU 2.8236e+00 | loss monitor 1.0087e+00 | job db3sp5hhpmgs73e92fv0 | 16.4 s, faltam ~28 min
+  época 13/110 | lr 0.09 | loss QPU 2.9491e+00 | loss monitor 1.6998e+00 | job db3sp9ila55c73frfkmg | 16.1 s, faltam ~27 min
+  época 14/110 | lr 0.09 | loss QPU 5.0545e+00 | loss monitor 3.6382e+00 | job db3spdhhpmgs73e92g7g | 16.6 s, faltam ~27 min
+  época 15/110 | lr 0.09 | loss QPU 2.2127e+00 | loss monitor 9.6349e+00 | job db3sphphpmgs73e92gc0 | 15.8 s, faltam ~26 min
+  época 16/110 | lr 0.09 | loss QPU 5.7986e+00 | loss monitor 9.0923e+00 | job db3splqla55c73frfl20 | 15.4 s, faltam ~26 min
+  época 17/110 | lr 0.09 | loss QPU 5.1465e+00 | loss monitor 5.0610e+00 | job db3sppila55c73frfl6g | 15.7 s, faltam ~26 min
+  época 18/110 | lr 0.09 | loss QPU 8.6131e+00 | loss monitor 2.8754e+00 | job db3sptila55c73frflag | 15.4 s, faltam ~25 min
+  época 19/110 | lr 0.09 | loss QPU 4.8965e+00 | loss monitor 7.4977e-01 | job db3sq19hpmgs73e92gr0 | 15.4 s, faltam ~25 min
+  época 20/110 | lr 0.09 | loss QPU 1.4376e+00 | loss monitor 4.1216e+00 | job db3sq59hpmgs73e92gug | 15.7 s, faltam ~25 min
+  época 21/110 | lr 0.08 | loss QPU 1.9514e+00 | loss monitor 4.6362e+00 | job db3sq92la55c73frflm0 | 15.9 s, faltam ~24 min
+  época 22/110 | lr 0.08 | loss QPU 6.2511e+00 | loss monitor 2.5986e+00 | job db3sqd12p4ds73bj9vag | 15.8 s, faltam ~24 min
+  época 23/110 | lr 0.08 | loss QPU 5.1702e+00 | loss monitor 1.8550e+00 | job db3sqh2la55c73frflug | 16.3 s, faltam ~24 min
+  época 24/110 | lr 0.08 | loss QPU 7.0542e+00 | loss monitor 9.6537e-01 | job db3sql2la55c73frfm2g | 15.8 s, faltam ~23 min
+  época 25/110 | lr 0.08 | loss QPU 3.2431e+00 | loss monitor 4.7971e-01 | job db3sqp3pvoos739cgdjg | 15.4 s, faltam ~23 min
+  época 26/110 | lr 0.08 | loss QPU 3.9442e+00 | loss monitor 4.7107e-01 | job db3sqt1hpmgs73e92hkg | 15.4 s, faltam ~23 min
+  época 27/110 | lr 0.08 | loss QPU 3.7104e+00 | loss monitor 2.7673e-01 | job db3sr0p2p4ds73bj9vsg | 15.1 s, faltam ~22 min
+  época 28/110 | lr 0.08 | loss QPU 2.1437e+00 | loss monitor 5.3500e-01 | job db3sr4ila55c73frfmhg | 16.0 s, faltam ~22 min
+  época 29/110 | lr 0.08 | loss QPU 2.2931e+00 | loss monitor 1.1304e+00 | job db3sr8hhpmgs73e92hv0 | 16.5 s, faltam ~22 min
+  época 30/110 | lr 0.08 | loss QPU 8.5230e-01 | loss monitor 1.6575e+00 | job db3srcqla55c73frfmp0 | 15.8 s, faltam ~22 min
+  época 31/110 | lr 0.07 | loss QPU 7.0160e-01 | loss monitor 3.2890e+00 | job db3srgjpvoos739cgea0 | 14.9 s, faltam ~21 min
+  época 32/110 | lr 0.07 | loss QPU 7.5682e-01 | loss monitor 3.0880e+00 | job db3srkala55c73frfn0g | 15.1 s, faltam ~21 min
+  época 33/110 | lr 0.07 | loss QPU 6.2990e-01 | loss monitor 2.0055e+00 | job db3sro3pvoos739cgeig | 16.0 s, faltam ~21 min
+  época 34/110 | lr 0.07 | loss QPU 3.6304e+00 | loss monitor 1.5875e+00 | job db3srs3pvoos739cgem0 | 15.4 s, faltam ~20 min
+  época 35/110 | lr 0.07 | loss QPU 3.3477e+00 | loss monitor 1.4624e+00 | job db3ss02la55c73frfnb0 | 16.4 s, faltam ~20 min
+  época 36/110 | lr 0.07 | loss QPU 1.8068e+00 | loss monitor 9.6054e-01 | job db3ss412p4ds73bja0sg | 14.7 s, faltam ~20 min
+  época 37/110 | lr 0.07 | loss QPU 1.9717e+00 | loss monitor 2.4558e+00 | job db3ss7p2p4ds73bja11g | 15.0 s, faltam ~20 min
+  época 38/110 | lr 0.07 | loss QPU 7.2654e-01 | loss monitor 5.6555e+00 | job db3ssbhhpmgs73e92j00 | 15.2 s, faltam ~19 min
+  época 39/110 | lr 0.07 | loss QPU 2.6517e+00 | loss monitor 6.1100e+00 | job db3ssfala55c73frfnp0 | 16.8 s, faltam ~19 min
+  época 40/110 | lr 0.07 | loss QPU 3.6084e+00 | loss monitor 2.9404e+00 | job db3ssjila55c73frfnt0 | 15.3 s, faltam ~19 min
+  época 41/110 | lr 0.06 | loss QPU 1.8304e+00 | loss monitor 1.3605e+00 | job db3ssnala55c73frfo0g | 15.6 s, faltam ~18 min
+  época 42/110 | lr 0.06 | loss QPU 1.1785e+00 | loss monitor 2.2332e+00 | job db3ssrbpvoos739cgfi0 | 15.9 s, faltam ~18 min
+  época 43/110 | lr 0.06 | loss QPU 1.8620e+00 | loss monitor 3.4881e+00 | job db3ssvbpvoos739cgfm0 | 16.0 s, faltam ~18 min
+  época 44/110 | lr 0.06 | loss QPU 3.2978e+00 | loss monitor 2.8215e+00 | job db3st39hpmgs73e92jmg | 15.0 s, faltam ~18 min
+  época 45/110 | lr 0.06 | loss QPU 4.0072e+00 | loss monitor 1.5497e+00 | job db3st712p4ds73bja1u0 | 14.8 s, faltam ~17 min
+  época 46/110 | lr 0.06 | loss QPU 2.4613e+00 | loss monitor 1.2793e+00 | job db3stap2p4ds73bja22g | 16.0 s, faltam ~17 min
+  época 47/110 | lr 0.06 | loss QPU 1.4889e+00 | loss monitor 1.7198e+00 | job db3steqla55c73frfong | 15.4 s, faltam ~17 min
+  época 48/110 | lr 0.06 | loss QPU 9.0653e-01 | loss monitor 1.3933e+00 | job db3stiila55c73frforg | 17.2 s, faltam ~17 min
+  época 49/110 | lr 0.06 | loss QPU 1.1476e+00 | loss monitor 8.2135e-01 | job db3stn2la55c73frfp00 | 15.8 s, faltam ~16 min
+  época 50/110 | lr 0.06 | loss QPU 6.2742e-01 | loss monitor 6.9808e-01 | job db3stqp2p4ds73bja2h0 | 15.0 s, faltam ~16 min
+  época 51/110 | lr 0.05 | loss QPU 1.7244e-01 | loss monitor 5.9558e-01 | job db3stuila55c73frfp7g | 15.1 s, faltam ~16 min
+  época 52/110 | lr 0.05 | loss QPU 1.8893e-01 | loss monitor 1.0251e+00 | job db3su2ila55c73frfpbg | 15.0 s, faltam ~15 min
+  época 53/110 | lr 0.05 | loss QPU 4.9207e-01 | loss monitor 1.5564e+00 | job db3su6ala55c73frfpg0 | 16.6 s, faltam ~15 min
+  época 54/110 | lr 0.05 | loss QPU 1.1476e+00 | loss monitor 1.1182e+00 | job db3sua92p4ds73bja2vg | 15.1 s, faltam ~15 min
+  época 55/110 | lr 0.05 | loss QPU 4.7178e-01 | loss monitor 6.6786e-01 | job db3sue3pvoos739cgh00 | 16.0 s, faltam ~15 min
+  época 56/110 | lr 0.05 | loss QPU 5.5874e-01 | loss monitor 5.5089e-01 | job db3sui3pvoos739cgh40 | 15.6 s, faltam ~14 min
+  época 57/110 | lr 0.05 | loss QPU 7.5600e-01 | loss monitor 5.9347e-01 | job db3sum2la55c73frfpv0 | 15.8 s, faltam ~14 min
+  época 58/110 | lr 0.05 | loss QPU 6.8953e-01 | loss monitor 2.9092e-01 | job db3suq3pvoos739cghbg | 15.2 s, faltam ~14 min
+  época 59/110 | lr 0.05 | loss QPU 5.0450e-01 | loss monitor 4.5700e-01 | job db3sutrpvoos739cghfg | 16.1 s, faltam ~14 min
+  época 60/110 | lr 0.05 | loss QPU 4.5917e-01 | loss monitor 6.8075e-01 | job db3sv1p2p4ds73bja3lg | 15.0 s, faltam ~13 min
+  época 61/110 | lr 0.04 | loss QPU 2.4281e-01 | loss monitor 6.9909e-01 | job db3sv5hhpmgs73e92lk0 | 16.3 s, faltam ~13 min
+  época 62/110 | lr 0.04 | loss QPU 3.6602e+00 | loss monitor 8.3795e-01 | job db3sv9ila55c73frfqhg | 15.1 s, faltam ~13 min
+  época 63/110 | lr 0.04 | loss QPU 1.3179e+00 | loss monitor 8.1294e-01 | job db3svdjpvoos739cghu0 | 15.5 s, faltam ~12 min
+  época 64/110 | lr 0.04 | loss QPU 7.6899e-01 | loss monitor 1.1099e+00 | job db3svhala55c73frfqp0 | 15.4 s, faltam ~12 min
+  época 65/110 | lr 0.04 | loss QPU 2.8455e-01 | loss monitor 1.4625e+00 | job db3svl1hpmgs73e92m2g | 15.0 s, faltam ~12 min
+  época 66/110 | lr 0.04 | loss QPU 4.1503e-01 | loss monitor 1.1436e+00 | job db3svoqla55c73frfr00 | 15.7 s, faltam ~12 min
+  época 67/110 | lr 0.04 | loss QPU 1.8873e-01 | loss monitor 5.3626e-01 | job db3svsp2p4ds73bja4f0 | 15.4 s, faltam ~11 min
+  época 68/110 | lr 0.04 | loss QPU 1.8142e+00 | loss monitor 3.7437e-01 | job db3t00p2p4ds73bja4ig | 15.1 s, faltam ~11 min
+  época 69/110 | lr 0.04 | loss QPU 1.0620e+00 | loss monitor 7.7077e-01 | job db3t04jpvoos739cgikg | 16.3 s, faltam ~11 min
+  época 70/110 | lr 0.04 | loss QPU 7.9440e-01 | loss monitor 9.8100e-01 | job db3t08jpvoos739cgiog | 16.2 s, faltam ~11 min
+  época 71/110 | lr 0.03 | loss QPU 9.0859e-01 | loss monitor 8.1230e-01 | job db3t0cila55c73frfrig | 14.9 s, faltam ~10 min
+  época 72/110 | lr 0.03 | loss QPU 9.5828e-01 | loss monitor 5.0497e-01 | job db3t0gala55c73frfrm0 | 15.7 s, faltam ~10 min
+  época 73/110 | lr 0.03 | loss QPU 7.8395e-01 | loss monitor 4.3239e-01 | job db3t0kbpvoos739cgj3g | 15.0 s, faltam ~10 min
+  época 74/110 | lr 0.03 | loss QPU 4.4705e-01 | loss monitor 6.0368e-01 | job db3t0o3pvoos739cgj7g | 15.9 s, faltam ~10 min
+  época 75/110 | lr 0.03 | loss QPU 4.9093e-01 | loss monitor 9.9486e-01 | job db3t0s12p4ds73bja5ag | 15.0 s, faltam ~9 min
+  época 76/110 | lr 0.03 | loss QPU 3.7154e-01 | loss monitor 1.1363e+00 | job db3t0vphpmgs73e92nag | 16.5 s, faltam ~9 min
+  época 77/110 | lr 0.03 | loss QPU 4.7987e-01 | loss monitor 9.3832e-01 | job db3t141hpmgs73e92ne0 | 14.9 s, faltam ~9 min
+  época 78/110 | lr 0.03 | loss QPU 4.1341e-01 | loss monitor 4.5440e-01 | job db3t17phpmgs73e92ni0 | 15.9 s, faltam ~8 min
+  época 79/110 | lr 0.03 | loss QPU 6.0540e-01 | loss monitor 1.8676e-01 | job db3t1bjpvoos739cgjpg | 16.7 s, faltam ~8 min
+  época 80/110 | lr 0.03 | loss QPU 2.0067e-01 | loss monitor 4.1666e-01 | job db3t1frpvoos739cgjug | 15.7 s, faltam ~8 min
+  época 81/110 | lr 0.02 | loss QPU 2.1499e-01 | loss monitor 5.9757e-01 | job db3t1jqla55c73frfsog | 16.2 s, faltam ~8 min
+  época 82/110 | lr 0.02 | loss QPU 6.5219e-01 | loss monitor 6.6983e-01 | job db3t1np2p4ds73bja64g | 16.2 s, faltam ~7 min
+  época 83/110 | lr 0.02 | loss QPU 3.9316e-01 | loss monitor 5.6139e-01 | job db3t1rqla55c73frft00 | 15.7 s, faltam ~7 min
+  época 84/110 | lr 0.02 | loss QPU 4.2222e-01 | loss monitor 4.7933e-01 | job db3t1vphpmgs73e92o7g | 15.6 s, faltam ~7 min
+  época 85/110 | lr 0.02 | loss QPU 4.4148e-01 | loss monitor 4.7771e-01 | job db3t23p2p4ds73bja6gg | 14.6 s, faltam ~7 min
+  época 86/110 | lr 0.02 | loss QPU 9.0643e-01 | loss monitor 4.3063e-01 | job db3t2792p4ds73bja6k0 | 15.3 s, faltam ~6 min
+  época 87/110 | lr 0.02 | loss QPU 3.3566e-01 | loss monitor 3.2916e-01 | job db3t2b2la55c73frfte0 | 15.4 s, faltam ~6 min
+  época 88/110 | lr 0.02 | loss QPU 5.0700e-01 | loss monitor 1.7435e-01 | job db3t2f12p4ds73bja6s0 | 15.9 s, faltam ~6 min
+  época 89/110 | lr 0.02 | loss QPU 7.3753e-02 | loss monitor 1.1324e-01 | job db3t2j3pvoos739cgktg | 15.4 s, faltam ~6 min
+  época 90/110 | lr 0.02 | loss QPU 2.0539e-01 | loss monitor 2.2205e-01 | job db3t2mrpvoos739cgl20 | 16.1 s, faltam ~5 min
+  época 91/110 | lr 0.01 | loss QPU 6.2575e-01 | loss monitor 2.4510e-01 | job db3t2qp2p4ds73bja76g | 15.7 s, faltam ~5 min
+  época 92/110 | lr 0.01 | loss QPU 6.5163e-01 | loss monitor 2.3614e-01 | job db3t2up2p4ds73bja7ag | 16.7 s, faltam ~5 min
+  época 93/110 | lr 0.01 | loss QPU 5.5768e-01 | loss monitor 1.8510e-01 | job db3t3312p4ds73bja7fg | 15.8 s, faltam ~4 min
+  época 94/110 | lr 0.01 | loss QPU 1.6724e-01 | loss monitor 1.2297e-01 | job db3t3712p4ds73bja7j0 | 15.2 s, faltam ~4 min
+  época 95/110 | lr 0.01 | loss QPU 2.4921e-01 | loss monitor 1.3299e-01 | job db3t3arpvoos739cglkg | 15.8 s, faltam ~4 min
+  época 96/110 | lr 0.01 | loss QPU 1.4980e-01 | loss monitor 1.6768e-01 | job db3t3eqla55c73frfuf0 | 16.2 s, faltam ~4 min
+  época 97/110 | lr 0.01 | loss QPU 2.1821e-01 | loss monitor 2.6426e-01 | job db3t3ip2p4ds73bja7ug | 15.0 s, faltam ~3 min
+  época 98/110 | lr 0.01 | loss QPU 7.6539e-02 | loss monitor 3.4022e-01 | job db3t3mjpvoos739cglvg | 16.6 s, faltam ~3 min
+  época 99/110 | lr 0.01 | loss QPU 2.4284e-01 | loss monitor 4.1309e-01 | job db3t3qh2p4ds73bja860 | 15.9 s, faltam ~3 min
+  época 100/110 | lr 0.01 | loss QPU 4.1018e-01 | loss monitor 4.0531e-01 | job db3t3uhhpmgs73e92q2g | 15.1 s, faltam ~3 min
+  época 101/110 | lr 0.01 | loss QPU 5.0145e-01 | loss monitor 3.4840e-01 | job db3t429hpmgs73e92q60 | 15.4 s, faltam ~2 min
+  época 102/110 | lr 0.01 | loss QPU 1.3017e-01 | loss monitor 2.8838e-01 | job db3t46bpvoos739cgmf0 | 14.8 s, faltam ~2 min
+  época 103/110 | lr 0.01 | loss QPU 1.8479e-01 | loss monitor 2.4753e-01 | job db3t4a1hpmgs73e92qdg | 16.8 s, faltam ~2 min
+  época 104/110 | lr 0.01 | loss QPU 1.5091e-01 | loss monitor 2.6400e-01 | job db3t4eala55c73frfvc0 | 15.6 s, faltam ~2 min
+  época 105/110 | lr 0.01 | loss QPU 2.9809e-01 | loss monitor 3.3358e-01 | job db3t4i1hpmgs73e92qkg | 17.4 s, faltam ~1 min
+  época 106/110 | lr 0.01 | loss QPU 3.9127e-01 | loss monitor 3.8796e-01 | job db3t4mjpvoos739cgmtg | 16.0 s, faltam ~1 min
+  época 107/110 | lr 0.01 | loss QPU 5.4321e-01 | loss monitor 4.0048e-01 | job db3t4qila55c73frfvng | 15.9 s, faltam ~1 min
+  época 108/110 | lr 0.01 | loss QPU 3.5404e-01 | loss monitor 4.0388e-01 | job db3t4uala55c73frfvrg | 16.0 s, faltam ~1 min
+  época 109/110 | lr 0.01 | loss QPU 3.1774e-01 | loss monitor 3.9316e-01 | job db3t52jpvoos739cgn8g | 16.3 s, faltam ~0 min
+  época 110/110 | lr 0.01 | loss QPU 2.9156e-01 | loss monitor 3.5585e-01 | job db3t56hhpmgs73e92r8g | 15.2 s, faltam ~0 min
+3/3 validação: 1 job × 200 conjuntos (200 pontos × 8 réplicas)...
+  job db3t5a9hpmgs73e92rc0 enviado (200 conjuntos de parâmetros)
+u(x,0.1) vs FDM: MSE antes 3.902e-02 -> depois: QPU 1.454e-03 | modelo medido 1.353e-03 | circuito ideal 1.638e-03 | fake (mesma seed) 8.055e-04
+L2 relativo QPU 5.666e-02 | RMS <Z>: QPU vs modelo medido 0.0132, vs fórmula exata 0.0517
+tempo total 3251 s | 112 jobs | saída em C:\Users\Gubio\CODESACE\CBPF-Geral\data\quantum_forward_hardware_real\T_0.1

@@ -15,14 +15,14 @@ CLASSICAL_INVERSE_DIR = "data/classical_inverse"
 QUANTUM_INVERSE_DIR = "data/quantum_inverse_exact"
 T_LABELS = ["0.1", "1"]
 INTRA_NEURO_LIST = [3, 7, 15]  # widths with a full N_COLLOCATION sweep
-N_QUBITS_LIST = [3, 7]  # quantum widths with a full N_COLLOCATION sweep
+N_QUBITS_LIST = [3, 7,15]  # quantum widths with a full N_COLLOCATION sweep
 INTRA_NEURO_COLORS = {
     3: "#e34948",
     7: "#3aa15c",
     15: "#8a4fd1",
 }
 QUANTUM_COLOR = "black"
-QUANTUM_LINESTYLES = {3: "--", 7: ":"}
+QUANTUM_LINESTYLES = {3: "--", 7: ":", 15: "-."}
 # Fixed marker per width (INTRA_NEURO / N_QUBITS), shared between classical
 # and quantum -- only color/linestyle distinguish the two.
 MARKER_BY_PARAM = {3: "o", 7: "D", 15: "v"}
@@ -65,7 +65,7 @@ def plot_nu_error_vs_collocation(series, Tfin, save_path):
         ax.errorbar(pos, mse_mean, yerr=mse_var, color=color, linestyle=linestyle,
                      marker=marker, linewidth=2.0, markersize=6, capsize=4, label=label)
 
-    ax.set_xlabel("N_COLLOCATION", fontsize=14)
+    ax.set_xlabel("N° of discretization points", fontsize=14)
     ax.set_ylabel(r"MSE($\nu$)", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(list(positions.values()))

@@ -1,15 +1,3 @@
-"""Classical vs quantum inverse-problem PINN (nu estimation): mean
-estimation error of nu vs INTRA_NEURO/N_QUBITS (architecture width), at a
-fixed N_COLLOCATION. Mirrors `plote_classico_vs_Intra.py`'s classical/
-quantum overlay convention, but reads checkpoints from
-`data/classical_inverse/` and `data/quantum_inverse/` (written by
-`Inverser_classical_pinn_paralelo.py` and `Inverser_quantum_pinn_paralelo.py`)
-and plots the nu-estimation error instead of the solution MSE against the
-FDM reference.
-
-Outputs (one pair of figures per T_LABEL):
-  NuError_std_vs_IntraNeuro_T_<Tfin>_NCOL<CLASSICAL_N_COLLOCATION>.png
-"""
 import os
 
 import matplotlib.pyplot as plt
@@ -29,7 +17,9 @@ except Exception:
 CLASSICAL_INVERSE_DIR = "data/classical_inverse"
 QUANTUM_INVERSE_DIR = "data/quantum_inverse_exact"
 T_LABELS = ["0.1", "1"]
-CLASSICAL_N_COLLOCATION = 10  # only N_COLLOCATION with the full INTRA_NEURO sweep
+INTRA_NEURO_LIST = [3, 7, 15]  # widths with a full N_COLLOCATION sweep
+N_QUBITS_LIST = [3, 7, 15]  # quantum widths with a full N_COLLOCATION sweep
+CLASSICAL_N_COLLOCATION = 100  # only N_COLLOCATION with the full INTRA_NEURO sweep
 QUANTUM_N_COLLOCATION = CLASSICAL_N_COLLOCATION  # also has the full N_QUBITS sweep
 ERROR_BAR_TYPE = "variancia"
 COLOR_MSE = "b"
@@ -74,7 +64,7 @@ def plot_nu_mse_vs_intra(intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse
     ax.set_ylabel(r"MSE($\nu$)", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(sorted(all_widths))
-    ax.set_title(f"T = {Tfin}", fontsize=13)
+    ax.set_title(f"T = {Tfin} NCOL = {CLASSICAL_N_COLLOCATION}", fontsize=13)
     ax.grid(True, which="both", linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()

@@ -1,0 +1,154 @@
+RESUMO PARA APRESENTAÇÃO -- PINN HÍBRIDO QUÂNTICO NA QPU REAL DA IBM
+=====================================================================
+Fonte: arquivos run_/plan_/backend_/history_/validation_*_10_NQ10_0_ibm_berlin_none_HW110
+(data/quantum_forward_hardware_real/T_0.1/) e scripts run_quantum_hardware_real.py,
+run_quantum_hardware.py e Inverser_quantum_hardware_pinn.py.
+Obs.: o problema é uma EDP (equação de Burgers viscosa), não uma EDO.
+
+
+1. O PROBLEMA (EDP)
+-------------------
+Equação ............... Burgers viscosa:  u_t + u*u_x = nu*u_xx
+Viscosidade ........... nu = 0,01 (conhecida, problema direto)
+Domínio ............... x em [0, 1), periódico;  t em [0; 0,1]
+Condição inicial ...... u(x,0) = sin(2*pi*x), imposta por construção:
+                        u = u0(x) + (t/T) * NN(x,t)
+Resíduo (loss) ........ MSE de u_t + u*u_x - nu*u_xx, por diferenças finitas sobre a rede
+                        (hx = 1/512, ht = 1e-3)
+Pontos de colocação ... 10 pontos aleatórios, sorteados de novo a cada época
+Referência ............ Diferenças finitas explícitas (FDM, upwind, Nx = 512, dt = 1e-4)
+Avaliação ............. 200 pontos em x, no tempo t = 0,1
+
+
+2. O MODELO HÍBRIDO (PINN QUÂNTICO)
+-----------------------------------
+Arquitetura ........... entrada periódica (sin 2*pi*x, cos 2*pi*x, t/T)
+                        -> pré-rede (10 neurônios, 1 camada)
+                        -> CIRCUITO QUÂNTICO DE 10 QUBITS
+                        -> pós-rede (10 neurônios, 1 camada) -> u(x,t)
+Circuito .............. codificação por rotações RY (ângulos vindos da pré-rede)
+                        + 1 camada fixa de CNOTs "brickwork" (sem parâmetros treináveis);
+                        saídas = <Z_i> dos 10 qubits
+Cone causal ........... cada qubit depende de no máximo 4 ângulos
+Gradiente na QPU ...... o forward usa o valor medido na QPU; o gradiente passa por um
+                        polinômio trigonométrico ajustado às medidas do chip
+                        (straight-through):
+                          q(phi) = poly(phi) + stopgrad(q_QPU - poly)
+Recalibração .......... o polinômio é reajustado a cada 10 épocas com todas as medidas
+                        acumuladas
+
+
+3. O COMPUTADOR QUÂNTICO (QPU REAL)
+-----------------------------------
+Máquina ............... ibm_berlin (IBM Nighthawk r1), 120 qubits, rede quadrada
+Porta de 2 qubits ..... CZ nativa (base: cz, rz, sx, x)
+Instância / modo ...... PDE_Europe, Session dedicada (limite de 1 h)
+Data da execução ...... 08/10/2026 (snapshot da calibração IBM: 12:30 -04:00)
+Qubits usados ......... 80 de 120: 8 cadeias x 10 qubits em paralelo, num único circuito
+Seleção das cadeias ... 12 candidatas; 4 descartadas por erro alto
+                        (notas 0,51 / 0,57 / 1,27 / 3,83; limite 0,50)
+Circuito transpilado .. profundidade 12, 72 portas CZ no total (9 por cadeia), sem SWAPs
+
+Qualidade dos 80 qubits usados (mediana, faixa mín-máx):
+  T1 ..................... 322 us   (110 - 528 us)
+  T2 ..................... 255 us   (34 - 510 us)
+  Erro de leitura ........ 1,7 %    (0,5 - 6,3 %)
+  Erro da porta SX ....... 1,7e-4
+  Erro da CZ ............. 1,7e-3   (0,6e-3 - 1,4e-2)
+
+
+4. CONFIGURAÇÃO DA EXECUÇÃO
+---------------------------
+Shots ................. 1024 por circuito (precisão ~ 1/32 por <Z>)
+Mitigação de erro ..... NENHUMA (resilience_level = 0, contagens brutas, igual ao fake)
+Otimizador ............ AdamW, 110 épocas, 1 job na QPU por época
+Learning rate ......... 0,1 -> 0,01 (cai 0,01 a cada 10 épocas); weight decay 1e-6;
+                        grad clip 1,0
+Seed .................. 0 (a melhor de 5 seeds rodadas no simulador fake_berlin)
+Jobs .................. 112 no total:
+                          1 de calibração (128 conjuntos de parâmetros)
+                          110 de treino (1 por época)
+                          1 de validação (200 pontos x 8 réplicas)
+Total de shots ........ 561.152
+Tempo ................. calibração 11 min | treino 29 min (~16 s/época) | total 54 min
+Software .............. Qiskit 2.5.2, qiskit-ibm-runtime 0.50.0, PyTorch 2.14.1
+
+Calibração do chip:
+  - resíduo RMS do polinômio ajustado: 0,040 (ruído de shot esperado: 0,031)
+  - contraste (quanto do sinal ideal sobrevive): 0,86 a 0,96 (ideal = 1)
+  - desvio RMS hardware x fórmula ideal do circuito: 0,064
+
+
+5. RESULTADOS -- u(x, 0,1) comparado com a FDM
+----------------------------------------------
+Modelo                                      MSE          Erro L2 relativo
+----------------------------------------    ---------    ----------------
+Antes do treino                             3,90e-2      29,4 %
+Treinado, medido na QPU ibm_berlin          1,45e-3       5,67 %
+Treinado, modelo medido (polinômio)         1,35e-3       5,47 %
+Treinado, circuito ideal (sem ruído)        1,64e-3       6,01 %
+Simulador fake_berlin, mesma seed           8,06e-4       4,22 %
+Simulador fake_berlin, seeds 0-4            8,1e-4 a 2,9e-3   --
+
+Mensagens principais:
+  1. O treino na QPU real reduziu o MSE ~27x (3,9e-2 -> 1,45e-3); erro L2 de 5,7 %.
+  2. O resultado do hardware real está dentro da faixa do simulador com ruído (5 seeds).
+     É um pouco pior que a mesma seed no fake, coerente com drift e crosstalk, que o
+     simulador não modela.
+  3. Os pesos treinados no hardware funcionam no circuito ideal (6,0 %): a rede não ficou
+     presa ao ruído específico do chip.
+  4. A diferença RMS entre os <Z> medidos na QPU e o polinômio foi de apenas 0,013:
+     o modelo do dispositivo acompanhou bem o hardware.
+  5. A loss na QPU oscila muito por causa do ruído de shot: começa em 5,6, mínimo de
+     0,074 na época 89, termina em 0,29.
+
+Figuras (na mesma pasta):
+  before_after_10_NQ10_0_ibm_berlin_none_HW110.png  -> antes x depois x FDM (slide principal)
+  validation_10_NQ10_0_ibm_berlin_none_HW110.png    -> QPU x modelo medido x circuito ideal
+                                                       x fake x FDM
+  loss_10_NQ10_0_ibm_berlin_none_HW110.png          -> curva de loss
+
+
+6. (EXTRA) PROBLEMA INVERSO EM QPU REAL -- ibm_aachen
+-----------------------------------------------------
+Pasta: data/quantum_inverse_hardware/T_0.1/
+Objetivo .............. aprender nu junto com u(x,t)
+Configuração .......... 2 qubits por cadeia, 64 cadeias em paralelo, 1024 shots
+Dados ................. 100 pontos em t = 0,1, da solução exata (Cole-Hopf)
+Treino ................ 5000 épocas com o polinômio medido (simulador)
+                        + 20 épocas com a QPU no loop
+nu .................... inicial 0,549 -> após simulador 0,0146 -> após QPU 0,0172
+                        (valor real: 0,01)
+Erro L2 de u na QPU ... 3,6 %
+Comparação ............ versão exata sem ruído recupera nu = 0,01095
+Tempo total ........... 9 min
+
+A confirmar antes de mostrar:
+  - O JSON do inverso não registra a mitigação usada. O padrão do script é "suppress"
+    (TREX + dynamical decoupling + twirling); confira se não foi alterada na linha de comando.
+  - Com só 20 épocas na QPU, nu ficou longe de 0,01: apresentar como prova de conceito.
+
+
+7. GLOSSÁRIO DAS CURVAS DA FIGURA DE VALIDAÇÃO
+----------------------------------------------
+Todas as curvas "trained" usam a MESMA rede (os mesmos pesos, treinados com a QPU no loop).
+O que muda é de onde vêm os valores <Z> do circuito quântico no meio da rede:
+
+  trained, QPU (ibm_berlin)
+      Os 200 pontos de x foram enviados à QPU real num job de validação; cada ponto rodou
+      em 8 cadeias diferentes (8 réplicas) e os <Z> foram mediados. É o resultado
+      "de verdade" do hardware.
+
+  trained, measured model  (modelo medido / surrogate)
+      Os <Z> vêm do polinômio trigonométrico ajustado às medições da própria QPU
+      (calibração + todas as medidas do treino). É um modelo clássico do chip, com o
+      ruído médio do dispositivo embutido, mas sem ruído de shot e sem rodar job.
+      É também o que fornece os gradientes durante o treino.
+
+  trained, ideal circuit
+      Os <Z> vêm da fórmula exata do circuito sem ruído (<Z_i> = produto de cossenos):
+      o que um computador quântico perfeito daria com esses mesmos pesos.
+
+  fake QPU (fake_berlin), same seed
+      Outra rede: treinada inteiramente no simulador com ruído da IBM (Aer), com a mesma
+      seed. Serve de referência do que se esperava antes de ir ao hardware.
