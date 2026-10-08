@@ -4,14 +4,18 @@ __pycache__/
 *.py[cod]
 
 # Images
-# *.png
-# *.jpg
-# *.jpeg
-# *.gif
-# *.svg
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Large numpy arrays (too big for GitHub)
+*.npz
 
 # Temp folder
 tmp/
+quantum_hardware/
 
 # Optional: compiled C extensions
 *.so
