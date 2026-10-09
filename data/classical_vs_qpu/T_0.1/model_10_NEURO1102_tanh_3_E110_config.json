@@ -1,0 +1,19 @@
+{
+  "class_name": "ClassicalPINN2",
+  "config": {
+    "pre_neurons": 10,
+    "pre_depth": 1,
+    "intra_neuron": 2,
+    "intra_neurons": 10,
+    "intra_depth": 1,
+    "post_neurons": 10,
+    "post_depth": 1,
+    "L": 1.0,
+    "Tfin": 0.1,
+    "seno": false
+  },
+  "training_params": {
+    "seed": 3,
+    "real_run": "C:\\Users\\Gubio\\CODESACE\\CBPF-Geral\\data\\quantum_forward_hardware_real\\T_0.1\\run_10_NQ10_0_ibm_berlin_none_HW110.json"
+  }
+}
