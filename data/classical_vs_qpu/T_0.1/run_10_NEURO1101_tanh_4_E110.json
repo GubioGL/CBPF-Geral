@@ -1,0 +1,38 @@
+{
+  "seed": 4,
+  "intra_neuron": 1,
+  "intra_neurons": 10,
+  "intra_depth": 1,
+  "activation": "tanh",
+  "n_trainable_params": 113,
+  "architecture": {
+    "pre_neurons": 10,
+    "pre_depth": 1,
+    "post_neurons": 10,
+    "post_depth": 1,
+    "input_rotation_axis": "ry",
+    "angle_scale": null
+  },
+  "training_config": {
+    "epochs": 110,
+    "lr0": 0.1,
+    "lr_step": 0.01,
+    "lr_every": 10,
+    "lr_min": 0.01,
+    "weight_decay": 1e-06,
+    "grad_clip": 1.0,
+    "recal_every": 10,
+    "collocation_distribution": "random",
+    "n_evaluation_points": 200,
+    "L": 1.0,
+    "nu": 0.01,
+    "hx": 0.001953125,
+    "ht": 0.001
+  },
+  "mse": 0.02051184384147554,
+  "mae": 0.12942521595702478,
+  "relative_l2": 0.21281546837886203,
+  "final_loss_monitor": 0.8974143862724304,
+  "real_qpu_run": "C:\\Users\\Gubio\\CODESACE\\CBPF-Geral\\data\\quantum_forward_hardware_real\\T_0.1\\run_10_NQ10_0_ibm_berlin_none_HW110.json",
+  "real_qpu_mse": 0.0014541102919788744
+}
