@@ -1,0 +1,56 @@
+{
+  "class_name": "QuantumExactInversePINN",
+  "config": {
+    "pre_neurons": 10,
+    "pre_depth": 1,
+    "n_qubits": 3,
+    "post_neurons": 10,
+    "post_depth": 1,
+    "L": 1.0,
+    "Tfin": 0.1,
+    "angle_scale": 3.141592653589793,
+    "fixed_layer": "brickwork_cnot",
+    "fixed_layer_repeats": 1,
+    "input_rotation_axis": "ry"
+  },
+  "training_params": {
+    "L": 1.0,
+    "TFIN": 0.1,
+    "NU": 0.1,
+    "HX": 0.001953125,
+    "HT": 0.001,
+    "N_COLLOCATION": 10,
+    "N_DATA": 100,
+    "SEED": 2,
+    "EPOCHS": 110,
+    "DATA_SOURCE": "exact_cole_hopf",
+    "CONFIG": "fixed_adam",
+    "CFG": {
+      "lr_net": 0.0217,
+      "lr_net_min": 0.0047,
+      "schedule_net": "exp",
+      "betas_net": [
+        0.78,
+        0.99
+      ],
+      "weight_decay": 0.0001,
+      "grad_clip": 10.0,
+      "r_ramp": 40,
+      "weighting": "fixed",
+      "w_d": 20.8,
+      "nu_opt": "adam",
+      "lr_nu": 0.213,
+      "lr_nu_min": 0.0099,
+      "schedule_nu": "cosine",
+      "betas_nu": [
+        0.86,
+        0.999
+      ]
+    },
+    "NU_INIT": 0.43599490214200376,
+    "NU_LEARNED": 0.1001032367348671,
+    "NU_REL_ERR": 0.001032367348670904,
+    "REL_L2_U_T": 0.018868064853330667,
+    "REL_L2_U_XT": 0.01523715378892255
+  }
+}
