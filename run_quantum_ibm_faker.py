@@ -7,8 +7,10 @@ Same configuration as the real run (data/quantum_forward_hardware_real/, REAL_RU
     brickwork CNOT layer, 1024 shots, CAL_SAMPLES = 1024, mitigation 'none';
   * the SAME physical chains of the chip the real run used (read from its log), so the fake
     simulates the noise model of the very qubits the real run measured;
-  * 110 epochs of QPU-in-the-loop AdamW with the same lr schedule / recalibration
-    (everything imported from run_quantum_hardware.py), 1 job per epoch (2 parameter sets);
+  * 110 epochs of QPU-in-the-loop AdamW, 1 job per epoch, with the optimizer settings found by
+    search_optimizer_ibm_faker.py: lr 0.1 for 5 epochs then exponential down to 1.4e-3,
+    betas (0.76, 0.99), gradient clip 2, and the EMA of the weights over the second half of
+    the training as the trained network; polynomial refitted every 10 epochs;
 
 Phases:
   1. calibration on the fake (1 job, 128 parameter sets);
@@ -36,7 +38,6 @@ from datetime import datetime
 from pathlib import Path
 
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
-
 import matplotlib
 matplotlib.use("Agg")  # no window: figures are only saved
 
@@ -58,24 +59,15 @@ from main.functions import (
 )
 from regression_hardware_nqubits import INSTANCE
 from run_quantum_hardware import (FakeChainCircuit, build_model,
-    learning_rate, qpu_step, residual_loss, stencil_inputs,
+    residual_loss, stencil_inputs,
 )
 # ---- fake QPU -------------------------------------------------------------------
 BACKEND = "ibm_berlin"            # simulated with FAKE_BACKENDS[BACKEND]
-# find_chains score = readout + sx errors of the chain + its CZ errors, so it grows with the
-# chain length; on fake_berlin the 10-qubit chains score 0.14-0.6, plus two with a broken
-# qubit (> 1) that would bias the chip-average polynomial
 MAX_CHAIN_SCORE_PER_QUBIT = 0.05
-CHAIN_OUTLIER = 3.0               # see Inverser_quantum_hardware_pinn.py (0 = keep all)
-# 'alap' schedules the circuits as on the device: the idle qubits get delays -> T1/T2 noise on
-# them. The circuit lasts ~0.3 us against T1 ~ 100 us: with 65536 shots the scheduled and
-# unscheduled <Z> differ by RMS 0.0049, the shot noise of the comparison alone (0.0055), and
-# Aer gets ~3x slower (the relaxation channels break its gate fusion) -> off (None) by default
+CHAIN_OUTLIER = 3.0               # 
 SCHEDULING = None
 PRECISION = 1 / 32                # per expectation value -> 1024 shots per circuit
 CAL_SAMPLES = 1024                # calibration samples per output (~ chains x parameter sets)
-
-%OUT_DIR = ROOT / "data" / "quantum_forward_hardware"
 
 # ---- physical parameters (same as run_quantumExact.ipynb) ---------------------
 L, NU = 1.0, 0.01
@@ -92,21 +84,56 @@ FIXED_LAYER = "brickwork_cnot"
 FIXED_LAYER_REPEATS = 1
 MAX_CONE = 6                      # 3^6 = 729 coefficients per output
 # ---- training (QPU in the loop) ---------------------------------------------------
-N_COLLOCATION = 10
-TFIN = 0.1
+N_COLLOCATION = 20
+TFIN = 1.0
 SEEDS = (0, 1, 2, 3, 4)           # trained together: their points share each QPU job
 EPOCHS = 110
-LR0, LR_STEP, LR_EVERY, LR_MIN = 0.1, 0.01, 10, 0.01   # 0.1 in epochs 1-10, ..., 0.01 from epoch 91 on
-WEIGHT_DECAY = 1.0e-6
-GRAD_CLIP = 1.0
+# AdamW with the best settings found by search_optimizer_ibm_faker.py (seed 0, 10 qubits, T=1:
+# median MSE of u(x,1) on the fake 2.3e-3 over 3 runs, against 2.1e-2 of the old 0.1 -> 0.01 stairs)
+LR0, LR_MIN, LR_HOLD = 0.1, 0.001375536953729357, 5   # 0.1 for 5 epochs, then exponential down to LR_MIN
+BETAS = (0.7581225476161662, 0.99)
+WEIGHT_DECAY = 2.1065109541876345e-06
+GRAD_CLIP = 2.0
+# EMA (Polyak) average of the weights from epoch EMA_START * epochs on; the averaged weights are
+# the trained network (they average out the shot noise the QPU puts on every step)
+EMA_DECAY, EMA_START = 0.8, 0.5
 RECAL_EVERY = 10                  # refit the polynomial with the training measurements (0 = never)
 COLLOCATION_DISTRIBUTION = "random"
-N_EVALUATION_POINTS = 200
+N_EVALUATION_POINTS = 100
 
 
+def learning_rate(epoch, epochs=EPOCHS):
+    """LR of `epoch` (1-based): LR0 for LR_HOLD epochs, then exponential down to LR_MIN at the last one."""
+    if epoch <= LR_HOLD:
+        return LR0
+    p = min((epoch - LR_HOLD - 1) / max(epochs - LR_HOLD - 1, 1), 1.0)
+    return LR0 * (LR_MIN / LR0) ** p
 
 
-from run_quantum_hardware_real import backend_snapshot, training_config
+def training_config(epochs):
+    return dict(epochs=epochs, optimizer="AdamW", lr0=LR0, lr_min=LR_MIN, lr_hold=LR_HOLD, lr_decay="exponential",
+                betas=BETAS, weight_decay=WEIGHT_DECAY, grad_clip=GRAD_CLIP, ema_decay=EMA_DECAY, ema_start=EMA_START,
+                recal_every=RECAL_EVERY, collocation_distribution=COLLOCATION_DISTRIBUTION,
+                n_evaluation_points=N_EVALUATION_POINTS, L=L, nu=NU, hx=HX, ht=HT)
+
+
+def qpu_step(model, opt, xt, angles, q_qpu):
+    """run_quantum_hardware.qpu_step with this file's GRAD_CLIP."""
+    with tc.no_grad():
+        q_poly = model.quantum(angles)
+    model.quantum.offset = (tc.as_tensor(q_qpu, dtype=q_poly.dtype) - q_poly).repeat(5, 1)
+    try:
+        loss = residual_loss(model, xt)
+    finally:
+        model.quantum.offset = None
+    opt.zero_grad()
+    loss.backward()
+    tc.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
+    opt.step()
+    return float(loss.detach())
+
+
+from run_quantum_hardware_real import backend_snapshot
 
 ROOT = Path(__file__).resolve().parent
 BACKEND = "ibm_berlin"            # real QPU of the prediction; FakeBerlin for the training
@@ -266,13 +293,15 @@ def main():
         # ---------- 2. training with the fake QPU in the loop ----------
         hist = dict(lr=[], loss_qpu=[], loss_monitor=[log["initial"]["monitor_loss"]], x_f=[], t_f=[],
                     angles=[], evs=[], epoch_time_s=[])
-        opt = tc.optim.AdamW(model.parameters(), lr=LR0, weight_decay=WEIGHT_DECAY)
-        print(f"2/4 treino no fake: {args.epochs} épocas, lr {LR0} -> {LR_MIN} (−{LR_STEP} a cada {LR_EVERY} "
-              f"épocas), polinômio reajustado a cada {RECAL_EVERY} épocas...", flush=True)
+        opt = tc.optim.AdamW(model.parameters(), lr=LR0, betas=BETAS, weight_decay=WEIGHT_DECAY)
+        ema, ema_from = None, int(round(EMA_START * args.epochs)) + 1
+        print(f"2/4 treino no fake: {args.epochs} épocas, AdamW lr {LR0} ({LR_HOLD} épocas) -> {LR_MIN:.1e} "
+              f"(exponencial), β={BETAS[0]:.2f},{BETAS[1]}, clip {GRAD_CLIP}, EMA {EMA_DECAY} dos pesos desde a "
+              f"época {ema_from}, polinômio reajustado a cada {RECAL_EVERY} épocas...", flush=True)
         t_hw = time.time()
         for epoch in range(1, args.epochs + 1):
             t_epoch = time.time()
-            lr = learning_rate(epoch)
+            lr = learning_rate(epoch, args.epochs)
             for group in opt.param_groups:
                 group["lr"] = lr
             model.train()
@@ -283,6 +312,13 @@ def main():
                 angles = model.angles(xt[:n_col])
             q_qpu, meas_angles, meas_evs = hw.evaluate(angles.numpy(), log["fake_job_ids"], shift=epoch, verbose=False)
             loss = qpu_step(model, opt, xt, angles, q_qpu)
+            if epoch >= ema_from:
+                with tc.no_grad():
+                    if ema is None:
+                        ema = {k: p.detach().clone() for k, p in model.named_parameters()}
+                    else:
+                        for k, p in model.named_parameters():
+                            ema[k].mul_(EMA_DECAY).add_(p.detach(), alpha=1.0 - EMA_DECAY)
             with tc.no_grad():
                 loss_mon = float(residual_loss(model, xt_mon))
             for key, value in dict(lr=lr, loss_qpu=loss, loss_monitor=loss_mon, x_f=x_f.numpy(), t_f=t_f.numpy(),
@@ -296,10 +332,16 @@ def main():
                                          n_samples=len(cal_angles) + sum(map(len, hist["angles"]))))
             if epoch % 10 == 0 or epoch == args.epochs:
                 rate = (time.time() - t_hw) / epoch
-                print(f"  época {epoch}/{args.epochs} | lr {lr:.2f} | loss fake {loss:.4e} | loss monitor "
+                print(f"  época {epoch}/{args.epochs} | lr {lr:.2e} | loss fake {loss:.4e} | loss monitor "
                       f"{loss_mon:.4e} | {rate:.1f} s/época, faltam ~{rate * (args.epochs - epoch) / 60:.0f} min",
                       flush=True)
         log["training_time_s"] = time.time() - t_hw
+        if ema is not None:                   # the trained network is the EMA of the weights
+            with tc.no_grad():
+                for k, p in model.named_parameters():
+                    p.copy_(ema[k])
+            with tc.no_grad():
+                log["monitor_loss_ema"] = float(residual_loss(model, xt_mon))
         tc.save(dict(state_dict=model.state_dict(), config=model.config, seed=seed, cones=cones,
                      coefs=[c.tolist() for c in coefs], chains=chains, backend=fake.name), path("model", "pt"))
         np.savez(path("history", "npz"), lr=np.array(hist["lr"]), loss_qpu=np.array(hist["loss_qpu"]),
@@ -349,38 +391,39 @@ def main():
     if args.no_real:
         print("--no-real: nenhum job enviado à IBM.")
     else:
-        real = get_backend(argparse.Namespace(fake=False, backend=args.backend))
-        hw_real = PackedCircuit(real, chains, n, gates, PRECISION, False, MITIGATIONS[MITIGATION])
-        R_val = args.val_replicas or hw_real.B
-        T_val = math.ceil(N_EVALUATION_POINTS * R_val / hw_real.B)
-        print(f"4/4 predição no QPU real {real.name}: 1 job × {T_val} conjuntos ({N_EVALUATION_POINTS} pontos × "
-              f"{R_val} réplicas) | {hw_real.B} cadeias, profundidade ISA {hw_real.depth}, {hw_real.n_2q} portas "
-              f"{hw_real.g2} | mitigação '{MITIGATION}'", flush=True)
-        if hw_real.n_2q != hw_real.n_2q_expected:
-            print(f"AVISO: esperado {hw_real.n_2q_expected} portas {hw_real.g2}: o transpilador inseriu SWAPs.")
-        path("backend_real", "json").write_text(json.dumps(backend_snapshot(real, chains, hw_real.g2), indent=2,
-                                                           default=str))
-        with open(path("isa_real", "qpy"), "wb") as f:
-            qpy.dump(hw_real.isa, f)
-        real_job_ids = []
-        t_job = time.time()
-        q_real, slot_angles, slot_evs = hw_real.evaluate(angles.numpy(), real_job_ids, replicas=R_val)
-        with tc.no_grad():
-            u_real = model.from_features(xt_plot, q_real).numpy()
-        log["real_prediction"] = dict(
-            backend=real.name, instance=INSTANCE, job_ids=real_job_ids, mitigation=MITIGATION,
-            mitigation_options=MITIGATIONS[MITIGATION], chains=chains, replicas=R_val, parameter_sets=T_val,
-            isa=dict(depth=hw_real.depth, two_qubit_gate=hw_real.g2, n_2q=hw_real.n_2q,
-                     n_2q_expected=hw_real.n_2q_expected, qubits_used=hw_real.n_qubits_used),
-            time_s=time.time() - t_job, finished=datetime.now().isoformat(), **errors(u_real),
-            rms_q_real_vs_fake_polynomial=float(np.sqrt(np.mean((q_real - q_sur) ** 2))),
-            rms_q_real_vs_exact=float(np.sqrt(np.mean((q_real - q_exact) ** 2))))
-        np.savez(path("prediction_real", "npz"), x=x_plot, angles=angles.numpy(), q_real=q_real, q_surrogate=q_sur,
-                 q_exact=q_exact, u_real=u_real, u_fake=u_fake, u_surrogate=u_sur, u_ideal=u_ideal,
-                 u_reference=u_ref_eval, slot_angles=slot_angles, slot_evs=slot_evs, replicas=R_val,
-                 job_id=real_job_ids[-1])
-        curves = {f"prediction on real QPU ({real.name}), trained on {fake.name}": u_real, **curves}
-        save_log()
+        print("Predição no QPU real desativada.")
+        # real = get_backend(argparse.Namespace(fake=False, backend=args.backend))
+        # hw_real = PackedCircuit(real, chains, n, gates, PRECISION, False, MITIGATIONS[MITIGATION])
+        # R_val = args.val_replicas or hw_real.B
+        # T_val = math.ceil(N_EVALUATION_POINTS * R_val / hw_real.B)
+        # print(f"4/4 predição no QPU real {real.name}: 1 job × {T_val} conjuntos ({N_EVALUATION_POINTS} pontos × "
+        #       f"{R_val} réplicas) | {hw_real.B} cadeias, profundidade ISA {hw_real.depth}, {hw_real.n_2q} portas "
+        #       f"{hw_real.g2} | mitigação '{MITIGATION}'", flush=True)
+        # if hw_real.n_2q != hw_real.n_2q_expected:
+        #     print(f"AVISO: esperado {hw_real.n_2q_expected} portas {hw_real.g2}: o transpilador inseriu SWAPs.")
+        # path("backend_real", "json").write_text(json.dumps(backend_snapshot(real, chains, hw_real.g2), indent=2,
+        #                                                    default=str))
+        # with open(path("isa_real", "qpy"), "wb") as f:
+        #     qpy.dump(hw_real.isa, f)
+        # real_job_ids = []
+        # t_job = time.time()
+        # q_real, slot_angles, slot_evs = hw_real.evaluate(angles.numpy(), real_job_ids, replicas=R_val)
+        # with tc.no_grad():
+        #     u_real = model.from_features(xt_plot, q_real).numpy()
+        # log["real_prediction"] = dict(
+        #     backend=real.name, instance=INSTANCE, job_ids=real_job_ids, mitigation=MITIGATION,
+        #     mitigation_options=MITIGATIONS[MITIGATION], chains=chains, replicas=R_val, parameter_sets=T_val,
+        #     isa=dict(depth=hw_real.depth, two_qubit_gate=hw_real.g2, n_2q=hw_real.n_2q,
+        #              n_2q_expected=hw_real.n_2q_expected, qubits_used=hw_real.n_qubits_used),
+        #     time_s=time.time() - t_job, finished=datetime.now().isoformat(), **errors(u_real),
+        #     rms_q_real_vs_fake_polynomial=float(np.sqrt(np.mean((q_real - q_sur) ** 2))),
+        #     rms_q_real_vs_exact=float(np.sqrt(np.mean((q_real - q_exact) ** 2))))
+        # np.savez(path("prediction_real", "npz"), x=x_plot, angles=angles.numpy(), q_real=q_real, q_surrogate=q_sur,
+        #          q_exact=q_exact, u_real=u_real, u_fake=u_fake, u_surrogate=u_sur, u_ideal=u_ideal,
+        #          u_reference=u_ref_eval, slot_angles=slot_angles, slot_evs=slot_evs, replicas=R_val,
+        #          job_id=real_job_ids[-1])
+        # curves = {f"prediction on real QPU ({real.name}), trained on {fake.name}": u_real, **curves}
+        # save_log()
 
     plot_solution(x_plot, curves, ref=u_ref_eval, save_path=path("validation", "png"))
     log["finished"] = datetime.now().isoformat()
