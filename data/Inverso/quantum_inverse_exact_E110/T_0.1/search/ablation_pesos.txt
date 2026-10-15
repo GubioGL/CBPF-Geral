@@ -1,0 +1,32 @@
+Ablation of the loss weighting (saída de scratchpad/ablation.py, 2026-10-15).
+The validated best config of each (weighting + nu optimizer) pair, with ONLY the weighting
+swapped; 3 qubit counts x 20 validation seeds (200-219) = 60 runs per line.
+"wins vs tuned" / Wilcoxon: paired against the weighting the config was tuned with.
+
+== config tuned as gradnorm+varpro: only the weighting is swapped
+   fixed     median 86.09%  mean 77.61%  max  98.46% | final w_d/w_r median    0.56 | wins vs tuned   0%  paired Wilcoxon p=0.000
+   gradnorm  median  0.71%  mean  1.23%  max   6.62% | final w_d/w_r median   11.66 | wins vs tuned   0%  paired Wilcoxon p=nan
+   ntk       median  2.72%  mean  3.21%  max  12.00% | final w_d/w_r median  183.98 | wins vs tuned  20%  paired Wilcoxon p=0.000
+== config tuned as fixed+varpro: only the weighting is swapped
+   fixed     median  0.92%  mean  1.20%  max   9.42% | final w_d/w_r median   15.43 | wins vs tuned   0%  paired Wilcoxon p=nan
+   gradnorm  median  1.78%  mean  2.02%  max   6.19% | final w_d/w_r median   13.64 | wins vs tuned  30%  paired Wilcoxon p=0.008
+   ntk       median  1.61%  mean  2.16%  max  10.69% | final w_d/w_r median  175.35 | wins vs tuned  23%  paired Wilcoxon p=0.000
+== config tuned as fixed+adam: only the weighting is swapped
+   fixed     median  1.14%  mean  1.42%  max   4.40% | final w_d/w_r median   20.81 | wins vs tuned   0%  paired Wilcoxon p=nan
+   gradnorm  median  1.15%  mean  1.28%  max   3.91% | final w_d/w_r median   11.68 | wins vs tuned  48%  paired Wilcoxon p=0.918
+   ntk       median  3.06%  mean  3.64%  max  11.00% | final w_d/w_r median  181.84 | wins vs tuned  15%  paired Wilcoxon p=0.000
+== config tuned as gradnorm+adam: only the weighting is swapped
+   fixed     median 30.40%  mean 31.26%  max  75.53% | final w_d/w_r median    0.40 | wins vs tuned   3%  paired Wilcoxon p=0.000
+   gradnorm  median  1.29%  mean  1.56%  max   4.35% | final w_d/w_r median   10.43 | wins vs tuned   0%  paired Wilcoxon p=nan
+   ntk       median  2.76%  mean  3.22%  max  11.59% | final w_d/w_r median  163.90 | wins vs tuned  33%  paired Wilcoxon p=0.021
+
+Paired comparison of the tuned winners (same 60 validation runs), scratchpad/paired.py:
+NQ3: gradnorm+varpro 1.39%  fixed+varpro 1.05%  fixed+adam 1.73%  ntk+varpro 2.51%  gradnorm+adam 1.57%  ntk+adam 2.15%
+NQ7: gradnorm+varpro 0.67%  fixed+varpro 0.66%  fixed+adam 0.94%  ntk+varpro 1.42%  gradnorm+adam 1.27%  ntk+adam 2.09%
+NQ10: gradnorm+varpro 0.51%  fixed+varpro 0.90%  fixed+adam 0.70%  ntk+varpro 0.87%  gradnorm+adam 1.16%  ntk+adam 1.83%
+gradnorm+varpro  vs fixed+varpro    : gradnorm+varpro better in  53% of runs, p=0.494
+gradnorm+varpro  vs fixed+adam      : gradnorm+varpro better in  52% of runs, p=0.320
+gradnorm+varpro  vs gradnorm+adam   : gradnorm+varpro better in  57% of runs, p=0.056
+fixed+varpro     vs fixed+adam      : fixed+varpro better in  55% of runs, p=0.576
+fixed+varpro     vs gradnorm+adam   : fixed+varpro better in  67% of runs, p=0.045
+fixed+adam       vs gradnorm+adam   : fixed+adam better in  53% of runs, p=0.457

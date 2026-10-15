@@ -1,0 +1,4 @@
+gradnorm_varpro  nu err median 1.29% mean 1.59% max 4.67% | NQ3:2.13% NQ7:1.03% NQ10:0.86% | relL2 QPU median 1.07e-02
+fixed_varpro     nu err median 1.34% mean 1.67% max 11.03% | NQ3:1.56% NQ7:1.02% NQ10:1.81% | relL2 QPU median 1.09e-02
+fixed_adam       nu err median 1.26% mean 1.60% max 7.01% | NQ3:1.87% NQ7:1.16% NQ10:1.26% | relL2 QPU median 2.27e-02
+180 runs, 334s
