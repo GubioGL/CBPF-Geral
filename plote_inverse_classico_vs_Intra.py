@@ -14,12 +14,12 @@ try:
 except Exception:
     plt.style.use("seaborn-v0_8-whitegrid")
 
-CLASSICAL_INVERSE_DIR = "data/classical_inverse"
-QUANTUM_INVERSE_DIR = "data/quantum_inverse_exact"
+CLASSICAL_INVERSE_DIR = "data/Inverso/classical_inverse"
+QUANTUM_INVERSE_DIR = "data/Inverso/quantum_inverse_exact"
 T_LABELS = ["0.1", "1"]
 INTRA_NEURO_LIST = [3, 7, 15]  # widths with a full N_COLLOCATION sweep
 N_QUBITS_LIST = [3, 7, 15]  # quantum widths with a full N_COLLOCATION sweep
-CLASSICAL_N_COLLOCATION = 100  # only N_COLLOCATION with the full INTRA_NEURO sweep
+CLASSICAL_N_COLLOCATION = 10  # only N_COLLOCATION with the full INTRA_NEURO sweep
 QUANTUM_N_COLLOCATION = CLASSICAL_N_COLLOCATION  # also has the full N_QUBITS sweep
 ERROR_BAR_TYPE = "variancia"
 COLOR_MSE = "b"
@@ -64,7 +64,7 @@ def plot_nu_mse_vs_intra(intra_neurons, mse_mean, mse_std, mse_var, mse_min, mse
     ax.set_ylabel(r"MSE($\nu$)", fontsize=14)
     ax.set_yscale("log")
     ax.set_xticks(sorted(all_widths))
-    ax.set_title(f"T = {Tfin} NCOL = {CLASSICAL_N_COLLOCATION}", fontsize=13)
+    ax.set_title(f"T = {Tfin} N° of discretization points = {CLASSICAL_N_COLLOCATION}", fontsize=13)
     ax.grid(True, which="both", linestyle="--", alpha=0.6)
     ax.legend()
     fig.tight_layout()
