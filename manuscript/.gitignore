@@ -1,0 +1,10 @@
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.toc
+*.synctex.gz
+*Notes.bib
+figures/schematic_preview.pdf
+manuscript_overleaf.zip
