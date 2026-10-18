@@ -1,0 +1,145 @@
+% Fig. 1 -- classical PINN and hybrid quantum PINN (HQPINN): architecture and training workflow.
+% \input inside a figure* (main.tex wraps it in \resizebox{\textwidth}{!}{...}).
+% Needs the TikZ libraries arrows.meta, positioning, calc, decorations.pathreplacing, the package bm,
+% and the colours qcol (HQPINN / QPU) and ccol (classical) defined in main.tex.
+% Preview alone: pdflatex schematic_preview.tex
+\begin{tikzpicture}[
+  font=\footnotesize, >={Stealth[length=3.4pt]},
+  arr/.style={->, line width=0.55pt, black!70},
+  grad/.style={->, line width=0.6pt, qcol, dash pattern=on 2.2pt off 1.4pt},
+  box/.style={draw=black!45, rounded corners=2pt, fill=white, align=center, font=\scriptsize,
+              inner sep=2pt, text width=2.2cm, minimum height=1.05cm},
+  qbox/.style={box, draw=qcol, fill=qcol!6},
+  neuron/.style={circle, draw=black!65, fill=white, line width=0.35pt, inner sep=0pt, minimum size=4.3pt},
+  wire/.style={black!75, line width=0.45pt},
+  gate/.style={draw=black!75, fill=white, line width=0.45pt, inner sep=0.6pt, minimum height=0.23cm,
+               minimum width=0.66cm, font=\tiny},
+  plabel/.style={font=\small\bfseries, anchor=north west, inner sep=0pt},
+  note/.style={font=\scriptsize, black!75, align=center},
+  tnote/.style={font=\tiny, black!75},
+]
+% ---- helpers: a column of neurons, all-to-all links between two columns, CNOT, meter
+\def\ncol#1#2#3{\foreach \i in {1,...,#2}{\node[neuron] at (#1,{#3+(\i-(#2+1)/2)*0.25}) {};}}
+\def\nlinks#1#2#3#4#5{\foreach \i in {1,...,#2}{\foreach \j in {1,...,#4}{%
+  \draw[black!22, line width=0.25pt] (#1,{#5+(\i-(#2+1)/2)*0.25}) -- (#3,{#5+(\j-(#4+1)/2)*0.25});}}}
+\def\cnot#1#2#3{\draw[wire] (#1,#2) -- (#1,#3); \fill[black!80] (#1,#2) circle (1.35pt);
+  \draw[wire, fill=white] (#1,#3) circle (3.1pt);
+  \draw[wire] ({#1-0.109},#3) -- ({#1+0.109},#3); \draw[wire] (#1,{#3-0.109}) -- (#1,{#3+0.109});}
+\def\meter#1#2{\draw[wire, fill=white] ({#1-0.19},{#2-0.115}) rectangle ({#1+0.19},{#2+0.115});
+  \draw[wire] ({#1-0.12},{#2-0.065}) arc (160:20:0.128); \draw[wire] (#1,{#2-0.065}) -- ({#1+0.1},{#2+0.08});}
+
+% =====================================================================================
+% (a) architecture: shared classical pre/post networks, interchangeable middle block
+% =====================================================================================
+\node[plabel] at (-0.1,6.1) {(a)};
+\node (in) at (0.45,2.75) {$(x,t)$};
+\node[draw=black!45, rounded corners=2pt, fill=white, inner sep=2pt, font=\scriptsize, align=center] (xi) at (2.0,2.75)
+  {$\bm\xi=\begin{pmatrix}\sin 2\pi x\\ \cos 2\pi x\\ t/T\end{pmatrix}$};
+\draw[arr] (in) -- (xi);
+% pre-network 3 -> 10 -> n
+\nlinks{3.4}{3}{4.0}{5}{2.75}\nlinks{4.0}{5}{4.6}{4}{2.75}
+\ncol{3.4}{3}{2.75}\ncol{4.0}{5}{2.75}\ncol{4.6}{4}{2.75}
+\draw[arr] (xi.east) -- (3.29,2.75);
+\node[note] at (4.0,1.85) {$\mathcal N_{\rm pre}(\,\cdot\,;\bm\phi)$\\[-1pt]$3\to10\to n$};
+\node[anchor=west, inner sep=1pt] (theta) at (4.82,2.75) {$\bm\theta\in\mathbb R^{n}$};
+\coordinate (split) at (5.88,2.75);
+\draw[line width=0.55pt, black!70] (theta.east) -- (split);
+
+% ---- middle block, option 1: fixed quantum circuit (HQPINN)
+\draw[qcol, line width=0.6pt, rounded corners=3pt, fill=qcol!5] (6.05,2.8) rectangle (12.05,6.12);
+\node[anchor=north west, font=\scriptsize\bfseries, text=qcol!80!black] at (6.13,6.07) {HQPINN: fixed quantum layer};
+\foreach \q/\y in {1/5.05,2/4.75,3/4.45,4/4.15,5/3.85,6/3.55}{
+  \node[font=\tiny, anchor=east, inner sep=1pt] at (6.6,\y) {$|0\rangle$};
+  \draw[wire] (6.6,\y) -- (9.41,\y);
+  \node[gate] at (7.0,\y) {$R_Y(\theta_{\q})$};
+  \meter{9.6}{\y}
+  \draw[wire, ->] (9.79,\y) -- (10.07,\y);
+}
+\cnot{7.95}{5.05}{4.75}\cnot{7.95}{4.45}{4.15}\cnot{7.95}{3.85}{3.55}
+\cnot{8.65}{4.75}{4.45}\cnot{8.65}{4.15}{3.85}
+\draw[decorate, decoration={brace, amplitude=3pt}, black!60] (7.75,5.23) -- (8.85,5.23)
+  node[midway, above=1.5pt, font=\tiny, black!85] {$W_{\rm brick}$};
+\draw[decorate, decoration={brace, amplitude=3pt}, black!60] (10.15,5.15) -- (10.15,3.45)
+  node[midway, right=2pt, font=\scriptsize, black!85, align=left]
+  {$y_q=\langle Z_q\rangle$\\[2pt]$\hat y_q=y_q+\xi_q$\\[0pt]{\tiny ($S$ shots)}};
+\node[tnote, anchor=west] at (6.13,3.2) {ideal: $y_q=\prod_{j\in S_q}\cos\theta_j$};
+\node[tnote, anchor=west] at (6.13,2.97) {device: degree-1 trig.\ polynomial on the light cone $\mathcal C_q$};
+\node[font=\tiny, anchor=east, black!85] at (11.98,3.2) {\textbf{0} trainable parameters};
+
+% ---- middle block, option 2: trainable bottleneck (classical PINN)
+\draw[ccol, line width=0.6pt, rounded corners=3pt, fill=ccol!5] (6.05,0.0) rectangle (12.05,2.42);
+\node[anchor=north west, font=\scriptsize\bfseries, text=ccol!80!black] at (6.13,2.37) {classical PINN: trainable bottleneck};
+\nlinks{8.15}{4}{8.85}{5}{1.15}\nlinks{8.85}{5}{9.55}{4}{1.15}
+\ncol{8.15}{4}{1.15}\ncol{8.85}{5}{1.15}\ncol{9.55}{4}{1.15}
+\node[note] at (7.05,1.15) {$\mathcal N_{\rm mid}(\,\cdot\,;\bm\chi)$\\[-1pt]$n\to10\to n$\\[-1pt]$\tanh$};
+\node[note] at (10.95,1.15) {$\bm y\in\mathbb R^{n}$};
+\node[font=\tiny, anchor=south east, black!85] at (11.98,0.06) {$\bm{21n+10}$ trainable parameters};
+\node[font=\scriptsize\itshape, black!60] at (9.05,2.61) {or};
+
+% ---- routing theta -> middle block -> post-network
+\draw[arr] (split) |- (6.05,4.3);
+\draw[arr] (split) |- (6.05,1.15);
+\draw[line width=0.55pt, black!70] (12.05,4.3) -- (12.3,4.3) -- (12.3,1.15) -- (12.05,1.15);
+\draw[arr] (12.3,2.75) -- (12.62,2.75);
+% post-network n -> 10 -> 1
+\nlinks{12.75}{4}{13.35}{5}{2.75}\nlinks{13.35}{5}{13.95}{1}{2.75}
+\ncol{12.75}{4}{2.75}\ncol{13.35}{5}{2.75}\ncol{13.95}{1}{2.75}
+\node[note] at (13.35,1.85) {$\mathcal N_{\rm post}(\,\cdot\,;\bm\psi)$\\[-1pt]$n\to10\to1$};
+\node[draw=black!45, rounded corners=2pt, fill=white, font=\scriptsize, align=center, inner sep=3pt] (u) at (16.0,2.75)
+  {$u_\Theta(x,t)=\sin 2\pi x+\dfrac{t}{T}\,\mathcal N_\Theta(x,t)$\\[2pt]
+   {\tiny initial condition and periodicity exact}};
+\draw[arr] (14.07,2.75) -- (u.west);
+
+% =====================================================================================
+% (b) physics-informed residual on a five-point stencil
+% =====================================================================================
+\node[plabel] at (-0.1,-0.5) {(b)};
+\draw[->, black!60, line width=0.45pt] (0.35,-4.75) -- (3.75,-4.75) node[below left=0pt, font=\scriptsize] {$x$};
+\draw[->, black!60, line width=0.45pt] (0.35,-4.75) -- (0.35,-1.15) node[below left=0pt, font=\scriptsize] {$t$};
+\draw[black!35, line width=0.4pt] (1.15,-3.05) -- (3.05,-3.05) (2.1,-4.0) -- (2.1,-2.1);
+\foreach \p/\l/\a in {{(3.05,-3.05)}/{$x_i{+}h$}/below, {(1.15,-3.05)}/{$x_i{-}h$}/below,
+                      {(2.1,-2.1)}/{$t_i{+}\tau$}/right, {(2.1,-4.0)}/{$t_i{-}\tau$}/right}{
+  \draw[qcol, line width=0.6pt, fill=white] \p circle (2.6pt);
+  \node[font=\tiny, \a=2pt] at \p {\l};}
+\fill[qcol] (2.1,-3.05) circle (3.1pt);
+\node[font=\tiny, above left=1pt and -1pt] at (2.1,-3.05) {$(x_i,t_i)$};
+\node[tnote, align=left, anchor=west] at (0.15,-5.3)
+  {\tikz\fill[qcol] (0,0) circle (2.4pt); centre: measured on the QPU\\[1pt]
+   \tikz\draw[qcol, line width=0.6pt] (0,0) circle (2.1pt); neighbours: surrogate $+$ offset};
+\node[font=\scriptsize, align=left, anchor=west] at (0.15,-6.15)
+  {$r_i=u_t+u\,u_x-\nu\,u_{xx}$\\[2pt]$\mathcal L(\Theta)=\frac{1}{N_{\rm col}}\sum_i r_i^2$\\[1pt]
+   {\tiny central differences, $h=1/512$, $\tau=10^{-3}$}};
+
+% =====================================================================================
+% (c) training workflows
+% =====================================================================================
+\node[plabel] at (4.2,-0.5) {(c)};
+\node[rotate=90, font=\scriptsize\bfseries, black!70] at (4.6,-1.95) {simulation};
+\node[rotate=90, font=\scriptsize\bfseries, text=qcol!80!black] at (4.6,-4.45) {QPU in the loop};
+\draw[black!20, line width=0.4pt] (4.4,-3.13) -- (17.5,-3.13);
+
+% lane 1: simulation (classical PINN and ideal HQPINN)
+\node[box] (s1) at (6.2,-1.95) {draw $N_{\rm col}$ new\\points $(x_i,t_i)$};
+\node[box] (s2) at (8.7,-1.95) {forward pass on\\the $5N_{\rm col}$ nodes};
+\node[box] (s3) at (11.2,-1.95) {$\mathcal L$ and $\nabla_\Theta\mathcal L$\\by autodiff};
+\node[box] (s4) at (13.7,-1.95) {AdamW, then\\L-BFGS};
+\node[box] (s5) at (16.2,-1.95) {stop at the FDM\\residual floor};
+\draw[arr] (s1) -- (s2); \draw[arr] (s2) -- (s3); \draw[arr] (s3) -- (s4); \draw[arr] (s4) -- (s5);
+\draw[arr] (s4.north) -- ++(0,0.22) -| (s1.north);
+\node[tnote, fill=white, inner sep=1pt] at (9.95,-1.08) {next step};
+
+% lane 2: HQPINN with the QPU in the loop
+\node[qbox] (q0) at (6.2,-4.45) {\textbf{(1) calibration}\\random angles;\\least-squares $\hat f$};
+\node[qbox] (q1) at (8.7,-4.45) {\textbf{(2) QPU job}\\$\hat{\bm y}_c$ at the centres\\(8 chains)};
+\node[box] (q2) at (11.2,-4.45) {straight-through:\\[1pt]$\tilde{\bm y}=\hat f(\bm\theta)$\\$+\,\mathrm{sg}\big[\hat{\bm y}_c-\hat f(\bm\theta_c)\big]$};
+\node[box] (q3) at (13.7,-4.45) {AdamW step\\on $\mathcal L$};
+\node[qbox] (q4) at (16.2,-4.45) {\textbf{(3) validation}\\$u(x,T)$ on the QPU};
+\draw[arr] (q0) -- (q1); \draw[arr] (q1) -- (q2); \draw[arr] (q2) -- (q3); \draw[arr] (q3) -- (q4);
+\draw[arr] (q3.north) -- ++(0,0.22) -| (q1.north);
+\node[tnote, fill=white, inner sep=1pt] at (11.2,-3.58) {next epoch};
+\draw[grad] (q3.south) -- ++(0,-0.25) -| (q2.south);
+\node[tnote, text=qcol!85!black, align=center] at (12.45,-5.5)
+  {backward through $\hat f$ (no parameter shift):\\$\partial\tilde{\bm y}/\partial\bm\theta=\partial\hat f/\partial\bm\theta$};
+\draw[arr, black!50] (q1.south) -- ++(0,-0.25) -| (q0.south);
+\node[tnote, align=center] at (7.45,-5.5) {every $K_{\rm fit}$ epochs:\\refit $\hat f$ with all data};
+\end{tikzpicture}
