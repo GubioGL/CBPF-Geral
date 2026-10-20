@@ -13,7 +13,8 @@ So the QPU measures only the stencil centres: the same <Z> feeds the residual an
 
 Training (CONFIG, "fixed_varpro"), two optimizers:
   * AdamW for the network, loss = ramp * MAE(residual) + W_D * MAE(data), the residual weight
-    ramping up from 0 over the first epochs;
+    ramping up from 0 over the first epochs; inner_steps AdamW steps per epoch, all on the
+    epoch's points and its single QPU measurement (the straight-through correction is kept);
   * "varpro" for nu alone, in log space: with the network fixed, the nu minimizing the batch
     residual is the |B|-weighted median of A/B, and log nu is relaxed towards it by a factor
     beta that decays over the training.
@@ -35,8 +36,11 @@ no IBM job. Real QPU (--real): PackedCircuit in a Session -- not run in the veri
 Usage (conda env `qiskit`):
     python Inverser_quantum_hardware_pinn_E110.py                        # fake: 3/7/10 qubits x seeds 0/1/2
     python Inverser_quantum_hardware_pinn_E110.py --qubits 7 10
+    python Inverser_quantum_hardware_pinn_E110.py --tfin 0.1                         # final time T = 0.1
+    python Inverser_quantum_hardware_pinn_E110.py --tfin 0.1 --nu 0.01               # -> quantico/T_0.1_nu_0.01
     python Inverser_quantum_hardware_pinn_E110.py --real --qubits 3 --seeds 0
-Outputs (runs, calibrations, summary.json, nu_summary_10_E110.png): OUT_DIR/quantico_<backend>/.
+Outputs: calibrations (independent of T, shared) in OUT_DIR/quantico/; runs, summary.json,
+nu_summary_10_E110.png in OUT_DIR/quantico/T_<TFIN>/.
 """
 import argparse
 import glob
@@ -73,7 +77,7 @@ from run_quantum_hardware import FakeChainCircuit  # noqa: E402
 
 # ---- problem --------------------------------------------------------------------
 NU_TRUE = 0.1
-TFIN = 0.1
+TFIN = 1.0
 N_COLLOCATION = 10        # random points per epoch: residual AND data
 EPOCHS = 110
 QUBITS = (3, 7, 10)
@@ -86,6 +90,7 @@ CONFIG = dict(
     r_ramp=20,                # epochs over which the residual weight ramps up from 0
     w_d=85.8,                 # data weight (the residual weight is 1)
     lr_nu=0.97, lr_nu_min=0.128,   # varpro relaxation factor beta, cosine decay
+    inner_steps=16,           # AdamW steps per epoch, all on the epoch's single QPU measurement
 )
 
 # ---- QPU ------------------------------------------------------------------------
@@ -99,6 +104,17 @@ VAL_POINTS = 100                  # validation: x points at t = TFIN, one replic
 SESSION_MAX_TIME = "2h"           # --real: safety limit of the Session
 
 OUT_DIR = os.path.join("data", "Inverso_110")
+CAL_DIR = os.path.join(OUT_DIR, "quantico")   # calibrations: shared by every final time
+
+
+def case_tag(tfin, nu):
+    """T_<tfin>, plus _nu_<nu> when nu is not the reference 0.1."""
+    return f"T_{tfin}" if nu == 0.1 else f"T_{tfin}_nu_{nu:g}"
+
+
+def results_dir(tfin, nu):
+    """OUT_DIR/quantico/<case_tag>: the runs for one (T, nu)."""
+    return os.path.join(CAL_DIR, case_tag(tfin, nu))
 
 
 # ----------------------------------------------------------------------
@@ -109,9 +125,9 @@ def cosine(lr0, lr_min, progress):
     return lr_min + 0.5 * (lr0 - lr_min) * (1.0 + math.cos(math.pi * progress))
 
 
-def exact_at(x, t):
-    """Exact solution u(x, t) (Cole-Hopf, nu = NU_TRUE): the data, shaped like x."""
-    return tc.tensor(exact_solution(x.numpy(), t.numpy(), nu=NU_TRUE, L=L), dtype=x.dtype)
+def exact_at(x, t, nu_true):
+    """Exact solution u(x, t) (Cole-Hopf, nu = nu_true): the data, shaped like x."""
+    return tc.tensor(exact_solution(x.numpy(), t.numpy(), nu=nu_true, L=L), dtype=x.dtype)
 
 
 def loss_terms(model, xt, n_f, u_data):
@@ -134,7 +150,7 @@ def nu_minimizer(a, b):
     return float(ratio[order][tc.searchsorted(cum, 0.5 * cum[-1])])
 
 
-def train(model, seed, measure=None, cfg=CONFIG, Tfin=TFIN, n_col=N_COLLOCATION, epochs=EPOCHS):
+def train(model, seed, measure=None, cfg=CONFIG, Tfin=TFIN, nu_true=NU_TRUE, n_col=N_COLLOCATION, epochs=EPOCHS):
     """Trains `model` for `epochs` epochs, one batch of n_col fresh random points per epoch.
     measure(epoch, xt), optional (QPU in the loop): gets the epoch's stencil points before the
     forward pass and returns the offset added to the output of `model.quantum`.
@@ -157,13 +173,15 @@ def train(model, seed, measure=None, cfg=CONFIG, Tfin=TFIN, n_col=N_COLLOCATION,
         xt = stencil_inputs(x_f, t_f, L, HX, HT)   # 5 blocks of n_col rows, the centres first
         if measure is not None:
             model.quantum.offset = measure(epoch, xt)
-        a, b, loss_r, loss_d = loss_terms(model, xt, n_col, exact_at(x_f, t_f))
+        u_data = exact_at(x_f, t_f, nu_true)
 
         ramp = min(1.0, (epoch + 1) / cfg["r_ramp"])
-        opt.zero_grad()
-        (ramp * loss_r + cfg["w_d"] * loss_d).backward(inputs=net_params)
-        tc.nn.utils.clip_grad_norm_(net_params, cfg["grad_clip"])
-        opt.step()
+        for _ in range(cfg.get("inner_steps", 1)):   # the extra steps reuse the epoch's QPU offset
+            a, b, loss_r, loss_d = loss_terms(model, xt, n_col, u_data)
+            opt.zero_grad()
+            (ramp * loss_r + cfg["w_d"] * loss_d).backward(inputs=net_params)
+            tc.nn.utils.clip_grad_norm_(net_params, cfg["grad_clip"])
+            opt.step()
         if measure is not None:
             model.quantum.offset = None
 
@@ -226,21 +244,22 @@ def calibrate(backend, n_qubits, real, out_dir):
 # ----------------------------------------------------------------------
 # One run: training with the QPU in the loop + validation on the QPU
 # ----------------------------------------------------------------------
-def run_one(n_qubits, seed, real=False, threads=0, epochs=EPOCHS):
+def run_one(n_qubits, seed, real=False, threads=0, tfin=TFIN, nu_true=NU_TRUE, cfg=CONFIG, epochs=EPOCHS):
     """Initialization as Inverser_quantum_exact_pinn_paralelo.run_one (set_seed,
     nu_init = np.random.random(), then the network)."""
     tc.set_num_threads(1)
     t0 = time.time()
     backend = get_backend(real)
-    out_dir = os.path.join(OUT_DIR, f"quantico_{backend.name}")
-    chains, cal_angles, cal_evs = calibrate(backend, n_qubits, real, out_dir)
+    out_dir = results_dir(tfin, nu_true)
+    os.makedirs(out_dir, exist_ok=True)
+    chains, cal_angles, cal_evs = calibrate(backend, n_qubits, real, CAL_DIR)
     M, cones = circuit_structure(n_qubits)
     qpu = make_qpu(backend, chains, n_qubits, real, threads)
     coefs, fit_rms, _ = fit_surrogate(cal_angles, cal_evs, cones, M)
 
     set_seed(seed)
     nu_init = float(np.random.random())
-    model = build_model(n_qubits, TFIN, nu_init)
+    model = build_model(n_qubits, tfin, nu_init)
     model.quantum = HardwareSurrogateLayer(cones, coefs)
     job_ids, meas_angles, meas_evs = [], [cal_angles], [cal_evs]
 
@@ -260,12 +279,12 @@ def run_one(n_qubits, seed, real=False, threads=0, epochs=EPOCHS):
     with (Session(backend=backend, max_time=SESSION_MAX_TIME) if real else nullcontext()) as session:
         if real:
             qpu.set_mode(session)
-        hist = train(model, seed, measure=measure, epochs=epochs)
+        hist = train(model, seed, measure=measure, cfg=cfg, Tfin=tfin, nu_true=nu_true, epochs=epochs)
 
         # ---------- validation: the trained network running on the QPU ----------
         x_val = np.linspace(0.0, L, VAL_POINTS, endpoint=False).reshape(-1, 1)
         x_t = tc.tensor(x_val, dtype=tc.get_default_dtype())
-        t_t = tc.full_like(x_t, TFIN)
+        t_t = tc.full_like(x_t, tfin)
         with tc.no_grad():
             angles = network_angles(model, x_t, t_t)
             u_sur = model(tc.cat([x_t, t_t], 1)).numpy()
@@ -274,40 +293,40 @@ def run_one(n_qubits, seed, real=False, threads=0, epochs=EPOCHS):
         q_qpu, _, _ = qpu.evaluate(angles.numpy(), job_ids, replicas=qpu.B, verbose=False)
     with tc.no_grad():
         u_qpu = network_output(model, x_t, t_t, q_qpu).numpy()
-    u_ref = exact_solution(x_val, TFIN, nu=NU_TRUE, L=L)
+    u_ref = exact_solution(x_val, tfin, nu=nu_true, L=L)
 
     nu_learned = float(model.learnable_parameter.detach())
-    out = dict(n_qubits=n_qubits, seed=seed, backend=backend.name, nu_init=nu_init,
-               nu=nu_learned, nu_rel_err=abs(nu_learned - NU_TRUE) / NU_TRUE,
+    out = dict(n_qubits=n_qubits, seed=seed, backend=backend.name, Tfin=tfin, nu_true=nu_true, nu_init=nu_init,
+               nu=nu_learned, nu_rel_err=abs(nu_learned - nu_true) / nu_true,
                rel_l2_T_qpu=relative_l2_error(u_qpu, u_ref), rel_l2_T_measured_model=relative_l2_error(u_sur, u_ref),
                rel_l2_T_ideal_circuit=relative_l2_error(u_ideal, u_ref), chains=len(chains),
                fit_rms_calibration=float(np.mean(fit_rms)), n_jobs=len(job_ids), time_s=time.time() - t0)
 
     # ---------- outputs ----------
     tag = f"{N_COLLOCATION}_NQ{n_qubits}_{seed}_E{epochs}"
-    tc.save(dict(state_dict=model.state_dict(), config=model.config, cfg=CONFIG, cones=cones,
+    tc.save(dict(state_dict=model.state_dict(), config=model.config, cfg=cfg, cones=cones,
                  coefs=[c.tolist() for c in model.quantum.coef.numpy()], chains=chains, result=out),
             os.path.join(out_dir, f"model_{tag}.pt"))
     with open(os.path.join(out_dir, f"run_{tag}.json"), "w") as f:
-        json.dump(dict(out, cfg=CONFIG, job_ids=job_ids, chain_list=chains), f, indent=1)
+        json.dump(dict(out, cfg=cfg, job_ids=job_ids, chain_list=chains), f, indent=1)
     np.savez(os.path.join(out_dir, f"losshist_{tag}.npz"), **{k: np.array(v) for k, v in hist.items()})
     np.savez(os.path.join(out_dir, f"validation_{tag}.npz"), x=x_val, angles=angles.numpy(), q_qpu=q_qpu,
              u_qpu=u_qpu, u_measured_model=u_sur, u_ideal_circuit=u_ideal, u_exact=u_ref)
     plot_loss({"residual (QPU values)": hist["loss_r"], "data (QPU values)": hist["loss_d"]},
               title=f"Hardware PINN (inverse, {epochs} epochs, {backend.name}) -- NQ={n_qubits}, seed {seed}",
               save_path=os.path.join(out_dir, f"loss_{tag}.png"))
-    plot_parameter_history(hist["nu"], NU_TRUE,
+    plot_parameter_history(hist["nu"], nu_true,
                            title=f"Learned nu = {nu_learned:.5f} ({100 * out['nu_rel_err']:.2f}%) -- "
                                  f"{backend.name}, NQ={n_qubits}, seed {seed}",
                            save_path=os.path.join(out_dir, f"nu_history_{tag}.png"))
     plot_solution(x_val, {f"QPU ({backend.name})": u_qpu, "measured model": u_sur,
                           "same weights, ideal circuit": u_ideal}, ref=u_ref,
-                  title=f"T={TFIN}, NQ={n_qubits}, seed {seed}: rel. L2 QPU = {out['rel_l2_T_qpu']:.2e}",
+                  title=f"T={tfin}, NQ={n_qubits}, seed {seed}: rel. L2 QPU = {out['rel_l2_T_qpu']:.2e}",
                   save_path=os.path.join(out_dir, f"solution_{tag}.png"))
     return out
 
 
-def plot_nu_summary(out_dir, sizes, size_label, prefix):
+def plot_nu_summary(out_dir, sizes, size_label, prefix, nu_true=NU_TRUE):
     """nu vs epoch of the runs saved in `out_dir`: one panel per size (qubits or neurons),
     one line per seed (losshist_<N_COLLOCATION>_<prefix><size>_<seed>_E<EPOCHS>.npz)."""
     colors = ("#2a78d6", "#eb6834", "#1baf7a")   # categorical slots 1-3, fixed order
@@ -316,7 +335,7 @@ def plot_nu_summary(out_dir, sizes, size_label, prefix):
         for color, s in zip(colors, SEEDS):
             nu = np.load(os.path.join(out_dir, f"losshist_{N_COLLOCATION}_{prefix}{size}_{s}_E{EPOCHS}.npz"))["nu"]
             ax.plot(np.arange(1, len(nu) + 1), nu, color=color, linewidth=2.0, label=f"seed {s}: nu = {nu[-1]:.4f}")
-        ax.axhline(NU_TRUE, color="#6b6a64", linestyle="--", linewidth=1.2, label=f"target {NU_TRUE:g}")
+        ax.axhline(nu_true, color="#6b6a64", linestyle="--", linewidth=1.2, label=f"target {nu_true:g}")
         ax.set_yscale("log")
         ax.set_title(f"{size} {size_label}", fontsize=12)
         ax.set_xlabel("Epochs")
@@ -330,7 +349,7 @@ def plot_nu_summary(out_dir, sizes, size_label, prefix):
     plt.close(fig)
 
 
-def summarize(out_dir):
+def summarize(out_dir, tfin, nu_true):
     """summary.json and nu_summary of every run saved in out_dir; returns the runs."""
     runs = sorted((json.load(open(p)) for p in glob.glob(os.path.join(out_dir, f"run_*_E{EPOCHS}.json"))),
                   key=lambda r: (r["n_qubits"], r["seed"]))
@@ -339,12 +358,12 @@ def summarize(out_dir):
             r.pop(k, None)
     err = np.array([r["nu_rel_err"] for r in runs])
     with open(os.path.join(out_dir, "summary.json"), "w") as f:
-        json.dump(dict(config=CONFIG, nu_true=NU_TRUE, Tfin=TFIN, n_collocation=N_COLLOCATION, epochs=EPOCHS,
+        json.dump(dict(config=CONFIG, nu_true=nu_true, Tfin=tfin, n_collocation=N_COLLOCATION, epochs=EPOCHS,
                        data="exact solution at the collocation points", nu_rel_err_median=float(np.median(err)),
                        nu_rel_err_mean=float(err.mean()), nu_rel_err_max=float(err.max()), runs=runs), f, indent=1)
     done = sorted({r["n_qubits"] for r in runs if sum(q["n_qubits"] == r["n_qubits"] for q in runs) == len(SEEDS)})
     if done:
-        plot_nu_summary(out_dir, done, "qubits", "NQ")
+        plot_nu_summary(out_dir, done, "qubits", "NQ", nu_true)
     return runs
 
 
@@ -358,23 +377,25 @@ if __name__ == "__main__":
     parser.add_argument("--seeds", type=int, nargs="+", default=list(SEEDS))
     parser.add_argument("--real", action="store_true", help=f"QPU real {BACKEND} (padrão: o fake, local)")
     parser.add_argument("--workers", type=int, default=6, help="runs em paralelo no fake")
+    parser.add_argument("--tfin", type=float, default=TFIN, help=f"tempo final T (padrão {TFIN})")
+    parser.add_argument("--nu", type=float, default=NU_TRUE, help=f"viscosidade verdadeira (padrão {NU_TRUE})")
     args = parser.parse_args()
 
     backend = get_backend(args.real)
-    out_dir = os.path.join(OUT_DIR, f"quantico_{backend.name}")
+    out_dir = results_dir(args.tfin, args.nu)
     for n in args.qubits:   # once per qubit count, before the runs that share it
-        calibrate(backend, n, args.real, out_dir)
+        calibrate(backend, n, args.real, CAL_DIR)
     jobs = [(n, s) for n in args.qubits for s in args.seeds]
     if args.real:           # one Session per run, one after the other
         for n, s in jobs:
-            run_one(n, s, real=True)
+            run_one(n, s, real=True, tfin=args.tfin, nu_true=args.nu)
     else:
         threads = max(1, (os.cpu_count() or 2) // args.workers)
         with ProcessPoolExecutor(args.workers) as pool:
-            list(pool.map(_run_job, [(n, s, False, threads) for n, s in jobs]))
+            list(pool.map(_run_job, [(n, s, False, threads, args.tfin, args.nu) for n, s in jobs]))
 
-    runs = summarize(out_dir)
-    print(f"{backend.name}: NU={NU_TRUE}, T={TFIN}, N_col={N_COLLOCATION}, {EPOCHS} epochs -- learned nu (relative error)")
+    runs = summarize(out_dir, args.tfin, args.nu)
+    print(f"{backend.name}: NU={args.nu}, T={args.tfin}, N_col={N_COLLOCATION}, {EPOCHS} epochs -- learned nu (relative error)")
     for n in sorted({r["n_qubits"] for r in runs}):
         print(f"  NQ{n:<2d} " + "  ".join(f"seed {r['seed']}: {r['nu']:.4f} ({100 * r['nu_rel_err']:.1f}%)"
                                        for r in runs if r["n_qubits"] == n))
