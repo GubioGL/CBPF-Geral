@@ -13,11 +13,14 @@ Every epoch, N_COLLOCATION fresh random points (x_c, t_c) are used for the PDE r
 Training: AdamW for the network, loss = ramp * MAE(residual) + W_D * MAE(data); "varpro" for nu
 alone, in log space: log nu relaxed towards the |B|-weighted median of A/B (residual = A - nu*B).
 
-At the end, if the quantum runs exist (OUT_DIR/quantico_<backend>/summary.json), compares the
-best run of each model: learned nu vs epoch and u(x, TFIN) (OUT_DIR/comparacao_classico_quantico_E110.png).
+Outputs: OUT_DIR/classico/T_<TFIN>/. At the end, if the quantum runs for the same TFIN exist
+(OUT_DIR/quantico/T_<TFIN>/summary.json), compares the best run of each model: learned nu vs epoch
+and u(x, TFIN) (OUT_DIR/comparacao_classico_quantico_T_<TFIN>_E110.png).
 
 Usage (conda env `qiskit` or any env with torch + scipy):
-    python Inverser_classical_pinn_E110.py               # 3/7/10 neurons x seeds 0/1/2 + comparison
+    python Inverser_classical_pinn_E110.py               # 3/7/10 neurons x seeds 0/1/2 + comparison, T = TFIN
+    python Inverser_classical_pinn_E110.py --tfin 0.1    # same, final time T = 0.1
+    python Inverser_classical_pinn_E110.py --nu 0.01     # same, true viscosity 0.01 (-> classico/T_1.0_nu_0.01)
     python Inverser_classical_pinn_E110.py --comparar    # only the comparison
 """
 import argparse
@@ -41,7 +44,7 @@ from Inverser_classical_pinn_paralelo import (
 
 # ---- problem --------------------------------------------------------------------
 NU_TRUE = 0.1
-TFIN = 0.1
+TFIN = 1.0
 N_COLLOCATION = 10        # random points per epoch: residual AND data
 EPOCHS = 110
 NEURONS = (3, 7, 10)      # width k of the trainable bottleneck
@@ -59,7 +62,16 @@ CONFIG = dict(
 )
 
 OUT_DIR = os.path.join("data", "Inverso_110")
-QUANTUM_DIR = os.path.join(OUT_DIR, "quantico_fake_berlin")
+
+
+def case_tag(tfin, nu):
+    """T_<tfin>, plus _nu_<nu> when nu is not the reference 0.1."""
+    return f"T_{tfin}" if nu == 0.1 else f"T_{tfin}_nu_{nu:g}"
+
+
+def results_dir(model_kind, tfin, nu):
+    """OUT_DIR/<classico|quantico>/<case_tag>: the runs of one model for one (T, nu)."""
+    return os.path.join(OUT_DIR, model_kind, case_tag(tfin, nu))
 
 
 # ----------------------------------------------------------------------
@@ -143,7 +155,7 @@ def run_one(neurons, seed, out_dir):
     set_seed(seed)
     nu_init = float(np.random.random())
     model = build_model(neurons, TFIN, nu_init)
-    hist = train(model, seed)
+    hist = train(model, seed, Tfin=TFIN)
 
     x_val = np.linspace(0.0, L, VAL_POINTS, endpoint=False).reshape(-1, 1)
     u_pred, u_ref = predict(model, x_val, TFIN), exact_solution(x_val, TFIN, nu=NU_TRUE, L=L)
@@ -208,8 +220,8 @@ def best_run(folder, size_key, prefix):
 
 
 def plot_comparison():
-    classical, nu_c, x, u_c, u_ref = best_run(os.path.join(OUT_DIR, "classico"), "neurons", "NE")
-    quantum, nu_q, x_q, u_q, _ = best_run(QUANTUM_DIR, "n_qubits", "NQ")
+    classical, nu_c, x, u_c, u_ref = best_run(results_dir("classico", TFIN, NU_TRUE), "neurons", "NE")
+    quantum, nu_q, x_q, u_q, _ = best_run(results_dir("quantico", TFIN, NU_TRUE), "n_qubits", "NQ")
     l2_c, l2_q = relative_l2_error(u_c, u_ref), relative_l2_error(u_q, u_ref)
     label_c = (f"classical ({classical['neurons']} neurons, seed {classical['seed']}): "
                f"nu = {classical['nu']:.5f} ({100 * classical['nu_rel_err']:.2f}%)")
@@ -241,7 +253,7 @@ def plot_comparison():
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, f"comparacao_classico_quantico_E{EPOCHS}.png"), dpi=150)
+    fig.savefig(os.path.join(OUT_DIR, f"comparacao_classico_quantico_{case_tag(TFIN, NU_TRUE)}_E{EPOCHS}.png"), dpi=150)
     plt.close(fig)
     print(f"best classical: {label_c}, rel. L2 of u(x,T) {l2_c:.2e}")
     print(f"best quantum:   {label_q}, rel. L2 of u(x,T) {l2_q:.2e}")
@@ -249,11 +261,14 @@ def plot_comparison():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--tfin", type=float, default=TFIN, help=f"tempo final T (padrão {TFIN})")
+    parser.add_argument("--nu", type=float, default=NU_TRUE, help=f"viscosidade verdadeira (padrão {NU_TRUE})")
     parser.add_argument("--comparar", action="store_true", help="só a comparação clássico x quântico")
     args = parser.parse_args()
+    TFIN, NU_TRUE = args.tfin, args.nu
 
     if not args.comparar:
-        out_dir = os.path.join(OUT_DIR, "classico")
+        out_dir = results_dir("classico", TFIN, NU_TRUE)
         os.makedirs(out_dir, exist_ok=True)
         runs = [run_one(k, s, out_dir) for k in NEURONS for s in SEEDS]
         err = np.array([r["nu_rel_err"] for r in runs])
@@ -266,5 +281,5 @@ if __name__ == "__main__":
         for k in NEURONS:
             print(f"  {k:2d} neurons " + "  ".join(f"seed {r['seed']}: {r['nu']:.4f} ({100 * r['nu_rel_err']:.1f}%)"
                                                 for r in runs if r["neurons"] == k))
-    if os.path.exists(os.path.join(QUANTUM_DIR, "summary.json")):
+    if os.path.exists(os.path.join(results_dir("quantico", TFIN, NU_TRUE), "summary.json")):
         plot_comparison()

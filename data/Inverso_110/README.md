@@ -41,12 +41,40 @@ hardware: a mediana do erro é 1,5% contra 8,4% nas seeds de teste, e 2,2% contr
 validação. O clássico tende a **subestimar** ν (0,086–0,095 na maioria das runs). Nos dois modelos, a
 seed 1 é a mais difícil.
 
-![ν × época, quântico](quantico_fake_berlin/nu_summary_10_E110.png)
-![ν × época, clássico](classico/nu_summary_10_E110.png)
+![ν × época, quântico](quantico/T_0.1/nu_summary_10_E110.png)
+![ν × época, clássico](classico/T_0.1/nu_summary_10_E110.png)
+
+## Quântico com ν = 0,01 (T = 0,1)
+
+Mesmo caso, com a viscosidade verdadeira 10× menor (`--tfin 0.1 --nu 0.01`). Pastas: `quantico/T_0.1_nu_0.01/`
+(otimizador novo) e `quantico/T_0.1_nu_0.01/otimizador_antigo_inner_steps_1/` (o otimizador da tabela acima).
+
+**Por que piora.** Até T = 0,1 o escoamento é quase invíscido: u_t e u u_x quase se cancelam e
+A = u_t + u u_x vale em média 0,28, contra 2,14 com ν = 0,1. O sinal de ν é ~8× menor, e o mesmo erro
+relativo nas derivadas da rede vira um erro ~8× maior em ν. O limite não é o ruído do QPU (no proxy sem
+ruído de shots o erro é o mesmo) nem as diferenças finitas (na solução exata o estimador acerta ν com
+0,02%), e sim a convergência da rede em 110 épocas: com 330 épocas o erro cai à metade. A busca só nos
+hiperparâmetros (80 configurações) não melhorou nada na validação.
+
+**O otimizador novo:** `inner_steps = 16` passos de AdamW por época, todos nos pontos da época e na
+**mesma** medida do QPU (a correção straight-through é mantida). Continuam 110 jobs; os demais
+hiperparâmetros são os de antes.
+
+| Erro de ν, quântico | ν = 0,01, otimizador antigo | ν = 0,01, `inner_steps = 16` | ν = 0,1, `inner_steps = 16` |
+|---|---|---|---|
+| Validação no proxy, 60 runs (seeds 200–219), mediana / média / máx | 14,5% / 21,3% / 82% | **5,7% / 6,7% / 23%** | **1,0% / 1,1% / 3,9%** (antes 2,1% / 3,0% / 10,9%) |
+| Teste no fake, 9 runs (seeds 0, 1, 2), mediana / média / máx | 10,7% / 14,7% / 27,8% | 8,1% / 11,1% / 32,8% | não rodado |
+| L2 relativo de u(x,T) no fake, mediana | 3,9·10⁻² | 1,7·10⁻² | |
+
+No teste no fake o ganho em ν é menor que no proxy (com 9 runs, a diferença está dentro do ruído) e o
+caso 3 qubits, seed 2 piorou (32,8%); u(x,T) melhora mais que o dobro. A calibração foi refeita em
+2026-10-20 (os arquivos antigos sumiram): mesmas cadeias do chip, ajuste estatisticamente equivalente
+(RMS 0,0312 → 0,0312 em 3 qubits). Atenção: `inner_steps = 16` agora é o padrão do script, então rodar de
+novo o caso ν = 0,1 **não** reproduz a tabela acima (feita com 1 passo por época).
 
 ## Comparação dos melhores casos
 
-![comparação](comparacao_classico_quantico_E110.png)
+![comparação](comparacao_classico_quantico_T_0.1_E110.png)
 
 | Melhor caso (menor erro de ν) | ν aprendido | Erro de ν | L2 relativo de u(x, T=0,1) |
 |---|---|---|---|
@@ -83,6 +111,7 @@ seed 1 é a mais difícil.
 | peso dos dados w_d (resíduo = 1) | 85,8 | 37,8 |
 | rampa do resíduo | 20 épocas | 10 épocas |
 | β do varpro, inicial → final | 0,97 → 0,128 | 0,50 → 0,163 |
+| passos de AdamW por época | 1 nas runs acima; 16 no script atual | 1 |
 
 Os valores foram buscados para cada modelo com o mesmo protocolo:
 1. **Busca:** seeds 100–105 × 3 tamanhos.
@@ -108,15 +137,21 @@ No fake, uma run leva ~10 min (3 e 7 qubits) ou ~12,5 min (10 qubits). O clássi
   (`--real`) está no script, mas **não foi executado**.
 - O clássico roda sem ruído, e o quântico com o ruído do hardware simulado.
 - Com 10 pontos ruidosos por época, um lote ruim pode puxar ν para longe. Exemplo: 3 qubits, seed 1,
-  época ~54 em `quantico_fake_berlin/nu_summary_10_E110.png`.
+  época ~54 em `quantico/T_0.1/nu_summary_10_E110.png`.
 
 ## Pastas
 ```
 Inverso_110/
 ├── README.md
-├── comparacao_classico_quantico_E110.png   melhor caso de cada modelo: ν × época e u(x,T)
-├── quantico_fake_berlin/                    calibration_NQ{3,7,10}_fake_berlin.npz + as 9 runs
-└── classico/                                as 9 runs
+├── comparacao_classico_quantico_T_<T>_E110.png   melhor caso de cada modelo: ν × época e u(x,T)
+├── quantico/                                calibration_NQ{3,7,10}_fake_berlin.npz (independe de T)
+│   ├── T_0.1/                               as 9 runs com T = 0,1
+│   ├── T_1.0/                               as runs com T = 1
+│   └── T_0.1_nu_0.01/                       T = 0,1, ν = 0,01 (+ otimizador_antigo_inner_steps_1/)
+└── classico/
+    ├── T_0.1/                               as 9 runs com T = 0,1
+    ├── T_1.0/                               as 9 runs com T = 1
+    └── T_1.0_nu_0.01/                       as 9 runs com T = 1, ν = 0,01
       cada run: model_*.pt, run_*.json, losshist_*.npz (ν e loss por época), validation_*.npz (u(x,T)),
       loss_*.png, nu_history_*.png, solution_*.png; e summary.json, nu_summary_10_E110.png
 ```
@@ -124,8 +159,10 @@ Inverso_110/
 ## Como rodar
 No ambiente conda `qiskit`, a partir da raiz do repositório:
 ```
-python Inverser_quantum_hardware_pinn_E110.py                 # quântico no fake: 3/7/10 qubits × seeds 0/1/2
+python Inverser_quantum_hardware_pinn_E110.py                 # quântico no fake: 3/7/10 qubits × seeds 0/1/2, T = 1
+python Inverser_quantum_hardware_pinn_E110.py --tfin 0.1      # idem com T = 0,1 (o caso da tabela acima)
 python Inverser_quantum_hardware_pinn_E110.py --qubits 3      # só 3 qubits
-python Inverser_classical_pinn_E110.py                        # clássico: 3/7/10 neurônios × seeds 0/1/2 + comparação
-python Inverser_classical_pinn_E110.py --comparar             # só a figura de comparação
+python Inverser_classical_pinn_E110.py                        # clássico: 3/7/10 neurônios × seeds 0/1/2 + comparação, T = 1
+python Inverser_classical_pinn_E110.py --tfin 0.1             # idem com T = 0,1
+python Inverser_classical_pinn_E110.py --tfin 0.1 --comparar  # só a figura de comparação
 ```
