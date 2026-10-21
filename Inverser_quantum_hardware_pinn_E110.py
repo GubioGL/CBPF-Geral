@@ -39,8 +39,9 @@ Usage (conda env `qiskit`):
     python Inverser_quantum_hardware_pinn_E110.py --tfin 0.1                         # final time T = 0.1
     python Inverser_quantum_hardware_pinn_E110.py --tfin 0.1 --nu 0.01               # -> quantico/T_0.1_nu_0.01
     python Inverser_quantum_hardware_pinn_E110.py --real --qubits 3 --seeds 0
-Outputs: calibrations (independent of T, shared) in OUT_DIR/quantico/; runs, summary.json,
-nu_summary_10_E110.png in OUT_DIR/quantico/T_<TFIN>/.
+Outputs: calibrations (independent of T, shared) in OUT_DIR/quantico/; runs and summary.json in
+OUT_DIR/quantico/T_<TFIN>/. The summary figures (nu_summary, comparison with the classical model) are
+made by plot_inverse_E110.py.
 """
 import argparse
 import glob
@@ -56,7 +57,6 @@ from contextlib import nullcontext
 
 import matplotlib
 matplotlib.use("Agg")  # headless backend -- safe across worker processes
-import matplotlib.pyplot as plt
 import numpy as np
 import torch as tc
 
@@ -327,31 +327,8 @@ def run_one(n_qubits, seed, real=False, threads=0, tfin=TFIN, nu_true=NU_TRUE, c
     return out
 
 
-def plot_nu_summary(out_dir, sizes, size_label, prefix, nu_true=NU_TRUE):
-    """nu vs epoch of the runs saved in `out_dir`: one panel per size (qubits or neurons),
-    one line per seed (losshist_<N_COLLOCATION>_<prefix><size>_<seed>_E<EPOCHS>.npz)."""
-    colors = ("#2a78d6", "#eb6834", "#1baf7a")   # categorical slots 1-3, fixed order
-    fig, axes = plt.subplots(1, len(sizes), figsize=(4.2 * len(sizes), 3.6), sharey=True, squeeze=False)
-    for ax, size in zip(axes[0], sizes):
-        for color, s in zip(colors, SEEDS):
-            nu = np.load(os.path.join(out_dir, f"losshist_{N_COLLOCATION}_{prefix}{size}_{s}_E{EPOCHS}.npz"))["nu"]
-            ax.plot(np.arange(1, len(nu) + 1), nu, color=color, linewidth=2.0, label=f"seed {s}: nu = {nu[-1]:.4f}")
-        ax.axhline(nu_true, color="#6b6a64", linestyle="--", linewidth=1.2, label=f"target {nu_true:g}")
-        ax.set_yscale("log")
-        ax.set_title(f"{size} {size_label}", fontsize=12)
-        ax.set_xlabel("Epochs")
-        ax.grid(True, linestyle="--", alpha=0.4)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.legend(fontsize=8, frameon=False)
-    axes[0][0].set_ylabel("learned nu")
-    fig.tight_layout()
-    fig.savefig(os.path.join(out_dir, f"nu_summary_{N_COLLOCATION}_E{EPOCHS}.png"), dpi=150)
-    plt.close(fig)
-
-
 def summarize(out_dir, tfin, nu_true):
-    """summary.json and nu_summary of every run saved in out_dir; returns the runs."""
+    """summary.json of every run saved in out_dir; returns the runs."""
     runs = sorted((json.load(open(p)) for p in glob.glob(os.path.join(out_dir, f"run_*_E{EPOCHS}.json"))),
                   key=lambda r: (r["n_qubits"], r["seed"]))
     for r in runs:
@@ -362,9 +339,6 @@ def summarize(out_dir, tfin, nu_true):
         json.dump(dict(config=CONFIG, nu_true=nu_true, Tfin=tfin, n_collocation=N_COLLOCATION, epochs=EPOCHS,
                        data="exact solution at the collocation points", nu_rel_err_median=float(np.median(err)),
                        nu_rel_err_mean=float(err.mean()), nu_rel_err_max=float(err.max()), runs=runs), f, indent=1)
-    done = sorted({r["n_qubits"] for r in runs if sum(q["n_qubits"] == r["n_qubits"] for q in runs) == len(SEEDS)})
-    if done:
-        plot_nu_summary(out_dir, done, "qubits", "NQ", nu_true)
     return runs
 
 

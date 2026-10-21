@@ -41,8 +41,8 @@ hardware: a mediana do erro é 1,5% contra 8,4% nas seeds de teste, e 2,2% contr
 validação. O clássico tende a **subestimar** ν (0,086–0,095 na maioria das runs). Nos dois modelos, a
 seed 1 é a mais difícil.
 
-![ν × época, quântico](quantico/T_0.1/nu_summary_10_E110.png)
-![ν × época, clássico](classico/T_0.1/nu_summary_10_E110.png)
+![ν × época, quântico](nu_summary_quantico_T_0.1_E110.png)
+![ν × época, clássico](nu_summary_classico_T_0.1_E110.png)
 
 ## Quântico com ν = 0,01 (T = 0,1)
 
@@ -137,13 +137,14 @@ No fake, uma run leva ~10 min (3 e 7 qubits) ou ~12,5 min (10 qubits). O clássi
   (`--real`) está no script, mas **não foi executado**.
 - O clássico roda sem ruído, e o quântico com o ruído do hardware simulado.
 - Com 10 pontos ruidosos por época, um lote ruim pode puxar ν para longe. Exemplo: 3 qubits, seed 1,
-  época ~54 em `quantico/T_0.1/nu_summary_10_E110.png`.
+  época ~54 em `nu_summary_quantico_T_0.1_E110.png`.
 
 ## Pastas
 ```
 Inverso_110/
 ├── README.md
-├── comparacao_classico_quantico_T_<T>_E110.png   melhor caso de cada modelo: ν × época e u(x,T)
+├── comparacao_classico_quantico_<caso>_E110.png  melhor caso de cada modelo: ν × época e u(x,T)
+├── nu_summary_<quantico|classico>_<caso>_E110.png  ν × época de todas as runs de um modelo
 ├── quantico/                                calibration_NQ{3,7,10}_fake_berlin.npz (independe de T)
 │   ├── T_0.1/                               as 9 runs com T = 0,1
 │   ├── T_1.0/                               as runs com T = 1
@@ -153,7 +154,7 @@ Inverso_110/
     ├── T_1.0/                               as 9 runs com T = 1
     └── T_1.0_nu_0.01/                       as 9 runs com T = 1, ν = 0,01
       cada run: model_*.pt, run_*.json, losshist_*.npz (ν e loss por época), validation_*.npz (u(x,T)),
-      loss_*.png, nu_history_*.png, solution_*.png; e summary.json, nu_summary_10_E110.png
+      loss_*.png, nu_history_*.png, solution_*.png; e summary.json
 ```
 
 ## Como rodar
@@ -162,7 +163,12 @@ No ambiente conda `qiskit`, a partir da raiz do repositório:
 python Inverser_quantum_hardware_pinn_E110.py                 # quântico no fake: 3/7/10 qubits × seeds 0/1/2, T = 1
 python Inverser_quantum_hardware_pinn_E110.py --tfin 0.1      # idem com T = 0,1 (o caso da tabela acima)
 python Inverser_quantum_hardware_pinn_E110.py --qubits 3      # só 3 qubits
-python Inverser_classical_pinn_E110.py                        # clássico: 3/7/10 neurônios × seeds 0/1/2 + comparação, T = 1
+python Inverser_classical_pinn_E110.py                        # clássico: 3/7/10 neurônios × seeds 0/1/2, T = 1
 python Inverser_classical_pinn_E110.py --tfin 0.1             # idem com T = 0,1
-python Inverser_classical_pinn_E110.py --tfin 0.1 --comparar  # só a figura de comparação
+python plot_inverse_E110.py                                   # figuras em Inverso_110/: nu_summary + comparação, todos os casos
+python plot_inverse_E110.py --tfin 0.1                        # só o caso T = 0,1 (ν = 0,1); --nu 0.01 para T_0.1_nu_0.01
 ```
+Os scripts de simulação salvam só as runs e o summary.json; as figuras de resumo
+(`nu_summary_<modelo>_<caso>_E110.png`, `comparacao_classico_quantico_<caso>_E110.png`, todas em `Inverso_110/`)
+saem de `plot_inverse_E110.py`,
+que lê os `losshist_*.npz` e `validation_*.npz` (esses arquivos não vão para o git).
