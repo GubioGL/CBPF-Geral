@@ -11,7 +11,7 @@ __pycache__/
 *.svg
 
 # Large numpy arrays (too big for GitHub)
-*.npz
+#*.npz
 
 # Temp folder
 tmp/

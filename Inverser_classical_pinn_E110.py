@@ -10,21 +10,19 @@ pre-net (3 -> 10 -> k) -> net (k -> 10 -> k) -> post-net (k -> 10 -> 1), tanh, p
 
 Every epoch, N_COLLOCATION fresh random points (x_c, t_c) are used for the PDE residual
 (finite differences on the 5-point stencil) AND as data (the exact Cole-Hopf solution there).
-Training: AdamW for the network, loss = ramp * MAE(residual) + W_D * MAE(data); "varpro" for nu
+Training: AdamW for the network, loss = ramp * MAE(residual) + W_D * MAE(data), inner_steps steps
+per epoch on the epoch's points; "varpro" for nu
 alone, in log space: log nu relaxed towards the |B|-weighted median of A/B (residual = A - nu*B).
 
-Outputs: OUT_DIR/classico/T_<TFIN>/. At the end, if the quantum runs for the same TFIN exist
-(OUT_DIR/quantico/T_<TFIN>/summary.json), compares the best run of each model: learned nu vs epoch
-and u(x, TFIN) (OUT_DIR/comparacao_classico_quantico_T_<TFIN>_E110.png).
+Outputs: OUT_DIR/classico/T_<TFIN>/. The summary figures (nu_summary, comparison with the quantum
+model) are made by plot_inverse_E110.py.
 
 Usage (conda env `qiskit` or any env with torch + scipy):
-    python Inverser_classical_pinn_E110.py               # 3/7/10 neurons x seeds 0/1/2 + comparison, T = TFIN
+    python Inverser_classical_pinn_E110.py               # 3/7/10 neurons x seeds 0/1/2, T = TFIN
     python Inverser_classical_pinn_E110.py --tfin 0.1    # same, final time T = 0.1
     python Inverser_classical_pinn_E110.py --nu 0.01     # same, true viscosity 0.01 (-> classico/T_1.0_nu_0.01)
-    python Inverser_classical_pinn_E110.py --comparar    # only the comparison
 """
 import argparse
-import glob
 import json
 import math
 import os
@@ -33,7 +31,6 @@ import time
 
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import torch as tc
 
@@ -59,6 +56,7 @@ CONFIG = dict(
     r_ramp=10,                # epochs over which the residual weight ramps up from 0
     w_d=37.8,                 # data weight (the residual weight is 1)
     lr_nu=0.50, lr_nu_min=0.163,   # varpro relaxation factor beta, cosine decay
+    inner_steps=16,           # AdamW steps per epoch, all on the epoch's points (as in the quantum script)
 )
 
 OUT_DIR = os.path.join("data", "Inverso_110")
@@ -126,13 +124,15 @@ def train(model, seed, cfg=CONFIG, Tfin=TFIN, n_col=N_COLLOCATION, epochs=EPOCHS
         x_f = tc.rand((n_col, 1), generator=generator) * L
         t_f = HT + tc.rand((n_col, 1), generator=generator) * (Tfin - 2.0 * HT)
         xt = stencil_inputs(x_f, t_f, L, HX, HT)   # 5 blocks of n_col rows, the centres first
-        a, b, loss_r, loss_d = loss_terms(model, xt, n_col, exact_at(x_f, t_f))
+        u_data = exact_at(x_f, t_f)
 
         ramp = min(1.0, (epoch + 1) / cfg["r_ramp"])
-        opt.zero_grad()
-        (ramp * loss_r + cfg["w_d"] * loss_d).backward(inputs=net_params)
-        tc.nn.utils.clip_grad_norm_(net_params, cfg["grad_clip"])
-        opt.step()
+        for _ in range(cfg.get("inner_steps", 1)):
+            a, b, loss_r, loss_d = loss_terms(model, xt, n_col, u_data)
+            opt.zero_grad()
+            (ramp * loss_r + cfg["w_d"] * loss_d).backward(inputs=net_params)
+            tc.nn.utils.clip_grad_norm_(net_params, cfg["grad_clip"])
+            opt.step()
 
         nu_star = min(max(nu_minimizer(a, b), 1.0e-4), 10.0)
         log_nu += beta * (math.log(nu_star) - log_nu)
@@ -183,103 +183,22 @@ def run_one(neurons, seed, out_dir):
     return out
 
 
-def plot_nu_summary(out_dir, sizes, size_label, prefix):
-    """nu vs epoch of the runs saved in `out_dir`: one panel per size (qubits or neurons),
-    one line per seed (losshist_<N_COLLOCATION>_<prefix><size>_<seed>_E<EPOCHS>.npz)."""
-    colors = ("#2a78d6", "#eb6834", "#1baf7a")   # categorical slots 1-3, fixed order
-    fig, axes = plt.subplots(1, len(sizes), figsize=(4.2 * len(sizes), 3.6), sharey=True, squeeze=False)
-    for ax, size in zip(axes[0], sizes):
-        for color, s in zip(colors, SEEDS):
-            nu = np.load(os.path.join(out_dir, f"losshist_{N_COLLOCATION}_{prefix}{size}_{s}_E{EPOCHS}.npz"))["nu"]
-            ax.plot(np.arange(1, len(nu) + 1), nu, color=color, linewidth=2.0, label=f"seed {s}: nu = {nu[-1]:.4f}")
-        ax.axhline(NU_TRUE, color="#6b6a64", linestyle="--", linewidth=1.2, label=f"target {NU_TRUE:g}")
-        ax.set_yscale("log")
-        ax.set_title(f"{size} {size_label}", fontsize=12)
-        ax.set_xlabel("Epochs")
-        ax.grid(True, linestyle="--", alpha=0.4)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.legend(fontsize=8, frameon=False)
-    axes[0][0].set_ylabel("learned nu")
-    fig.tight_layout()
-    fig.savefig(os.path.join(out_dir, f"nu_summary_{N_COLLOCATION}_E{EPOCHS}.png"), dpi=150)
-    plt.close(fig)
-
-
-# ----------------------------------------------------------------------
-# Comparison: best classical run vs best quantum run
-# ----------------------------------------------------------------------
-def best_run(folder, size_key, prefix):
-    """Run of `folder` with the smallest nu error, with its nu history and u(x, TFIN)."""
-    runs = [json.load(open(p)) for p in glob.glob(os.path.join(folder, f"run_*_E{EPOCHS}.json"))]
-    best = min(runs, key=lambda r: r["nu_rel_err"])
-    tag = f"{N_COLLOCATION}_{prefix}{best[size_key]}_{best['seed']}_E{EPOCHS}"
-    val = np.load(os.path.join(folder, f"validation_{tag}.npz"))
-    u = val["u_qpu"] if "u_qpu" in val.files else val["u_pred"]
-    return best, np.load(os.path.join(folder, f"losshist_{tag}.npz"))["nu"], val["x"], u, val["u_exact"]
-
-
-def plot_comparison():
-    classical, nu_c, x, u_c, u_ref = best_run(results_dir("classico", TFIN, NU_TRUE), "neurons", "NE")
-    quantum, nu_q, x_q, u_q, _ = best_run(results_dir("quantico", TFIN, NU_TRUE), "n_qubits", "NQ")
-    l2_c, l2_q = relative_l2_error(u_c, u_ref), relative_l2_error(u_q, u_ref)
-    label_c = (f"classical ({classical['neurons']} neurons, seed {classical['seed']}): "
-               f"nu = {classical['nu']:.5f} ({100 * classical['nu_rel_err']:.2f}%)")
-    label_q = (f"quantum, fake QPU ({quantum['n_qubits']} qubits, seed {quantum['seed']}): "
-               f"nu = {quantum['nu']:.5f} ({100 * quantum['nu_rel_err']:.2f}%)")
-    blue, orange, ink = "#2a78d6", "#eb6834", "#6b6a64"
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12.5, 4.2))
-    epochs = np.arange(1, EPOCHS + 1)
-    ax1.plot(epochs, nu_c, color=blue, linewidth=2.0, label=label_c)
-    ax1.plot(epochs, nu_q, color=orange, linewidth=2.0, label=label_q)
-    ax1.axhline(NU_TRUE, color=ink, linestyle="--", linewidth=1.2, label=f"target nu = {NU_TRUE:g}")
-    ax1.set_yscale("log")
-    ax1.set_xlabel("Epochs")
-    ax1.set_ylabel("learned nu")
-    ax1.set_title("Learned viscosity")
-    ax1.legend(fontsize=8, frameon=False, loc="lower right")
-
-    ax2.plot(x.ravel(), u_ref.ravel(), color=ink, linewidth=3.0, label="exact (Cole-Hopf)")
-    ax2.plot(x.ravel(), u_c.ravel(), color=blue, linewidth=2.0, linestyle="--", label=f"classical: rel. L2 = {l2_c:.2e}")
-    ax2.plot(x_q.ravel(), u_q.ravel(), color=orange, linewidth=2.0, linestyle="--",
-             label=f"quantum on the fake QPU: rel. L2 = {l2_q:.2e}")
-    ax2.set_xlabel("x")
-    ax2.set_ylabel(f"u(x, T={TFIN})")
-    ax2.set_title(f"Solution at the final time T = {TFIN}")
-    ax2.legend(fontsize=8, frameon=False)
-    for ax in (ax1, ax2):
-        ax.grid(True, linestyle="--", alpha=0.4)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-    fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, f"comparacao_classico_quantico_{case_tag(TFIN, NU_TRUE)}_E{EPOCHS}.png"), dpi=150)
-    plt.close(fig)
-    print(f"best classical: {label_c}, rel. L2 of u(x,T) {l2_c:.2e}")
-    print(f"best quantum:   {label_q}, rel. L2 of u(x,T) {l2_q:.2e}")
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tfin", type=float, default=TFIN, help=f"tempo final T (padrão {TFIN})")
     parser.add_argument("--nu", type=float, default=NU_TRUE, help=f"viscosidade verdadeira (padrão {NU_TRUE})")
-    parser.add_argument("--comparar", action="store_true", help="só a comparação clássico x quântico")
     args = parser.parse_args()
     TFIN, NU_TRUE = args.tfin, args.nu
 
-    if not args.comparar:
-        out_dir = results_dir("classico", TFIN, NU_TRUE)
-        os.makedirs(out_dir, exist_ok=True)
-        runs = [run_one(k, s, out_dir) for k in NEURONS for s in SEEDS]
-        err = np.array([r["nu_rel_err"] for r in runs])
-        with open(os.path.join(out_dir, "summary.json"), "w") as f:
-            json.dump(dict(config=CONFIG, nu_true=NU_TRUE, Tfin=TFIN, n_collocation=N_COLLOCATION, epochs=EPOCHS,
-                           data="exact solution at the collocation points", nu_rel_err_median=float(np.median(err)),
-                           nu_rel_err_mean=float(err.mean()), nu_rel_err_max=float(err.max()), runs=runs), f, indent=1)
-        plot_nu_summary(out_dir, NEURONS, "neurons", "NE")
-        print(f"classical: NU={NU_TRUE}, T={TFIN}, N_col={N_COLLOCATION}, {EPOCHS} epochs -- learned nu (relative error)")
-        for k in NEURONS:
-            print(f"  {k:2d} neurons " + "  ".join(f"seed {r['seed']}: {r['nu']:.4f} ({100 * r['nu_rel_err']:.1f}%)"
-                                                for r in runs if r["neurons"] == k))
-    if os.path.exists(os.path.join(results_dir("quantico", TFIN, NU_TRUE), "summary.json")):
-        plot_comparison()
+    out_dir = results_dir("classico", TFIN, NU_TRUE)
+    os.makedirs(out_dir, exist_ok=True)
+    runs = [run_one(k, s, out_dir) for k in NEURONS for s in SEEDS]
+    err = np.array([r["nu_rel_err"] for r in runs])
+    with open(os.path.join(out_dir, "summary.json"), "w") as f:
+        json.dump(dict(config=CONFIG, nu_true=NU_TRUE, Tfin=TFIN, n_collocation=N_COLLOCATION, epochs=EPOCHS,
+                       data="exact solution at the collocation points", nu_rel_err_median=float(np.median(err)),
+                       nu_rel_err_mean=float(err.mean()), nu_rel_err_max=float(err.max()), runs=runs), f, indent=1)
+    print(f"classical: NU={NU_TRUE}, T={TFIN}, N_col={N_COLLOCATION}, {EPOCHS} epochs -- learned nu (relative error)")
+    for k in NEURONS:
+        print(f"  {k:2d} neurons " + "  ".join(f"seed {r['seed']}: {r['nu']:.4f} ({100 * r['nu_rel_err']:.1f}%)"
+                                            for r in runs if r["neurons"] == k))
