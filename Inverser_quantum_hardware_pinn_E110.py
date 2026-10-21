@@ -46,6 +46,7 @@ import argparse
 import glob
 import json
 import math
+import multiprocessing
 import os
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 import sys
@@ -391,7 +392,9 @@ if __name__ == "__main__":
             run_one(n, s, real=True, tfin=args.tfin, nu_true=args.nu)
     else:
         threads = max(1, (os.cpu_count() or 2) // args.workers)
-        with ProcessPoolExecutor(args.workers) as pool:
+        # spawn, not fork (the Linux default): the parent already holds OpenMP threads from the
+        # calibration, and forked workers deadlock on their locks
+        with ProcessPoolExecutor(args.workers, mp_context=multiprocessing.get_context("spawn")) as pool:
             list(pool.map(_run_job, [(n, s, False, threads, args.tfin, args.nu) for n, s in jobs]))
 
     runs = summarize(out_dir, args.tfin, args.nu)
