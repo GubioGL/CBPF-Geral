@@ -1,4 +1,6 @@
-% Stand-alone preview of Fig. 1 (pdflatex schematic_preview.tex). The manuscript \input-s schematic.tex.
+% Stand-alone preview of Fig. 1. From manuscript/:
+%   pdflatex -output-directory=figures figures/schematic_preview.tex
+% The manuscript \input-s figures/schematic.tex.
 \documentclass[border=4pt]{standalone}
 \usepackage{amsmath,amssymb,bm}
 \usepackage{tikz}
@@ -6,5 +8,5 @@
 \definecolor{qcol}{HTML}{EB6834}
 \definecolor{ccol}{HTML}{2A78D6}
 \begin{document}
-\input{schematic.tex}
+\input{figures/schematic.tex}
 \end{document}

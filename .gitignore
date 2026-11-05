@@ -1,27 +1,27 @@
-
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
+.ipynb_checkpoints/
+.venv/
+env/
+*.env
+*.dev
+*.so
 
-# Images
+# Kept on your machine only (IBM Quantum helpers / credentials); see README
+src/quantum_hardware/
+quantum_hardware/
+tmp/
+
+# Images: figures are committed as PDF. PNGs are local previews.
 *.png
 *.jpg
 *.jpeg
 *.gif
 *.svg
 
-# Large numpy arrays (too big for GitHub)
-#*.npz
+# Git bundles of the two repositories merged here: a local safety copy
+archive/
 
-# Temp folder
-tmp/
-quantum_hardware/
-
-# Optional: compiled C extensions
-*.so
-
-# Environment files
-*.dev
-*.env
-env/
-.venv/
+# Temporary test folder
+.tmp/

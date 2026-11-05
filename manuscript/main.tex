@@ -9,11 +9,14 @@
 \usepackage{amsmath,amssymb}
 \usepackage{xcolor}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit,backgrounds}
 \usepackage{hyperref}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit,backgrounds}
+
 
 % ---------------------------------------------------------------------
-% Colours used consistently in every figure (quantum/QPU = orange, classical = blue, FakeBerlin = aqua)
+% Colours used consistently in the figures: classical = blue, HQPINN (noiseless and on the real QPU) = orange,
+% HQPINN on a noisy emulator = aqua. Fig. 3 is the exception, at the author's request: classical = black, one colour
+% per width for the HQPINN.
 \definecolor{qcol}{HTML}{EB6834}
 \definecolor{ccol}{HTML}{2A78D6}
 \definecolor{fcol}{HTML}{1BAF7A}
@@ -25,6 +28,7 @@
 \newtheorem{proposition}{Proposition}
 \newtheorem{remark}{Remark}
 \newcommand{\sg}{\operatorname{sg}}
+\newcommand{\wmed}{\operatorname{wmed}}
 \newcommand{\Ncol}{N_{\rm col}}
 
 % Algorithms without extra packages: numbered, ruled, non-floating blocks
@@ -42,10 +46,10 @@
 
 \begin{document}
 
-\title{Training a physics-informed neural network with a fixed quantum layer on a superconducting quantum processor}
+\title{Hybrid quantum physics-informed neural networks with a fixed quantum layer for forward and inverse problems}
 % Alternative titles:
-%  - "Hybrid quantum physics-informed neural networks trained with the quantum processor in the loop"
-%  - "A non-variational quantum layer for physics-informed learning, from noiseless simulation to 80 superconducting qubits"
+%  - "A non-variational quantum layer for physics-informed learning: forward and inverse problems, from simulation to a superconducting processor"
+%  - "Training a physics-informed neural network with a fixed quantum layer on a superconducting quantum processor"
 
 \author{Gubio G. de Lima}
 \email{gubio.gomes@estudante.ufscar.br}
@@ -55,7 +59,7 @@
 \affiliation{\TODO{afilia\c{c}\~ao}}
 
 \begin{abstract}
-\TODO{Resumo -- a escrever por \'ultimo.}
+We study a physics-informed neural network whose middle block is a fixed quantum circuit with no trainable parameters, on the forward and inverse problems of the viscous Burgers equation. In the forward problem, with one common protocol and noiseless simulation, the hybrid model reaches the error of a classical network of the same form with about half of the optimizer steps and fewer parameters at the short horizon, and a lower error at the long horizon. Trained with a 120-qubit superconducting processor in the loop, with one job per epoch and no error mitigation, it reaches a relative error of 5.7\% in 110 epochs at the short horizon. In the inverse problem, with the quantum layer on a noisy emulator of the device, both models identify the viscosity with a median error below 3\% in 500 epochs at the short horizon, with no significant difference between them; at the long horizon neither identifies it accurately (median 21\% and 30\%), and the classical model reconstructs the field better in all cases. Since the noiseless layer is classically computable, the simulations measure the merit of an architecture, not a quantum advantage. \TODO{Rascunho do resumo. Faltam os resultados no QPU real: problema direto em $T=1$ e problema inverso nos dois $T$.}
 \end{abstract}
 
 \maketitle
@@ -63,74 +67,124 @@
 % =====================================================================
 \section{Introduction}\label{sec:intro}
 % =====================================================================
-\TODO{Introdu\c{c}\~ao -- a escrever.}
-% Suggested storyline (structure modelled on Refs. [havlicek2019supervised, wright2022deep, kyriienko2021solving]):
-%  1. PINNs [raissi2019physics, karniadakis2021physics] and their training pathologies at small collocation
-%     budgets and long horizons [krishnapriyan2021characterizing, wang2021understanding, wang2022when].
-%  2. Quantum circuits for differential equations [lubasch2020variational, kyriienko2021solving, paine2023quantum]
-%     and hybrid quantum PINNs [sedykh2024hybrid, berger2025trainable, farea2025qcpinn, lantigua2026classical,
-%     zabihi2026hybrid]: trainable (variational) circuits, noiseless simulation, barren plateaus
-%     [mcclean2018barren, cerezo2021cost], gradients by parameter shift [mitarai2018quantum, schuld2019evaluating].
-%  3. Fixed (non-variational) quantum feature maps exist [havlicek2019supervised, fujii2017harnessing,
-%     mujal2021opportunities, henderson2020quanvolutional] but not inside a physics-informed residual.
-%  4. Gap: no PINN has been TRAINED on a quantum processor; the FD residual amplifies shot noise.
-%  5. This work: fixed quantum layer + calibrated trigonometric surrogate + straight-through gradient
-%     (physics-aware training [wright2022deep]); same-protocol comparison in simulation (2800 runs per model);
-%     training with 80 qubits of ibm_berlin in the loop (1 job per epoch); honest framing with respect to
-%     classical surrogates [schreiber2023classical].
-%  6. Outline.
+\TODO{Rascunho da introdu\c{c}\~ao, a revisar.}
+Physics-informed neural networks (PINNs)~\cite{raissi2019physics,karniadakis2021physics} represent the solution of a partial differential equation (PDE) by a neural network trained on the residual of the equation. The same construction addresses two tasks: the \emph{forward} problem, in which the equation is known and its solution is sought, and the \emph{inverse} problem, in which an unknown parameter of the equation is learned together with the solution from sparse data~\cite{raissi2019physics}. Training a PINN is delicate at small collocation budgets and long time horizons~\cite{krishnapriyan2021characterizing,wang2021understanding,wang2022when}, which motivates the search for other functional forms of the network.
+
+Quantum circuits have been proposed both as solvers of differential equations~\cite{lubasch2020variational,kyriienko2021solving,paine2023quantum} and as layers of hybrid PINNs~\cite{sedykh2024hybrid,berger2025trainable,farea2025qcpinn,lantigua2026classical,zabihi2026hybrid}. In these hybrid PINNs the circuit is trainable, which exposes the optimization to barren plateaus~\cite{mcclean2018barren,cerezo2021cost} and requires gradients of the device output, for example by parameter-shift rules~\cite{mitarai2018quantum,schuld2019evaluating}, and the results come from noiseless simulation. Fixed, non-variational quantum maps have been studied as feature maps~\cite{havlicek2019supervised}, reservoirs~\cite{fujii2017harnessing,mujal2021opportunities} and convolutional filters~\cite{henderson2020quanvolutional}, but not inside a physics-informed residual. To our knowledge, no PINN has been trained with a quantum processor in the loop. \TODO{confirmar as duas afirma\c{c}\~oes na revis\~ao bibliogr\'afica antes de submeter.} An obstacle is specific to this setting: the finite differences of the residual amplify the shot noise of the device.
+
+Here we use a fixed quantum layer between two classical networks, and the same model and training machinery for both problems. All trainable parameters are classical. Since noise changes the coefficients of the layer but not its functional form, a calibrated classical surrogate of the device supplies the gradient and a noise-free interpolation across the finite-difference stencil, in a scheme analogous to physics-aware training of physical neural networks~\cite{wright2022deep}. In the inverse problem the viscosity enters the residual linearly and is updated in closed form by variable projection~\cite{golub1973differentiation}.
+
+We report four sets of results for the viscous Burgers equation, against a classical PINN of the same form: the forward problem in simulation (Sec.~\ref{sec:f_sim}) and with the \texttt{ibm\_berlin} processor in the loop (Sec.~\ref{sec:f_qpu}), and the inverse problem in simulation with noisy emulators of the device (Sec.~\ref{sec:i_sim}) and on real hardware (Sec.~\ref{sec:i_qpu}, still pending). Because the noiseless layer is classically computable, the simulations measure the merit of an architecture rather than a quantum advantage~\cite{schreiber2023classical}. Section~\ref{sec:hqpinn} describes the model for both problems, Secs.~\ref{sec:forward} and~\ref{sec:inverse} give the results, and Secs.~\ref{sec:discussion} and~\ref{sec:conclusions} close the paper. The technical details of each of the four sets of results are in Appendices~\ref{app:fsim}, \ref{app:fqpu}, \ref{app:isim} and~\ref{app:iqpu}, respectively.
 
 % =====================================================================
-\section{Theoretical framework}\label{sec:theory}
+\section{Hybrid quantum PINN}\label{sec:hqpinn}
 % =====================================================================
-
-\subsection{Benchmark problem}\label{sec:problem}
-We solve the viscous Burgers equation on the periodic unit interval,
+\subsection{Forward and inverse problems}\label{sec:problem}
+We consider the viscous Burgers equation on the periodic unit interval,
 \begin{equation}
   \partial_t u + u\,\partial_x u = \nu\,\partial_x^2 u,\qquad x\in[0,1),\ t\in[0,T],
   \label{eq:burgers}
 \end{equation}
-with $u(x+1,t)=u(x,t)$, $u(x,0)=\sin(2\pi x)$ and $\nu=0.01$. Equation~\eqref{eq:burgers} is the simplest partial differential equation (PDE) that combines nonlinear advection with diffusion~\cite{basdevant1986spectral}: for $\nu=0.01$ the initial sine steepens into a front at $x=1/2$, which is already sharp at $T=0.1$; at $T=1$ the wave has been strongly damped ($\|u\|_{\rm rms}\simeq0.21$) and the problem is harder for the networks because the solution has to be propagated over a ten times longer horizon. We consider the \emph{forward} problem: $\nu$ is known and no solution data enter the training. A reference solution $u_{\rm FDM}$ is computed by explicit finite differences (Appendix~\ref{app:reference}) and is used only for evaluation. The accuracy of a model is measured on $u(x,T)$ at 200 equispaced points by the mean squared error (MSE) and the relative $L_2$ error $\epsilon_{L_2}=\|u-u_{\rm FDM}\|_2/\|u_{\rm FDM}\|_2$. A model that does not evolve the initial condition, $u(x,T)=\sin2\pi x$, has $\mathrm{MSE}=3.93\times10^{-2}$ at $T=0.1$ and $2.82\times10^{-1}$ at $T=1$; we refer to this as the \emph{no-evolution level}.
+with $u(x,0)=\sin(2\pi x)$. Equation~\eqref{eq:burgers} is the simplest PDE that combines nonlinear advection with diffusion~\cite{basdevant1986spectral}. We use $\nu=0.01$ and two horizons. The inviscid solution breaks at $t=1/(2\pi)\simeq0.16$. At $T=0.1$ the profile has steepened ($\max_x|\partial_xu|\simeq13.6$, against $2\pi$ at $t=0$) but no shock has formed yet. At $T=1$ a viscous shock sits at $x=1/2$ and the wave has been strongly damped ($\max_xu$ drops from 0.96 at $T=0.1$ to 0.33, with $\|u\|_{\rm rms}\simeq0.21$), and the problem is harder.
 
-\subsection{Physics-informed neural networks}\label{sec:pinn}
-A physics-informed neural network (PINN)~\cite{raissi2019physics,karniadakis2021physics} represents the solution by a parametrized function $u_\Theta(x,t)$ and determines the parameters $\Theta$ by minimizing the residual of the PDE at a set of collocation points $\{(x_i,t_i)\}_{i=1}^{\Ncol}$,
+In the \emph{forward problem} $\nu$ is known and $u$ is sought, with no solution data in the training. In the \emph{inverse problem} $\nu$ is unknown, and it is recovered together with $u$ from sparse observations
 \begin{equation}
-  \mathcal L(\Theta)=\frac{1}{\Ncol}\sum_{i=1}^{\Ncol} r_i^2,
-  \label{eq:loss}
+  \mathcal D=\{(x_i,t_i,u^\star_i)\}_{i=1}^{\Ncol},\qquad u^\star_i=u(x_i,t_i;\nu_{\rm true})+\varepsilon_i,
+  \label{eq:data}
 \end{equation}
-with $r_i=\big(\partial_t u_\Theta+u_\Theta\,\partial_x u_\Theta-\nu\,\partial_x^2u_\Theta\big)(x_i,t_i)$.
-Boundary and initial conditions are usually added as penalty terms; here both are imposed exactly by construction~\cite{lagaris1998artificial}. The network acts on the periodic feature vector $\bm\xi(x,t)=(\sin2\pi x,\cos2\pi x,t/T)$ and its output enters
+here given by the exact solution (Appendix~\ref{app:colehopf}) with $\nu_{\rm true}=0.01$ and $\varepsilon_i=0$. This is a controlled first step towards the seismic inverse problem, in which a wave speed $c(x)$ plays the role of $\nu$. In both problems the residual of Eq.~\eqref{eq:burgers} is written as
 \begin{equation}
-  u_\Theta(x,t)=\sin(2\pi x)+\frac{t}{T}\,\big(\mathcal N_{\rm post}\circ\mathcal M\circ\mathcal N_{\rm pre}\big)\big(\bm\xi(x,t)\big),
+  r=A-\nu\,B,\qquad A=\partial_tu+u\,\partial_xu,\qquad B=\partial_x^2u,
+  \label{eq:residual}
+\end{equation}
+which makes explicit that $\nu$ enters linearly.
+
+\subsection{Architecture}\label{sec:arch}
+A PINN~\cite{raissi2019physics,karniadakis2021physics} represents the solution by a parametrized function $u_\Theta(x,t)$. Before entering the network, the inputs are mapped to the periodic feature vector $\bm\xi(x,t)=(\sin2\pi x,\cos2\pi x,t/T)$, so that periodicity is exact. The initial condition can be imposed in two ways. With a \emph{soft constraint} it enters the loss as a penalty, whose weight has to be balanced against the residual, a known source of training difficulties~\cite{wang2021understanding,krishnapriyan2021characterizing}. With a \emph{hard constraint} it is built into the form of the solution~\cite{lagaris1998artificial},
+\begin{equation}
+  u_\Theta(x,t)=\sin(2\pi x)+\frac{t}{T}\,\big(\mathcal N_{\rm post}\circ\mathcal M\circ\mathcal N_{\rm pre}\big)\big(\bm\xi(x,t)\big).
   \label{eq:composition}
 \end{equation}
-so that $u_\Theta$ is exactly 1-periodic in $x$ and equals the initial condition at $t=0$, and Eq.~\eqref{eq:loss} is the complete loss. The classical pre-network $\mathcal N_{\rm pre}(\cdot;\bm\phi):\mathbb R^3\to\mathbb R^n$ (one hidden layer of 10 $\tanh$ units, linear output) maps the features to a latent vector $\bm\theta\in\mathbb R^n$, a middle block $\mathcal M:\mathbb R^n\to\mathbb R^n$ transforms it into $\bm y$, and the classical post-network $\mathcal N_{\rm post}(\cdot;\bm\psi):\mathbb R^n\to\mathbb R$ (one hidden layer of 10 $\tanh$ units) produces the correction to the initial profile [Fig.~\ref{fig:schematic}(a)]. The width $n$ of the latent space is the only size parameter of the model. The classical PINN and the hybrid quantum PINN (HQPINN) differ \emph{only} in $\mathcal M$, so that any difference in their behaviour can be attributed to the middle block.
+We use the hard constraint everywhere except in the inverse problem at $T=1$, where the soft constraint gave better results in training tests (Appendix~\ref{app:adjust}).
 
-The derivatives in $r_i$ are computed by second-order central differences of the network itself on the five-point stencil $\{(x_i,t_i),(x_i\pm h,t_i),(x_i,t_i\pm\tau)\}$ with $h=1/512$ and $\tau=10^{-3}$ [Fig.~\ref{fig:schematic}(b)], rather than by automatic differentiation with respect to the inputs. This choice is dictated by the hardware: a quantum processor returns function values, not derivatives with respect to $(x,t)$, and all stencil nodes of a batch can be evaluated in a single pass. The truncation error of the stencil is negligible at the accuracy reached here (Appendix~\ref{app:ste}). At every optimizer step a fresh set of $\Ncol$ collocation points is drawn uniformly in $[0,1)\times[\tau,T-\tau]$.
-
-In the \emph{classical PINN} the middle block is a trainable network,
+The classical pre-network $\mathcal N_{\rm pre}(\cdot;\bm\phi):\mathbb R^3\to\mathbb R^n$ maps the features to a latent vector $\bm\theta\in\mathbb R^n$, a middle block $\mathcal M:\mathbb R^n\to\mathbb R^n$ transforms it into $\bm y$, and the classical post-network $\mathcal N_{\rm post}(\cdot;\bm\psi):\mathbb R^n\to\mathbb R$ produces the output [Fig.~\ref{fig:schematic}(a)]. The middle block is the only part that distinguishes the two models compared here, and its size $n$ is the quantity we vary. In the \emph{classical PINN} it is a trainable network with one hidden layer of $m$ units,
 \begin{equation}
-  \mathcal M_{\rm C}(\bm\theta)=\mathcal N_{\rm mid}(\bm\theta;\bm\chi),
+  \mathcal M_{\rm C}(\bm\theta)=\mathcal N_{\rm mid}(\bm\theta;\bm\chi).
   \label{eq:bottleneck}
 \end{equation}
-with one hidden $\tanh$ layer, so that the classical model is a $\tanh$ network $3\to10\to n\to m\to n\to10\to1$ with a bottleneck of width $n$; the hidden width is $m=n$ in the long-budget simulations and $m=10$ in the hardware-budget control (Table~\ref{tab:arch}; the two coincide at $n=10$, 491 parameters).
-
-\subsection{Hybrid quantum PINN with a fixed quantum layer}\label{sec:hqpinn}
-In the HQPINN the latent vector is the set of rotation angles of an $n$-qubit circuit,
+In the \emph{hybrid quantum PINN} (HQPINN) it is a fixed quantum circuit: the latent vector is the set of rotation angles of $n$ qubits,
 \begin{equation}
-  U(\bm\theta)=W_{\rm brick}\,\bigotimes_{q=1}^{n}R_Y(\theta_q),\qquad R_Y(\theta)=e^{-i\theta Y/2},
+  \mathcal U(\bm\theta)=W_{\rm brick}\,\bigotimes_{q=1}^{n}R_Y(\theta_q),\qquad R_Y(\theta)=e^{-i\theta Y/2},
   \label{eq:circuit}
 \end{equation}
-where $W_{\rm brick}$ is one brickwork layer of nearest-neighbour CNOT gates, first on the pairs $(1,2),(3,4),\dots$ and then on $(2,3),(4,5),\dots$ ($n-1$ gates in total). The circuit acts on $|0\rangle^{\otimes n}$ and the layer output is the vector of local magnetizations,
+where $W_{\rm brick}$ is one brickwork layer of nearest-neighbour CNOT gates, and the output is the vector of local magnetizations,
 \begin{equation}
-  y_q(\bm\theta)=\operatorname{Tr}\!\big[Z_q\,\mathcal E_{\bm\theta}\big(|0\rangle\langle0|^{\otimes n}\big)\big],\qquad q=1,\dots,n,
+  \mathcal M_{\rm Q}(\bm\theta)=\bm y(\bm\theta),\qquad y_q(\bm\theta)=\operatorname{Tr}\!\big[Z_q\,\mathcal E_{\bm\theta}\big(|0\rangle\langle0|^{\otimes n}\big)\big],
   \label{eq:expval}
 \end{equation}
-where $\mathcal E_{\bm\theta}$ is the channel actually implemented by the device. On hardware $y_q$ is estimated from $S$ shots, $\hat y_q=y_q+\xi_q$ with $\mathbb E[\xi_q]=0$ and $\operatorname{Var}[\xi_q]=(1-y_q^2)/S\le1/S$.
+where $\mathcal E_{\bm\theta}$ is the channel actually implemented by the device. On a device $y_q$ is estimated from $S$ shots.
 
-The defining feature of the model is that \emph{the circuit has no free parameter}: all trainable parameters belong to the classical networks, and the quantum layer is a fixed nonlinear map $\bm\theta\mapsto\bm y$. The HQPINN has $21n+61$ trainable parameters (271 for $n=10$), roughly half of the classical model of the same width. This is the opposite design choice to the variational hybrid PINNs studied so far~\cite{sedykh2024hybrid,berger2025trainable,farea2025qcpinn,lantigua2026classical,zabihi2026hybrid}, and connects the HQPINN to fixed-substrate approaches such as quantum feature maps~\cite{havlicek2019supervised}, quantum reservoir computing and extreme learning machines~\cite{fujii2017harnessing,mujal2021opportunities} and quanvolutional networks~\cite{henderson2020quanvolutional}, none of which has been used to minimize a PDE residual.
+\emph{The circuit has no free parameter}: all trainable parameters belong to the classical networks. The HQPINN has $21n+61$ trainable parameters. The classical PINN has $2nm+m+n$ more in its middle block: $2n^2+23n+61$ in total with $m=n$, used in the forward simulations, and $42n+71$ with $m=10$, used in the inverse problem and in the hardware-budget control. The two coincide at $n=10$, with 491 parameters against 271. This is the opposite design choice to the variational hybrid PINNs studied so far~\cite{sedykh2024hybrid,berger2025trainable,farea2025qcpinn,lantigua2026classical,zabihi2026hybrid}, and without trainable gates the barren-plateau phenomenon of variational circuits~\cite{mcclean2018barren,cerezo2021cost} does not arise.
 
-\paragraph{Function class.} The structure of the quantum layer is captured by the following statement (proof in Appendix~\ref{app:trig}).
+\begin{figure*}[t]
+  \centering
+  \resizebox{\textwidth}{!}{\input{figures/schematic.tex}}
+  \caption{\justifying
+  Classical PINN and hybrid quantum PINN (HQPINN), for the forward and inverse problems.
+  (a) Architecture. Both models share the classical pre-network $\mathcal N_{\rm pre}$, which maps the periodic features $\bm\xi$ to the latent vector $\bm\theta\in\mathbb R^n$, and the classical post-network $\mathcal N_{\rm post}$. In the HQPINN (orange) the middle block is a \emph{fixed} quantum circuit---one $R_Y(\theta_q)$ rotation per qubit followed by one brickwork layer of CNOTs---whose output is the vector of local expectation values $y_q=\langle Z_q\rangle$, estimated with $S$ shots; the circuit has no trainable parameter. Six of the $n=10$ qubits used on hardware are drawn. In the classical PINN (blue) the middle block is a trainable bottleneck $\mathcal N_{\rm mid}$. In the inverse problem (dashed) $\nu$ is learned and solution data enter the loss.
+  (b) Physics-informed residual. The derivatives in $r_i$ are central differences of the network on a five-point stencil; with a device in the loop only the centre is measured, and the neighbours receive the surrogate value plus the same measured offset [Eq.~\eqref{eq:ste}].
+  (c) Training workflows. Without a device, the full stencil is evaluated exactly and the gradient is obtained by automatic differentiation. With a device in the loop, (1) one calibration job fits the trigonometric surrogate $\hat f$ of the device [Eq.~\eqref{eq:trigpoly}]; (2) at every epoch one job measures the circuit at the $\Ncol$ stencil centres on all chains in parallel, the forward pass uses the measured values and the backward pass goes through $\hat f$ (straight-through estimator, dashed); $\hat f$ is refitted every $K_{\rm fit}$ epochs with all measurements; (3) one final job evaluates the trained network on the device. In the inverse problem, $\nu$ is relaxed every epoch towards its closed-form minimizer [Eqs.~\eqref{eq:wmed} and~\eqref{eq:logrelax}].}
+  \label{fig:schematic}
+\end{figure*}
+
+\subsection{Physics-informed training}\label{sec:loss}
+At every epoch $k$ a fresh batch of $\Ncol$ collocation points $(x_i,t_i)$ is drawn. The two problems share one form of the loss,
+\begin{equation}
+  \mathcal L_k(\Theta)=\frac{\rho_k}{\Ncol}\sum_{i} |r_i|^p+\frac{w_d}{\Ncol}\sum_{i}\big|u_\Theta(x_i,t_i)-u^\star_i\big|+w_0\,\mathcal L_{\rm ic},
+  \label{eq:loss}
+\end{equation}
+with $r_i=r(x_i,t_i;\nu_k)$, and they differ in the terms that are switched on (Table~\ref{tab:problems}). The forward problem uses the squared residual alone ($p=2$, $\rho_k=1$, $w_d=w_0=0$), so that with the hard constraint Eq.~\eqref{eq:loss} is the complete loss. The inverse problem uses the absolute residual ($p=1$), which is robust to the heavy-tailed residuals of a few badly resolved points and of measurement noise, with a weight $\rho_k$ ramped up from zero and a large fixed data weight $w_d$; the data term fixes the particular solution and the residual term constrains $\nu$. At $T=1$ it also has the soft initial-condition term $\mathcal L_{\rm ic}$. In all cases the derivatives in Eq.~\eqref{eq:residual} are central differences on the five-point stencil $\{(x_i,t_i),(x_i\pm h,t_i),(x_i,t_i\pm\tau)\}$ with $h=1/512$ and $\tau=10^{-3}$, because device outputs are not differentiable with respect to the inputs [Fig.~\ref{fig:schematic}(b)].
+
+\begin{table}[t]
+\caption{\justifying What changes between the two problems. In the forward problem the first value of a pair refers to the simulations, the second to the real QPU. Details in Appendices~\ref{app:fsim}--\ref{app:iqpu}.}
+\label{tab:problems}
+\setlength{\tabcolsep}{2pt}
+\footnotesize
+\begin{ruledtabular}
+\begin{tabular}{lcc}
+ & forward & inverse\\
+\colrule
+unknown & $u$ & $u$, $\nu$\\
+data & none & $u^\star_i$ at the points\\
+residual norm $p$ & 2 & 1\\
+$\rho_k$; $w_d$; $w_0$ & 1; 0; 0 & ramp; $\gg1$; 10 ($T=1$)\\
+initial condition & hard & hard; soft ($T=1$)\\
+$\Ncol$ & 10--100; 10 & 10\\
+$\nu$ update & -- & closed form\\
+AdamW steps/epoch & 1 & 16\\
+budget & $\le2{\times}10^4$; 110 & 110, 500 epochs\\
+stopping & FDM floor; budget & budget\\
+classical hidden $m$ & $n$; 10 & 10\\
+evaluation & FDM, 200 points & exact, 100 points\\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\subsection{Learning the viscosity}\label{sec:nu}
+In the inverse problem $\nu$ is not updated by gradient descent. Since it enters the residual linearly [Eq.~\eqref{eq:residual}], for a fixed network it can be eliminated in closed form (variable projection~\cite{golub1973differentiation}): the minimizer of the $L_1$ residual is the $|B_i|$-weighted median of the ratios $A_i/B_i$,
+\begin{equation}
+  \nu^\star_k=\arg\min_{\nu}\sum_{i=1}^{\Ncol}|A_i-\nu B_i|=\wmed\!\left(\left\{\frac{A_i}{B_i}\right\};\ \{|B_i|\}\right).
+  \label{eq:wmed}
+\end{equation}
+Because this batch estimate fluctuates from batch to batch, the viscosity is relaxed towards it in logarithmic scale,
+\begin{equation}
+  \log\nu_{k+1}=\log\nu_k+\beta_k\big(\log\nu^\star_k-\log\nu_k\big),
+  \label{eq:logrelax}
+\end{equation}
+with $\beta_k$ decaying over the training (Appendix~\ref{app:varpro}). Both models use this update.
+
+\subsection{Structure of the quantum layer}\label{sec:layer}
+Both the simulations and the training on a device rest on the structure of the layer, which is captured by the following statement (proof in Appendix~\ref{app:trig}).
 \begin{proposition}\label{prop:trig}
 Let $\mathcal C_q\subseteq\{1,\dots,n\}$ be the backward light cone of $Z_q$ in the circuit~\eqref{eq:circuit}. For any noise model in which every gate is followed by a $\bm\theta$-independent, trace-preserving channel acting on the qubits of that gate (readout errors included), $y_q$ depends only on $\{\theta_j\}_{j\in\mathcal C_q}$ and is a multilinear trigonometric polynomial of degree one in each of them,
 \begin{equation}
@@ -139,179 +193,139 @@ Let $\mathcal C_q\subseteq\{1,\dots,n\}$ be the backward light cone of $Z_q$ in 
 \end{equation}
 with $g_0=1$, $g_c=\cos$, $g_s=\sin$, and device-dependent real coefficients $c^{(q)}_{\bm\alpha}$. For one brickwork layer $|\mathcal C_q|\le4$, i.e., at most $3^4=81$ coefficients per output.
 \end{proposition}
-The hypothesis holds on IBM devices because $R_Y(\theta)$ is compiled into fixed microwave pulses and a \emph{virtual} $R_Z$ rotation, so the physical operations, and hence their errors, do not depend on $\theta$. Equation~\eqref{eq:trigpoly} has three consequences that guide both the theory and the implementation. (i) The quantum layer injects a finite Fourier structure into the latent representation~\cite{schuld2021effect}: the pre-network learns where to place the angles, and the circuit multiplies harmonics of different latent coordinates, $\cos\theta_a\cos\theta_b=\tfrac12[\cos(\theta_a+\theta_b)+\cos(\theta_a-\theta_b)]$, in the spirit of Fourier-feature networks~\cite{tancik2020fourier,rahimi2007random}. (ii) Noise does not change the function class, only the coefficients; this is what makes a calibrated surrogate of the device possible (Sec.~\ref{sec:hil}). (iii) The quantum layer has no trainable parameter, so the barren-plateau phenomenon of variational circuits~\cite{mcclean2018barren,cerezo2021cost} does not arise; what remains is the possible concentration of the map $\bm\theta\mapsto\bm y$ itself, which is controlled by the size of the light cones (Remark~\ref{rem:parity}).
+Noise therefore does not change the function class, only the coefficients. Without noise the layer reduces to products of cosines, $y_q=\prod_{j\in\mathcal S_q}\cos\theta_j$ with $|\mathcal S_q|\le3$ (Appendix~\ref{app:parity}), which a classical computer evaluates efficiently: the noiseless HQPINN is a classical network with cosine-product activations. Simulations of it measure the merit of this architecture, not a quantum advantage~\cite{schreiber2023classical}.
 
-\begin{remark}\label{rem:parity}
-A CNOT network acts on the computational basis as a linear map over $\mathrm{GF}(2)$, $\bm b\mapsto M\bm b$. For the noiseless circuit~\eqref{eq:circuit} the Heisenberg evolution of $Z_q$ is the Pauli string $\prod_{j\in\mathcal S_q}Z_j$ with $\mathcal S_q=\{j:M_{qj}=1\}\subseteq\mathcal C_q$, and
+\subsection{Training with a device in the loop}\label{sec:hil}
+Training on a quantum processor raises two problems: the device returns $\hat{\bm y}$ but not its gradient, and the finite differences of the residual amplify shot noise by a factor of order $h^{-2}$. Both are solved by Proposition~\ref{prop:trig}. A classical surrogate $\hat f$ fitted to measurements describes the device, in a scheme analogous to the physics-aware training of physical neural networks~\cite{wright2022deep} [Fig.~\ref{fig:schematic}(c)]. One job calibrates $\hat f$ at random angles. At each epoch, one job measures the circuit only at the $\Ncol$ stencil centres $\bm\theta_c$, and every node $\bm\theta$ of the stencil centred at $c$ receives
 \begin{equation}
-  y_q(\bm\theta)=\prod_{j\in\mathcal S_q}\cos\theta_j ,\qquad |\mathcal S_q|\le3 .
-  \label{eq:parity}
+  \tilde{\bm y}(\bm\theta)=\hat f(\bm\theta)+\sg\!\big[\hat{\bm y}^{\,\rm QPU}(\bm\theta_c)-\hat f(\bm\theta_c)\big],
+  \label{eq:ste}
 \end{equation}
-The ideal layer is therefore efficiently classically computable: the noiseless HQPINN is a classical network with cosine-product activations. Its simulation results (Sec.~\ref{sec:res_sim}) measure the merit of this \emph{architecture}, not a quantum advantage, in line with the general results on classical surrogates of quantum learning models~\cite{schreiber2023classical}. For angles spread over a full period, $\operatorname{Var}[y_q]=2^{-|\mathcal S_q|}$, so deeper entangling layers trade expressivity (longer products) against concentration.
-\end{remark}
+where $\sg$ stops the gradient (straight-through estimator~\cite{bengio2013estimating}). The forward pass thus uses the measured value, the gradient comes from $\hat f$, and the shot noise is not amplified across the stencil. In the inverse problem the measured value also enters the data term. A final job evaluates the trained network on the device. A run of $K$ epochs costs $K+2$ jobs, independently of the number of trainable parameters (Appendices~\ref{app:fqpu} and~\ref{app:iqpu}). The same loop runs with a noisy emulator of the device in place of the processor.
 
-\subsection{Training with the quantum processor in the loop}\label{sec:hil}
-Training the HQPINN on a quantum processor raises two problems. First, the device returns $\hat{\bm y}$ but not $\partial\bm y/\partial\bm\theta$. Parameter-shift rules~\cite{mitarai2018quantum,schuld2019evaluating,wierichs2022general} give unbiased derivatives at the price of $2n$ extra circuits per evaluation point, and SPSA~\cite{spall1992multivariate,kandala2017hardware} gives a single random directional derivative per step. Second, the residual~\eqref{eq:loss} is built from finite differences: if the five stencil nodes were measured independently, the shot noise $\sigma_u$ of $u$ would enter $\partial_x^2u$ amplified by $\sqrt6/h^2\approx6.4\times10^5$ (Appendix~\ref{app:ste}), which would bury the physical signal. Both problems are solved by Proposition~\ref{prop:trig}, through a scheme analogous to the physics-aware training of physical neural networks~\cite{wright2022deep}, in which the physical system computes the forward pass and a digital model of it provides the backward pass [Fig.~\ref{fig:schematic}(c)]:
-\begin{enumerate}
-  \item \emph{Calibration.} Before training, one job evaluates the circuit at random angles $\theta_j\sim\mathcal U(-\pi,\pi)$ on every $n$-qubit chain of the chip in parallel. The coefficients of Eq.~\eqref{eq:trigpoly} are obtained by linear least squares, which yields a classical surrogate $\hat f(\bm\theta)$ of the device with its average noise built in~\cite{sung2020using}.
-  \item \emph{Training.} At each epoch the device is measured only at the $\Ncol$ stencil centres $\bm\theta_c$. Every node $\bm\theta$ of the stencil centred at $c$ receives
-  \begin{equation}
-    \tilde{\bm y}(\bm\theta)=\hat f(\bm\theta)+\sg\!\big[\hat{\bm y}^{\,\rm QPU}(\bm\theta_c)-\hat f(\bm\theta_c)\big],
-    \label{eq:ste}
-  \end{equation}
-  where $\sg$ stops the gradient (straight-through estimator~\cite{bengio2013estimating}). At the centre $\tilde{\bm y}=\hat{\bm y}^{\,\rm QPU}$, so the value of $u$ entering the nonlinear term $u\,\partial_xu$ is the measured one; across the stencil the variation of $\tilde{\bm y}$ is that of the smooth surrogate, so the shot noise is not amplified by the finite differences; and the gradient is $\partial\tilde{\bm y}/\partial\bm\theta=\partial\hat f/\partial\bm\theta$, available analytically. Every $K_{\rm fit}$ epochs the surrogate is refitted with the calibration data and all measurements accumulated so far, so that it tracks the device in the region of angles actually visited by the network.
-  \item \emph{Validation.} A final job evaluates $u(x,T)$ with the trained network and the circuit run on the device.
-\end{enumerate}
-A training run of $K$ epochs therefore costs $K+2$ jobs and $\Ncol$ circuit evaluations per epoch, independently of the number of trainable parameters (Table~\ref{tab:cost}). Because the surrogate has the exact functional form of the device response, the method does not approximate the circuit; its only bias is the statistical error of the fitted coefficients and the part of the device behaviour that the time-independent, chip-averaged model~\eqref{eq:trigpoly} cannot capture (chain-to-chain variation, drift, crosstalk), which we quantify in Sec.~\ref{sec:res_device}.
+% =====================================================================
+\section{Results: forward problem}\label{sec:forward}
+% =====================================================================
+Accuracy is measured on $u(x,T)$ against a finite-difference reference, by the mean squared error (MSE) and the relative error $\epsilon_{L_2}$ (Appendix~\ref{app:reference}).
+
+\subsection{Simulation}\label{sec:f_sim}
+% LEMBRETE para discutir depois: os dados antigos de data/Forward/classical* NAO sao comparaveis com a HQPINN: outro
+% criterio de parada (uniform_exact) e, para n != 10, outra arquitetura (n->10->n). Em T=1, N_col=10 a classica sai 50 vezes
+% pior so por causa disso. Este artigo usa so o protocolo comum (fixed_validation_v2). As curvas classicas do PDF
+% "HQPINN 10_2026" vem desses dados antigos; aqui elas foram refeitas com o protocolo comum.
+% Numeros em docs/manuscript_notes_pt.md, secao "Por que a pasta data/Forward/classical nao entra nas figuras".
+We compare the classical PINN and the noiseless HQPINN under one common protocol, with the same optimizer, hyperparameters and step budget (Appendix~\ref{app:sim}). Training stops when the residual on a fixed validation set reaches the \emph{target}: the residual of the reference solution itself on those points, below which a network would be fitting the discretization error of the reference. For a given seed the two models share the validation set and therefore the target. Every configuration is repeated with 50 seeds. We report the median and interquartile range of the MSE and the mean and standard deviation of the number of steps, over all runs. A run that never reaches the target counts at the step budget, so the mean number of steps is a lower bound of the steps needed.
 
 \begin{figure*}[t]
   \centering
-  \resizebox{\textwidth}{!}{\input{figures/schematic.tex}}
-  \caption{\justifying
-  Classical PINN and hybrid quantum PINN (HQPINN).
-  (a) Architecture. Both models share the classical pre-network $\mathcal N_{\rm pre}$, which maps the periodic features $\bm\xi$ to the latent vector $\bm\theta\in\mathbb R^n$, and the classical post-network $\mathcal N_{\rm post}$; the initial condition and the periodicity are imposed exactly by Eq.~\eqref{eq:composition}. In the HQPINN (orange) the middle block is a \emph{fixed} quantum circuit---one $R_Y(\theta_q)$ rotation per qubit followed by one brickwork layer of CNOTs---whose output is the vector of local expectation values $y_q=\langle Z_q\rangle$, estimated with $S$ shots; the circuit has no trainable parameter. Six of the $n=10$ qubits used on hardware are drawn. In the classical PINN (blue) the middle block is a trainable bottleneck $\mathcal N_{\rm mid}$.
-  (b) Physics-informed residual. The derivatives in $r_i$ are central differences of the network on a five-point stencil; on hardware only the centre is measured, and the neighbours receive the surrogate value plus the same measured offset [Eq.~\eqref{eq:ste}].
-  (c) Training workflows. In simulation the full stencil is evaluated exactly and the gradient is obtained by automatic differentiation. With the quantum processor in the loop, (1) one calibration job fits the trigonometric surrogate $\hat f$ of the device [Eq.~\eqref{eq:trigpoly}]; (2) at every epoch one job measures the circuit at the $\Ncol$ stencil centres on all chains in parallel, the forward pass uses the measured values and the backward pass goes through $\hat f$ (straight-through estimator, dashed); $\hat f$ is refitted every $K_{\rm fit}$ epochs with all measurements; (3) one final job evaluates the trained network on the device.}
-  \label{fig:schematic}
+  \includegraphics[width=\textwidth]{fig2_sim_width.pdf}
+  \caption{\justifying Forward problem, more qubits or neurons: classical PINN (blue) and noiseless HQPINN (orange) with the same setup, for $T=0.1$ (top) and $T=1$ (bottom), with $\Ncol=100$ (circles, solid) and $\Ncol=10$ (triangles, dashed); 50 seeds per point.
+  (a,d) Median MSE of $u(x,T)$ versus width $n$; bands, interquartile range.
+  (b,e) Mean number of optimizer steps versus $n$, over all runs, with runs that miss the target counted at the step budget; bands, standard deviation, cut at the budget.
+  (c,f) Median MSE versus the number of trainable parameters.}
+  \label{fig:width}
 \end{figure*}
 
-% =====================================================================
-\section{Methods}\label{sec:methods}
-% =====================================================================
-The numerical and experimental protocols are summarized here; Appendices~\ref{app:training}--\ref{app:hyper} contain the full algorithms, the implementation of the hardware loop and all hyperparameters. The results are organized in two groups: \emph{simulations} (noiseless circuits, shot noise only, and the noise model of the device) and \emph{real-QPU} executions.
+\paragraph{More qubits or neurons.} Figure~\ref{fig:width} shows the effect of the width $n$. At $T=0.1$ with $\Ncol=100$ both models reach the same error, a median MSE of $\simeq7\times10^{-6}$ ($\epsilon_{L_2}\simeq0.4\%$) for $n\ge5$, a level set by the reference solution [Fig.~\ref{fig:width}(a)]. What differs is the cost of getting there. The HQPINN uses about half of the optimizer steps, a factor between 1.95 and 2.16 for $n\ge7$, for example $7.6\times10^3$ against $1.52\times10^4$ at $n=10$ [Fig.~\ref{fig:width}(b)]. It also needs fewer parameters: an MSE of $8\times10^{-6}$ takes $n=3$ (124 parameters) against $n=5$ (226) [Fig.~\ref{fig:width}(c)]. And it is more reliable: for $n\ge5$, 98\% of its runs reach the target, against 55\% of the classical ones. With $\Ncol=10$ its median MSE is lower at every width, by a factor between 1.2 and 4.5, and an MSE of $3\times10^{-5}$ takes $n=2$ (103 parameters) against $n=5$ (226).
 
-\subsection{Simulations}\label{sec:methods_sim}
-\paragraph{Long-budget, same-protocol sweep.} Both models are trained with the same algorithm and hyperparameters (Algorithm~\ref{alg:sim}): AdamW~\cite{loshchilov2019decoupled} with learning rate $10^{-3}$ reduced on plateaus, a fresh batch of $\Ncol$ collocation points at every step, up to $2\times10^4$ steps, followed by at most $10^3$ L-BFGS iterations~\cite{liu1989limited} on the last batch. The residual is monitored on a fixed validation set of $\Ncol$ random points, and training stops when it reaches the residual of the reference solution itself on the same points and with the same stencil: below this \emph{FDM floor} the network would be fitting the discretization error of the reference. The best monitored snapshot is returned. We sweep $n=2,\dots,15$, $\Ncol\in\{10,100\}$ and $T\in\{0.1,1\}$, with 50 seeds per configuration and model (5600 runs), seed $s$ fixing the initialization and the validation set. \TODO{arquivar no reposit\'orio o script que gerou a varredura (\texttt{Experiment1Modified}, protocolo \texttt{fixed\_validation\_v2}); a vers\'ao local de \texttt{run\_qubit\_sweep.py} monitora o lote de treino.} The ideal quantum layer is evaluated with the closed form~\eqref{eq:parity}, which is exact for the noiseless circuit and differentiable. A complementary sweep of the HQPINN alone covers $\Ncol$ from 10 to 500 for $n\in\{3,5,7,10,15\}$ (Appendix~\ref{app:extra}).
-
-\paragraph{Hardware-budget simulations.} To separate the effect of noise from that of the short training affordable on hardware, the HQPINN is also trained offline with exactly the protocol of the hardware run (110 epochs, $\Ncol=10$, same learning-rate schedule, same initialization and collocation stream per seed; Sec.~\ref{sec:methods_hw}) with (i) the ideal layer on all stencil nodes and (ii) the ideal layer plus binomial shot noise with $S=1024$ at the stencil centres, propagated with Eq.~\eqref{eq:ste} and a perfect surrogate. Seeds 0--4 are used.
-
-\paragraph{Noisy emulation.} The device is emulated with the \texttt{FakeBerlin} noise model of Qiskit~\cite{javadiabhari2024qiskit}, which reproduces the calibrated gate errors, $T_1/T_2$ relaxation, readout errors and coupling map of \texttt{ibm\_berlin} but not crosstalk or temporal drift. Each 10-qubit chain is simulated exactly as a density matrix and $S=1024$ shots are sampled. The emulated training uses the same physical chains, seed, collocation stream and protocol as the real run (Algorithm~\ref{alg:hil}).
-
-\subsection{Real-QPU execution}\label{sec:methods_hw}
-The hardware experiment ran on \texttt{ibm\_berlin}, an IBM Nighthawk processor with 120 transmon qubits on a square lattice and native CZ gates, on 8 October 2026, within a single dedicated runtime \texttt{Session}. The circuit~\eqref{eq:circuit} with $n=10$ was laid out on 8 disjoint chains of 10 coupled qubits [Fig.~\ref{fig:hardware}(a)], selected from the current calibration data (12 candidate chains, 4 discarded for a high error score), and the 8 copies were transpiled into a single packed circuit of depth 12 with 72 CZ gates and no SWAPs. All expectation values were estimated with $S=1024$ shots (precision $1/32$) and \emph{without} error suppression or mitigation (raw counts). The run consisted of one calibration job (128 parameter sets on 8 chains, 1024 samples per output), 110 training jobs (one per epoch, the 10 stencil centres distributed over the chains) and one validation job (200 points, each measured once on every chain and averaged), i.e., 112 jobs, 548 parameter sets and $5.6\times10^5$ shots in 54~min of wall-clock time. Training used AdamW with learning rate $0.1$ decreased by $0.01$ every 10 epochs down to $0.01$, gradient-norm clipping at 1 and $K_{\rm fit}=10$. The same settings were used in an earlier FakeBerlin batch of five seeds, and the hardware seed (seed 0) is the best of that batch. Device characteristics are listed in Table~\ref{tab:device}.
-
-As controls with the \emph{same} budget we (a) evaluated on \texttt{ibm\_berlin} (one prediction job) the network trained on FakeBerlin, and (b) trained the classical PINN with exactly the hardware protocol for $n=1,\dots,10$ and seeds 0--4 (50 runs). Since all randomness of the hardware training is in the measured values, which were recorded, the training is reproducible offline: feeding the recorded measurements into the same update reproduces the trained weights bit for bit (Appendix~\ref{app:hil_impl}). We use this replay to evaluate the network after every epoch.
-
-% =====================================================================
-\section{Results}\label{sec:results}
-% =====================================================================
-
-\subsection{Simulations}\label{sec:res_sim}
+At $T=1$ the advantage extends to the error itself [Figs.~\ref{fig:width}(d)--(f)]. The median MSE of the HQPINN is lower at every width and for both values of $\Ncol$, by a factor of up to 14 for $\Ncol=100$; at $n=10$ it is $4.8\times10^{-5}$ ($\epsilon_{L_2}=3.3\%$) against $3.0\times10^{-4}$ (8.2\%), and 92\% of the runs reach the target against 34\%. An MSE of $10^{-4}$ takes $n=6$ (187 parameters), whereas the classical PINN does not reach it up to $n=15$ (856 parameters); its best median is $1.1\times10^{-4}$, at $n=9$. With $\Ncol=100$ the classical PINN uses between 1.16 and 1.6 times more steps for $n\ge7$. With $\Ncol=10$ neither model reaches the target in most runs (at most 20\% for the HQPINN and 12\% for the classical PINN), so both stay close to the budget [Fig.~\ref{fig:width}(e)].
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{fig2_simulations.pdf}
-  \caption{\justifying Noiseless simulations, classical PINN (blue) and HQPINN with the ideal circuit (orange) trained with the same protocol; 50 seeds per point. Top row, $T=0.1$; bottom row, $T=1$. Solid lines, $\Ncol=100$ collocation points per step; dashed lines with open markers, $\Ncol=10$.
-  (a,d) Median MSE of $u(x,T)$ versus the width $n$ of the latent space (number of qubits of the HQPINN, bottleneck width of the classical PINN); bands, interquartile range.
-  (b,e) Empirical distribution of the MSE over the 50 seeds for $n=10$.
-  (c,f) Fraction of the runs, $n=10$, that have reached the physical stopping target (the residual of the reference solution, Sec.~\ref{sec:methods_sim}) as a function of the number of optimizer steps; the AdamW phase ends at $2\times10^4$ steps.}
-  \label{fig:sim}
+  \includegraphics[width=\textwidth]{fig3_sim_points.pdf}
+  \caption{\justifying Forward problem, more collocation points: noiseless HQPINN (colours, $\Ncol=10$ to 100) and classical PINN with the same setup (black, same range), with one marker per width $n=3,5,7,10,15$, at $T=0.1$ (top) and $T=1$ (bottom); 50 seeds per point. (a,c) Median MSE of $u(x,T)$. (b,d) Mean number of optimizer steps over all runs, with runs that miss the target counted at the step budget.}
+  \label{fig:points}
 \end{figure*}
 
-\paragraph{Same protocol, long budget.} Figure~\ref{fig:sim} and Table~\ref{tab:sim} compare the two models over 5600 runs. At $T=0.1$ with $\Ncol=100$ both models reach the same median MSE, $\simeq7\times10^{-6}$ ($\epsilon_{L_2}\simeq0.4\%$) for $n\ge4$ [Fig.~\ref{fig:sim}(a)]; this level is set by the reference solution and is reached by the HQPINN for every $\Ncol\ge30$ (Appendix~\ref{app:extra}). With only $\Ncol=10$ points per step the median MSE of the HQPINN is lower than that of the classical PINN for every width, by a factor between 1.2 and 4.5, and its distribution over seeds is narrower [Fig.~\ref{fig:sim}(b)]. Neither model has failed runs at $T=0.1$ under this protocol (largest MSE $2.2\times10^{-3}$ for the classical PINN and $1.2\times10^{-3}$ for the HQPINN among 1400 runs each). The difference is more pronounced in convergence than in final accuracy: with $\Ncol=100$, 98\% of the HQPINN runs with $n\ge5$ reach the physical target, against 55\% of the classical ones, and for $n=10$ the median run stops after $7.1\times10^3$ steps against $1.6\times10^4$ [Fig.~\ref{fig:sim}(c)].
+\paragraph{More collocation points.} Figure~\ref{fig:points} shows the effect of $\Ncol$. At $T=0.1$ the median MSE of the HQPINN stays below $10^{-5}$ from $\Ncol=30$ on, for every width [Fig.~\ref{fig:points}(a)]. The number of steps depends much more on $n$ than on $\Ncol$: at $n=10$ it goes from $1.02\times10^4$ at $\Ncol=10$ to $7.6\times10^3$ at $\Ncol=100$ [Fig.~\ref{fig:points}(b)]. At $T=1$ the number of points matters more. For $n=10$, going from $\Ncol=10$ to 100 lowers the median MSE from $1.3\times10^{-3}$ to $4.8\times10^{-5}$, raises the fraction of runs that reach the target from 18\% to 92\% and lowers the mean number of steps from $1.85\times10^4$ to $1.33\times10^4$ [Figs.~\ref{fig:points}(c),(d)]. The three-qubit model stays about an order of magnitude higher and at most 4\% of its runs reach the target, which identifies the width as the limiting factor at this horizon.
 
-At $T=1$ the advantage of the HQPINN extends to the final accuracy [Figs.~\ref{fig:sim}(d)--(f)]. Its median MSE is lower for every width and both values of $\Ncol$, by a factor of up to 14 for $\Ncol=100$; for $n=10$ it is $4.8\times10^{-5}$ ($\epsilon_{L_2}=3.3\%$) against $3.0\times10^{-4}$ (8.2\%), and 92\% of the runs reach the target against 34\%. The classical PINN improves non-monotonically with $n$, and its best median ($1.1\times10^{-4}$ at $n=9$, 430 parameters) is above that of the HQPINN for every $n\ge6$ (187 parameters and more) [Fig.~\ref{fig:extra}(c)]. Since the ideal quantum layer is a fixed cosine-product map (Remark~\ref{rem:parity}), these results show that a parameter-free, bounded and periodic middle block conditions the residual minimization better than a trainable bottleneck, in particular for the long horizon; they do not rely on any quantum effect. At the hardware budget [$T=0.1$, 110 epochs, $n=10$, seeds 0--4; Fig.~\ref{fig:ladder}], replacing $\tanh$ by $\sin$ in the classical middle block lowers the median $\epsilon_{L_2}$ from 31.1\% to 20.9\% (7.0--27.2\%) under the learning-rate schedule of the HQPINN (9.1\% for the noiseless HQPINN), and from 11.4\% to 10.6\% (8.7--12.5\%) under the best schedule of the classical model (Sec.~\ref{sec:discussion}): a periodic activation closes part of the gap at a common schedule and has little effect once the schedule is tuned. \TODO{repetir o controle com \texttt{seno=True} no protocolo longo ($T=1$), onde est\'a a vantagem.}
+The classical curves compare the two models at every width and $\Ncol$. At $T=0.1$ the classical PINN uses more steps in all 50 configurations, by a factor of 1.1 to 1.7 for $n\le5$ and of 1.5 to 2.1 for $n\ge7$, and it reaches the target less often in all of them; at $n=10$, for example, in 52--64\% of its runs, against at least 94\% for the HQPINN from $\Ncol=20$ on [Fig.~\ref{fig:points}(b)]. The errors are close: from $\Ncol=20$ on and for $n\ge5$ the classical median is between 0.8 and 1.5 times that of the HQPINN. Only at $n=3$ is it clearly larger, by a factor of 1.1 to 2.8 [Fig.~\ref{fig:points}(a)].
 
-\begin{table}[b]
-\caption{\justifying Same-protocol simulations for $n=10$ (50 seeds): median MSE and relative $L_2$ error of $u(x,T)$, fraction of runs reaching the physical target, and median number of optimizer steps. Trainable parameters: 491 (classical), 271 (HQPINN).}
-\label{tab:sim}
-\setlength{\tabcolsep}{1.5pt}
+At $T=1$ the median MSE of the classical PINN is larger in all 50 configurations, by a factor of 1.7 to 6.2 for $n\le10$ and of 4.7 to 18 for $n=15$ [Fig.~\ref{fig:points}(c)]. Among these five widths its best median is $2.1\times10^{-4}$ ($n=10$, $\Ncol=80$, 491 parameters); the HQPINN goes below that value with $n=7$ at $\Ncol=30$ (208 parameters). The saving in steps grows with $n$ and $\Ncol$ [Fig.~\ref{fig:points}(d)]. There is none at $n=3$, where at most 4\% of the runs of either model reach the target, and it reaches a factor of 1.33 at $n=10$ and 1.61 at $n=15$. The HQPINN reaches the target at least as often in 49 of the 50 configurations; the exception is $n=10$, $\Ncol=20$ (22\% against 24\%).
+
+\subsection{Real quantum processor}\label{sec:f_qpu}
+We trained the HQPINN with \texttt{ibm\_berlin} in the loop (Sec.~\ref{sec:hil}) for one specific case per horizon: $n=10$ qubits on 8 chains in parallel (80 of the 120 qubits), one job per epoch, 110 epochs, 1024 shots and no error mitigation (Appendix~\ref{app:fqpu}). This budget is two orders of magnitude below that of the simulations, so the runs do not reach the target; here we compare the error after the same number of epochs. Each result is a single run.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig4_qpu.pdf}
+  \caption{\justifying Forward problem, HQPINN trained with \texttt{ibm\_berlin} in the loop, one run per horizon. (a,b) $T=0.1$: $n=10$, $\Ncol=10$, 110 epochs, seed 0, no error mitigation. (a) $u(x,T)$: reference, initial network, classical PINN with the same protocol, seed and width, and HQPINN evaluated on the device (every fifth point). (b) MSE of $u(x,T)$ versus epoch, from the bit-exact replay of the recorded run, through the surrogate in force at each epoch; star, final network evaluated on the device. Blue, median and interquartile range of the classical PINN with the same protocol ($n=1,\dots,10$, seeds 0--4); dashed, median of the noiseless HQPINN (seeds 0--4). Grey, MSE of a network that does not evolve the initial condition. (c,d) $T=1$. \TODO{Pain\'eis (c,d) aguardam a rodada no QPU; (c) mostra s\'o a refer\^encia.}}
+  \label{fig:qpu}
+\end{figure*}
+
+\paragraph{$T=0.1$.} The network starts at $\epsilon_{L_2}=29.4\%$ and ends at $\mathrm{MSE}=1.45\times10^{-3}$ ($\epsilon_{L_2}=5.7\%$) when evaluated with the circuit running on the device, a 27-fold reduction of the MSE, and it follows the steep front at $x\simeq0.5$ [Fig.~\ref{fig:qpu}(a)]. The classical PINN trained with the same protocol, seed and width has almost twice the parameters (491 against 271) and ends at 31.2\%, with the peak and the trough displaced. Over all 50 classical runs of the control ($n=1,\dots,10$, seeds 0--4) the median is 24.7\%, and only one run ends below the hardware MSE [Fig.~\ref{fig:qpu}(b)]. The classical schedule is the one selected for the HQPINN; the best of ten schedules tested for the classical PINN at $n=10$ gives 11.4\% (6.2--19.5\%), against 9.1\% (3.9--15.1\%) for the noiseless HQPINN with its own schedule. The hardware run lies within the spread of the noiseless model: after epoch 30 its learning curve is at or below the noiseless median in 88\% of the epochs, and the same weights evaluated with the ideal circuit give 6.0\%, so the network is not tied to the noise of the chip. Within the statistics of one run, device noise does not appear to be the limiting factor at this budget.
+
+\paragraph{$T=1$.} \TODO{Resultado do QPU real em $T=1$.}
+
+% =====================================================================
+\section{Results: inverse problem}\label{sec:inverse}
+% =====================================================================
+Accuracy is measured by the relative error of the learned viscosity, $\epsilon_\nu=|\hat\nu-\nu_{\rm true}|/\nu_{\rm true}$, and by the relative error $\epsilon_{L_2}$ of $u(x,T)$ against the exact solution (Appendix~\ref{app:colehopf}).
+
+\subsection{Simulation}\label{sec:i_sim}
+Both models are trained with the same algorithm (Algorithm~\ref{alg:inv} in Appendix~\ref{app:isim}), with hyperparameters selected independently for each model under the same protocol. We use $\nu_{\rm true}=0.01$, $T\in\{0.1,1\}$, $\Ncol=10$ points per epoch, $n\in\{3,7,10\}$ and seeds 0--10, i.e., 33 runs per model and horizon. Runs with the same size and seed are paired: both models start from the same $\nu_0$ and see the same sequence of collocation points. At $T=1$ both models use the adjusted training of Appendix~\ref{app:adjust}. The quantum layer is evaluated on a noisy emulator of the device with $S=1024$ shots, in the loop of Sec.~\ref{sec:hil}: \texttt{FakeAachen} at the budget of $K=500$ epochs and \texttt{FakeBerlin} at $K=110$. The classical model runs without noise. Comparisons between the models use the two-sided paired Wilcoxon signed-rank test over the 33 pairs. Because the emulator changes together with the budget, the change of the HQPINN between 110 and 500 epochs mixes both effects; the classical model has no device, so its change is the effect of the epochs alone.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{fig5_inv_nu_E500.pdf}
+  \caption{\justifying Inverse problem, identification of $\nu_{\rm true}=0.01$ in $K=500$ epochs over the 33 paired runs of each model ($n\in\{3,7,10\}$, seeds 0--10), for $T=0.1$ (top) and $T=1$ (bottom). Blue, classical PINN; aqua, HQPINN on the noisy emulator \texttt{FakeAachen}. (a,d) Learned viscosity versus epoch: median and 10--90\% range; at $T=1$ the viscosity is frozen during the first 10 epochs. (b,e) Relative error of $\nu_k$: median and interquartile range; dotted, 5\%. (c,f) Final relative error of each run, grouped by size; black ticks, medians per size. The same figure at $K=110$ is Fig.~\ref{fig:invnu110}.}
+  \label{fig:invnu}
+\end{figure*}
+
+\begin{table}[t]
+\caption{\justifying Inverse problem: relative error of the learned viscosity, $\epsilon_\nu$, and relative $L_2$ error of $u(x,T)$, over 33 paired runs per model ($\nu_{\rm true}=0.01$, $n\in\{3,7,10\}$, seeds 0--10). Wins: pairs in which the model has the smaller error; $p$: two-sided paired Wilcoxon test.}
+\label{tab:inverse}
+\setlength{\tabcolsep}{1pt}
 \footnotesize
 \begin{ruledtabular}
-\begin{tabular}{llcccc}
-$T$, $\Ncol$ & model & MSE & $\epsilon_{L_2}$ & target & steps/$10^3$\\
-\colrule
-0.1, 10  & class. & $1.9{\times}10^{-5}$ & 0.6\% & 56\% & 18.4\\
-         & HQPINN & $1.3{\times}10^{-5}$ & 0.5\% & 78\% & 8.0\\
-0.1, 100 & class. & $6.7{\times}10^{-6}$ & 0.4\% & 64\% & 16.0\\
-         & HQPINN & $6.9{\times}10^{-6}$ & 0.4\% & 100\% & 7.1\\
-1, 10    & class. & $2.7{\times}10^{-3}$ & 24.6\% & 6\% & 20.1\\
-         & HQPINN & $1.3{\times}10^{-3}$ & 17.4\% & 18\% & 20.1\\
-1, 100   & class. & $3.0{\times}10^{-4}$ & 8.2\% & 34\% & 20.1\\
-         & HQPINN & $4.8{\times}10^{-5}$ & 3.3\% & 92\% & 12.7\\
-\end{tabular}
+\input{tables/inverse_summary.tex}
 \end{ruledtabular}
+\raggedright\footnotesize $^{a}$Median / mean / max. $^{b}$Noisy emulator; $u(x,T)$ evaluated with the circuit run on the emulator.
 \end{table}
 
-\paragraph{Hardware budget.} The hardware run is limited to 110 epochs with $\Ncol=10$, two orders of magnitude fewer steps than above, at a large learning rate. At this budget the result depends strongly on the seed [Fig.~\ref{fig:ladder}, simulation rows]: the noiseless HQPINN reaches $\epsilon_{L_2}$ between 3.9\% and 15.1\% (median 9.1\%; 5.5\% for seed 0), and adding 1024-shot noise at the stencil centres does not degrade it (3.8\%--16.2\%, median 5.5\%). The FakeBerlin emulation, with the full noise model of the device, gives 4.1\% for seed 0 and 6.9\%--8.1\% for seeds 1--4. In contrast, the classical PINN trained with the same protocol ends between 4.6\% and 35.9\% (median 24.7\%), and 28\% of its runs end above the no-evolution level. Within the statistics available, neither shot noise nor the noise model of the device is the limiting factor at this budget: the spread is dominated by the short optimization.
+\paragraph{Identification of the viscosity.} Figure~\ref{fig:invnu} and Table~\ref{tab:inverse} summarize the results. At $T=0.1$ both models identify $\nu$ well and cannot be told apart: in 500 epochs the median $\epsilon_\nu$ is 2.8\% for the HQPINN and 2.3\% for the classical PINN ($p=0.76$; the HQPINN has the smaller error in 16 of the 33 pairs). The median error of both stays below 5\% from about epoch 400 on [Fig.~\ref{fig:invnu}(b)]. The epochs help: from 110 to 500 the classical median goes from 7.3\% to 2.3\% (better in 28 of the 33 runs, $p<10^{-5}$), and that of the HQPINN from 6.0\% to 2.8\% (better in 24 of the 33 runs, $p=0.001$). At 110 epochs the models are also tied ($p=0.11$).
 
-\subsection{Real quantum processor}\label{sec:res_qpu}
+At $T=1$ the problem is harder for both models and more epochs do not solve it. The median $\epsilon_\nu$ goes from 21.5\% to 20.9\% for the classical PINN (better at 500 epochs in 13 of the 33 runs, $p=0.26$) and from 30.2\% to 30.5\% for the HQPINN (17 of 33, $p=0.82$), and the median curves do not improve after about epoch 100 [Fig.~\ref{fig:invnu}(e)]. The classical PINN has the smaller median at both budgets, but the difference is significant only at 110 epochs ($p=0.046$, against $p=0.37$ at 500). Both models tend to underestimate $\nu$: at 500 epochs in 26 of the 33 classical runs and 30 of the 33 HQPINN runs, with final values down to $3.7\times10^{-3}$ and $2.5\times10^{-3}$. Across the sizes the medians vary widely and without a stable pattern: at 500 epochs, 41.2\%, 27.8\% and 12.8\% for the HQPINN with $n=3,7,10$, against 16.9\%, 33.7\% and 14.6\% for the classical PINN, whereas at 110 epochs $n=7$ is the best size of the HQPINN (Table~\ref{tab:persize}). With 11 seeds per size and a learned $\nu$ that still fluctuates by about 25\% over the last 20 epochs of a run (against 1.4--1.7\% at $T=0.1$), we do not interpret these differences. The final $\nu$ of a single run depends on the last batches, and comparisons require many seeds.
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{fig3_hardware.pdf}
-  \caption{\justifying Training the HQPINN with \texttt{ibm\_berlin} in the loop ($n=10$, $\Ncol=10$, 110 epochs, seed 0, no error mitigation).
-  (a) The 120-qubit square lattice of \texttt{ibm\_berlin} and the 8 disjoint 10-qubit chains on which the circuit ran in parallel (alternating shades and numbers distinguish neighbouring chains); median device figures of the 80 qubits used.
-  (b) $u(x,T=0.1)$: FDM reference (black), initial network (dotted), classical PINN trained with the same protocol ($n=10$, blue), HQPINN trained on FakeBerlin and evaluated on \texttt{ibm\_berlin} (triangles), HQPINN trained and evaluated on \texttt{ibm\_berlin} (circles; every fifth point shown).
-  (c) Pointwise error of the hardware evaluations; bands, spread (minimum to maximum) of the network output over the 8 chains, each validation point having been measured once on every chain; dashed, the \texttt{ibm\_berlin}-trained weights evaluated with the ideal circuit.
-  (d) MSE of $u(x,T)$ versus epoch, from the bit-exact replay of the recorded runs, with the network evaluated through the calibrated surrogate in force at each epoch; stars, final network evaluated on the device (validation job). Blue, median and interquartile range of the classical PINN trained with the same protocol (widths 1--10, seeds 0--4); dashed orange, median of the noiseless HQPINN (seeds 0--4). Ticks at the top mark the surrogate refits; the learning rate decreases from 0.1 to 0.01 in steps every 10 epochs.}
-  \label{fig:hardware}
+  \includegraphics[width=\textwidth]{fig6_inv_field.pdf}
+  \caption{\justifying Inverse problem, reconstruction of the field at the final time, for $T=0.1$ (top) and $T=1$ (bottom). (a,c) $u(x,T)$ at $K=500$ for the paired run $n=10$, seed 0: exact solution, classical PINN and HQPINN with the circuit on \texttt{FakeAachen} (every fourth point). (b,d) Relative $L_2$ error of $u(x,T)$ of every run at $K=110$ (\texttt{FakeBerlin}) and $K=500$ (\texttt{FakeAachen}), 33 runs per column; grey, the HQPINN weights evaluated with the ideal circuit; black ticks, medians.}
+  \label{fig:invfield}
 \end{figure*}
 
-\paragraph{Training on the device.} Figure~\ref{fig:hardware} shows the HQPINN trained with \texttt{ibm\_berlin} in the loop. The network, initialized at $\epsilon_{L_2}=29.4\%$, ends at $\mathrm{MSE}=1.45\times10^{-3}$ ($\epsilon_{L_2}=5.7\%$) when evaluated with the circuit running on the device, a 27-fold reduction of the MSE, and follows the steep front at $x\simeq0.5$ [Fig.~\ref{fig:hardware}(b)]. The classical PINN trained with the same protocol and the same seed remains close to the initial profile, with the peak and the trough displaced. The replayed learning curve [Fig.~\ref{fig:hardware}(d)] shows a transient of a few epochs at the initial learning rate, falls below $10^{-2}$ at epoch 29, and has a median MSE of $1.9\times10^{-3}$ over the last 10 epochs, against $2.7\times10^{-2}$ for the classical control. After epoch 30 the \texttt{ibm\_berlin} and FakeBerlin curves lie at or below the median curve of the noiseless HQPINN in 88\% and 85\% of the epochs, respectively. Only one of the 50 classical runs ends below the MSE of the hardware run. The pointwise error [Fig.~\ref{fig:hardware}(c)] is largest at the front ($|u-u_{\rm FDM}|\le0.1$); the spread between the 8 chains is small compared with this systematic error, and the same weights evaluated with the ideal circuit give $\epsilon_{L_2}=6.0\%$, so the trained network is not tied to the specific noise of the chip.
+\paragraph{Reconstruction of the field.} The classical PINN, which runs without noise, reconstructs $u(x,T)$ better in all four cases [Fig.~\ref{fig:invfield} and Table~\ref{tab:inverse}]: at 500 epochs, median $\epsilon_{L_2}=0.005$ against 0.013 at $T=0.1$ (better in 32 of the 33 pairs) and 0.044 against 0.068 at $T=1$ (28 of 33). Unlike $\nu$, the field keeps improving with the epochs at $T=1$, from 0.073 to 0.044 for the classical PINN and from 0.107 to 0.068 for the HQPINN. A better field thus does not by itself give a better $\nu$ at this horizon. A likely cause is the small number of points per epoch: on a proxy of the device, more collocation points lowered the median $\epsilon_\nu$ of the HQPINN at $T=1$ markedly (Appendix~\ref{app:adjust}).
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{fig4_noise_ladder.pdf}
-  \caption{\justifying Relative $L_2$ error of $u(x,T=0.1)$ at the hardware budget (110 epochs, $\Ncol=10$), from noiseless simulation to the real QPU. Simulation: classical PINN (widths 1--10, seeds 0--4), HQPINN with the ideal circuit and with 1024-shot noise (seeds 0--4), and HQPINN on FakeBerlin (seed 0 on the chains of the real run; small markers, seeds 1--4 of an earlier FakeBerlin batch). Real QPU: the FakeBerlin-trained network evaluated on \texttt{ibm\_berlin}, and the network trained and evaluated on \texttt{ibm\_berlin}. Large markers, seed 0 (the seed of the hardware runs); open markers, the same weights evaluated with the ideal circuit; vertical ticks, medians.}
-  \label{fig:ladder}
-\end{figure}
+The networks of the HQPINN are trained through the noisy device, and they adapt to it. At $T=0.1$, the same weights combined with the ideal circuit give a larger error in 22 of the 33 runs at 500 epochs, by a median factor of 1.05 (25 of 33 and 1.14 at 110 epochs); at $T=1$ the effect disappears (17 of 33, median factor 1.00), the error being dominated by the front. This is the behaviour expected from Proposition~\ref{prop:trig}: noise changes the coefficients $c^{(q)}_{\bm\alpha}$ but not the function class, and the post-network learns the map from the coefficients of the device.
 
-\paragraph{Transfer between emulator and device.} The network trained on FakeBerlin and evaluated on \texttt{ibm\_berlin} gives $\epsilon_{L_2}=4.8\%$, against 4.1\% on the emulator (Fig.~\ref{fig:ladder} and Table~\ref{tab:hw}): the noise model transfers to the real device with a small loss. Training on the real device (5.7\%) and training on the emulator (4.8\% on the device) lead to comparable results; with one seed each, both lie within the seed-to-seed spread of the noiseless model, so neither strategy can be declared superior. The real run lies above the same seed on the FakeBerlin batch (4.2\%) but within the range of the five FakeBerlin seeds, which is compatible with the effects of drift and chain-to-chain variation that the emulator does not model (Sec.~\ref{sec:res_device}).
-
-\begin{table}[b]
-\caption{\justifying HQPINN at the hardware budget ($n=10$, $\Ncol=10$, 110 epochs, $T=0.1$): MSE and relative $L_2$ error of $u(x,T)$. Rows marked $^{a}$ give the median over seeds 0--4 (ranges of $\epsilon_{L_2}$: ideal circuit 3.9--15.1\%, with shot noise 3.8--16.2\%) or, for the classical control, over widths 1--10 and seeds 0--4 (4.6--35.9\%); all other rows are seed 0.}
-\label{tab:hw}
-\setlength{\tabcolsep}{2.5pt}
-\footnotesize
-\begin{ruledtabular}
-\begin{tabular}{llcc}
-trained on & evaluated on & MSE & $\epsilon_{L_2}$\\
-\colrule
-\multicolumn{4}{l}{\emph{Simulation}}\\
-ideal circuit$^{a}$ & ideal circuit & $3.7\times10^{-3}$ & 9.1\%\\
-ideal + shot noise$^{a}$ & ideal circuit & $1.4\times10^{-3}$ & 5.5\%\\
-FakeBerlin & FakeBerlin & $7.7\times10^{-4}$ & 4.1\%\\
-FakeBerlin & ideal circuit & $4.6\times10^{-4}$ & 3.2\%\\
-\multicolumn{4}{l}{\emph{Real QPU}}\\
-FakeBerlin & \texttt{ibm\_berlin} & $1.06\times10^{-3}$ & 4.8\%\\
-\texttt{ibm\_berlin} & \texttt{ibm\_berlin} & $1.45\times10^{-3}$ & 5.7\%\\
-\texttt{ibm\_berlin} & surrogate $\hat f$ & $1.35\times10^{-3}$ & 5.5\%\\
-\texttt{ibm\_berlin} & ideal circuit & $1.64\times10^{-3}$ & 6.0\%\\
-\colrule
-\multicolumn{2}{l}{initial network} & $3.90\times10^{-2}$ & 29.4\%\\
-\multicolumn{2}{l}{classical PINN, same protocol$^{a}$} & $2.8\times10^{-2}$ & 24.7\%\\
-\end{tabular}
-\end{ruledtabular}
-\end{table}
-
-\subsection{Fidelity of the device model}\label{sec:res_device}
-Figure~\ref{fig:device} quantifies how well the calibrated surrogate describes the device. On FakeBerlin the calibration residual is at the shot-noise level (RMS 0.029 against 0.028 expected from 1024 shots), the contrast of the ideal term $\prod_{j\in\mathcal S_q}\cos\theta_j$ is 0.93--0.96 for all outputs, and the misfit of every chain is at the shot-noise floor: the emulated device is fully described by Eq.~\eqref{eq:trigpoly} with chip-averaged coefficients. On \texttt{ibm\_berlin} the contrast is lower and more heterogeneous (0.86--0.96), the residual distribution has heavier tails (RMS 0.044), and one chain has twice the median misfit [Figs.~\ref{fig:device}(a)--(c)]. During training the RMS of the correction $\Delta=\hat{\bm y}^{\,\rm QPU}-\hat f$ at the stencil centres stays at the shot-noise level on FakeBerlin (mean 0.030) and at 0.031--0.076 (mean 0.045) on \texttt{ibm\_berlin}, with averages over every 10 epochs between 0.042 and 0.050 [Fig.~\ref{fig:device}(d)]: the device did not drift away from the model during the 29~min of training. At validation, where every point is averaged over the 8 chains, the RMS drops to 0.013, close to the floor $1/(32\sqrt8)=0.011$. An excess that averages out over chains is chain-specific rather than common to the chip, which identifies chain-to-chain variation as the main limitation of a chip-averaged surrogate; chain-resolved coefficients would remove it at the cost of $B$ times more calibration samples.
+\subsection{Real quantum processor}\label{sec:i_qpu}
+\TODO{Ainda n\~ao h\'a nenhuma rodada do problema inverso em hardware real: todos os resultados acima v\^em de emuladores. Esta se\c{c}\~ao e a Fig.~\ref{fig:invqpu} aguardam os dados. Sugest\~ao de texto a preencher: $\hat\nu$, $\epsilon_\nu$ e $\epsilon_{L_2}$ da rodada, comparados com a mediana e a dispers\~ao do emulador no mesmo or\c{c}amento.}
+The training loop, the protocol and the comparison are ready. A run on a device uses the machinery of Sec.~\ref{sec:hil}, with the same training as on the emulator; at the budget of the forward run it costs 112 jobs (Appendix~\ref{app:iqpu}). Figure~\ref{fig:invqpu} holds the place of the result, and shows the emulator medians at the same budget against which it will be compared.
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{fig5_device_model.pdf}
-  \caption{\justifying Calibrated surrogate versus device, \texttt{ibm\_berlin} (orange) and FakeBerlin (aqua).
-  (a) Distribution of the residual of the calibration fit, $\langle Z\rangle_{\rm meas}-\hat f(\bm\theta)$, over 1024 random angle sets and 10 outputs; dashed, the distribution expected from 1024-shot noise alone.
-  (b) Contrast, the fitted coefficient of the ideal term $\prod_{j\in\mathcal S_q}\cos\theta_j$ of each output (1 for a noiseless device).
-  (c) Misfit of each chain to the chip-averaged surrogate; dotted, the screening threshold ($3\times$ median); grey, shot-noise level.
-  (d) RMS of the measured correction $\Delta$ at the stencil centres per training epoch (surrogate refitted every 10 epochs, light vertical lines) and at validation (diamond, 8-chain average); horizontal lines, the shot-noise levels $1/\sqrt S$ and $1/\sqrt{8S}$.}
-  \label{fig:device}
+  \includegraphics[width=\textwidth]{fig7_inv_qpu.pdf}
+  \caption{\justifying Inverse problem on the real QPU. \TODO{Sem dados ainda: a figura mostra s\'o as refer\^encias e se preenche sozinha quando a rodada existir (\texttt{INVERSE\_QPU\_CASES} em \texttt{paper\_common.py}).} (a,c) Learned viscosity versus epoch at $K=110$: medians of the classical PINN and of the HQPINN on \texttt{FakeBerlin} over 33 runs; dashed, $\nu_{\rm true}$. (b,d) $u(x,T)$: exact solution.}
+  \label{fig:invqpu}
 \end{figure*}
 
 % =====================================================================
-\section{Discussion}\label{sec:discussion}
+\section{Final considerations}\label{sec:discussion}
 % =====================================================================
-\TODO{Rascunho -- revisar.} Three points frame the results. First, the comparison in simulation is between two classical computations: the noiseless quantum layer is a fixed cosine-product map (Remark~\ref{rem:parity}), and its better conditioning of the residual minimization---higher success rate, half the optimizer steps, about half the parameters, and an up to 14-fold (6-fold for $n=10$) lower error at the long horizon---is an architectural effect. The quantum processor enters as the physical device that implements this map, and the question addressed by the hardware experiment is whether such a model can be \emph{trained} through a noisy device. Second, the answer is positive at the budget tested: with one job per epoch, without error mitigation, on 80 qubits, the network reaches an accuracy indistinguishable from that of the noiseless model trained with the same protocol. Proposition~\ref{prop:trig} is what makes this possible, since noise changes the coefficients of the layer but not its functional form, so a calibrated model of the device provides both the gradient and a noise-free interpolation across the finite-difference stencil. Third, the straight-through construction is generic: it applies to any circuit whose light cones are small enough for the $3^{|\mathcal C_q|}$ coefficients of Eq.~\eqref{eq:trigpoly} to be calibrated, which bounds the entangling depth to a few brickwork layers, and it is compatible with error mitigation schemes that are affine in the measured data (e.g., readout mitigation~\cite{vandenberg2022model}, Pauli twirling, linear zero-noise extrapolation~\cite{temme2017error}).
+\TODO{Rascunho, a revisar depois das rodadas no QPU.}
+In the forward problem, the simulations show that the HQPINN reaches the same error as the classical PINN with fewer parameters and fewer optimizer steps, and at the long horizon also a lower error. This comparison is between two classical computations: the noiseless quantum layer is a fixed cosine-product map, and its better conditioning of the residual minimization is an architectural effect. The quantum processor enters as the physical device that implements this map, and the hardware experiment addresses whether such a model can be \emph{trained} through a noisy device. At the budget tested the answer is positive: with one job per epoch, without error mitigation, on 80 qubits, the network reaches an accuracy within the spread of the noiseless model trained with the same protocol. This is possible because noise changes the coefficients of the layer but not its functional form, so a calibrated model of the device provides both the gradient and a noise-free interpolation across the finite-difference stencil.
 
-\emph{Limitations.} The hardware results rest on one seed per training strategy, and that seed was the best of five on the emulator. The classical control at the hardware budget uses the learning-rate schedule selected for the HQPINN; a schedule tuned for the classical model would narrow the gap at that budget: for $n=10$, the best of ten schedules (the step decay of the HQPINN rescaled to $\eta_0$, or a cosine decay from $\eta_0$ to $\eta_0/10$, with $\eta_0\in\{1,3,10,30,100\}\times10^{-3}$), selected on the test error itself, is a cosine decay from $\eta_0=0.03$; it lowers the median $\epsilon_{L_2}$ from 31.1\% to 11.4\% (6.2--19.5\%, MSE $5.8\times10^{-3}$), against 9.1\% (3.9--15.1\%, $3.7\times10^{-3}$) for the noiseless HQPINN and 5.7\% for the run on \texttt{ibm\_berlin}. For $n=3$ the schedule of the HQPINN is already the best (13.7\%). The long-budget comparison uses a common protocol, not separately optimized hyperparameters. Finally, the stopping target and the error metric rely on a first-order finite-difference reference whose own error sets the $7\times10^{-6}$ floor.
+In the inverse problem we find no advantage of the HQPINN at the budgets and with the noise tested. The two models identify $\nu$ equally well at $T=0.1$, neither identifies it accurately at $T=1$, and the classical PINN reconstructs the field better throughout. The same training machinery works in both problems, but the two sets of results should not be read as one comparison. The forward simulations are noiseless, long and stop at a physical target; the inverse runs are short, fixed-budget, and put the noise of the device on the HQPINN only. In addition, the hyperparameters of the inverse runs were selected at $\nu=0.1$, $T=0.1$ and not at the values used here. The direct counterpart of Sec.~\ref{sec:f_sim} for the inverse problem, a noiseless HQPINN and a classical PINN under one protocol, does not exist yet: the older long-budget sweeps differ in circuit, stopping rule and number of seeds (Appendix~\ref{app:long}). \TODO{Rodar esse caso e o controle cl\'assico com produto de cossenos [Eq.~\eqref{eq:parity}] separaria o efeito da arquitetura do efeito do ru\'ido.}
+
+\emph{Limitations.} The hardware results rest on a single run per horizon, the seed at $T=0.1$ was the best of five on an emulator of the device, and the real-QPU results at $T=1$ (forward) and for the inverse problem are still missing. The classical family compared here has one specific middle block, and in the forward problem the common protocol does not use separately optimized hyperparameters for each model; at the hardware budget a schedule tuned for the classical PINN narrows the gap to the noiseless HQPINN (Appendix~\ref{app:controls}). The target and the error metric of the forward problem rely on a first-order finite-difference reference whose own error sets the $7\times10^{-6}$ floor at $T=0.1$. The emulators reproduce the calibrated errors of the device but not crosstalk or drift, and they do not fix the seed of the simulator, so rerunning the HQPINN gives slightly different numbers. In the inverse problem, the effects of the budget and of the emulator on the HQPINN were not separated.
 
 % =====================================================================
 \section{Conclusions}\label{sec:conclusions}
 % =====================================================================
-\TODO{Conclus\~oes -- a escrever.}
-% Outlook items: inverse problem (identification of nu, previous draft); chain-resolved surrogates;
-% error mitigation; deeper entangling layers (|C_q| <= 4D); larger n and harder PDEs; seismic inversion.
+\TODO{Rascunho -- revisar; incluir $T=1$ no QPU e o problema inverso em hardware real.} A PINN with a fixed, parameter-free quantum layer needs fewer trainable parameters and fewer optimizer steps than a classical PINN of the same form to reach the same error on the viscous Burgers equation: about half of the steps at $T=0.1$ and, at $T=1$ and $n=10$, an error about 6 times lower. Since the noiseless layer is classically computable, this is a property of the architecture. The model can also be trained with a superconducting quantum processor in the loop, with one job per epoch and no error mitigation: at $T=0.1$ it reaches $\epsilon_{L_2}=5.7\%$ in 110 epochs, in line with the noiseless simulation at the same budget. The same model and loop extend to the inverse problem, with the viscosity updated in closed form. With the layer on a noisy emulator it identifies the viscosity as well as the classical PINN at $T=0.1$ (median error 2.8\% against 2.3\% in 500 epochs), and it does not improve on it at $T=1$, where neither model is accurate.
+
+\section*{Data and code availability}\label{sec:data}
+\TODO{Reposit\'orio/Zenodo.} The tables behind every figure are in \texttt{manuscript/data/}, written from the raw results in \texttt{data/} by \texttt{manuscript/scripts/build\_paper\_data.py}; \texttt{manuscript/scripts/make\_all.py} regenerates tables and figures. \texttt{replay\_training.py}, \texttt{simulate\_same\_budget.py} and \texttt{controls\_hardware\_budget.py} produce the replayed learning curves and the hardware-budget controls without any quantum job. The IBM job identifiers of all 113 hardware jobs are recorded in the run logs.
 
 \begin{acknowledgments}
 \TODO{Agradecimentos; acesso ao IBM Quantum (inst\^ancia PDE\_Europe); financiamento.}
@@ -321,14 +335,94 @@ Figure~\ref{fig:device} quantifies how well the calibrated surrogate describes t
 \begin{appendices}
 % =====================================================================
 
-\section{Reference solution and error metrics}\label{app:reference}
-The reference $u_{\rm FDM}$ is obtained with an explicit scheme on $N_x=512$ periodic grid points ($\Delta x=1/512$) with time step $\Delta t=10^{-4}$: first-order upwind differences for the advection term, $u\,\partial_xu\to u_j(u_j-u_{j-1})/\Delta x$ for $u_j\ge0$ and $u_j(u_{j+1}-u_j)/\Delta x$ otherwise, and second-order central differences for the diffusion term. The time step satisfies the advective and diffusive stability limits ($\Delta t\max|u|/\Delta x\simeq0.05$, $\nu\Delta t/\Delta x^2\simeq0.26$). Evaluation points that do not coincide with the grid are obtained by periodic linear interpolation at $t=T$.
+% ---------------------------------------------------------------------
+\section{Forward problem: simulation}\label{app:fsim}
+% ---------------------------------------------------------------------
+\renewcommand{\thesubsection}{\thesection.\arabic{subsection}}
+\makeatletter\renewcommand{\p@subsection}{}\makeatother
 
-\emph{FDM floor.} The stopping target of the simulations is the residual of the reference itself, $\mathcal L_{\rm FDM}=\frac{1}{N}\sum_k r_k[u_{\rm FDM}]^2$, evaluated with the same stencil $(h,\tau)$ on the same validation points, with $u_{\rm FDM}$ interpolated bilinearly (periodic in $x$, linear in $t$). Because the upwind scheme is only first-order accurate, $\mathcal L_{\rm FDM}>0$; a network whose residual is below it would be fitting the error of the reference. The corresponding floor of the MSE against the reference is $\simeq7\times10^{-6}$ at $T=0.1$.
+\subsection{Reference solution and error metrics}\label{app:reference}
+The reference $u_{\rm FDM}$ is obtained with an explicit scheme on $N_x=512$ periodic grid points ($\Delta x=1/512$) with time step $\Delta t=10^{-4}$: first-order upwind differences for the advection term, $u\,\partial_xu\to u_j(u_j-u_{j-1})/\Delta x$ for $u_j\ge0$ and $u_j(u_{j+1}-u_j)/\Delta x$ otherwise, and second-order central differences for the diffusion term. The time step satisfies the advective and diffusive stability limits ($\Delta t\max|u|/\Delta x\simeq0.05$, $\nu\Delta t/\Delta x^2\simeq0.26$). Evaluation points that do not coincide with the grid are obtained by periodic linear interpolation at $t=T$. The reference is used only for evaluation: $\nu$ is known and there is no solution data in the training.
 
-\emph{Metrics.} $\mathrm{MSE}=\frac1P\sum_p[u(x_p,T)-u_{\rm FDM}(x_p,T)]^2$, $\mathrm{MAE}$ analogously, and $\epsilon_{L_2}=\|u-u_{\rm FDM}\|_2/\|u_{\rm FDM}\|_2$, on $P=200$ equispaced points $x_p\in[0,1]$. At $T=0.1$, $\langle u_{\rm FDM}^2\rangle=0.453$, so $\epsilon_{L_2}=\sqrt{\mathrm{MSE}/0.453}$.
+\emph{FDM floor.} The stopping target of the simulations is the residual of the reference itself, $\mathcal L_{\rm FDM}=\frac{1}{N}\sum_k r_k[u_{\rm FDM}]^2$, evaluated with the same stencil $(h,\tau)$ on the same validation points, with $u_{\rm FDM}$ interpolated bilinearly (periodic in $x$, linear in $t$). Because the upwind scheme is only first-order accurate, $\mathcal L_{\rm FDM}>0$; a network whose residual is below it would be fitting the error of the reference. The corresponding floor of the MSE against the reference is $\simeq7\times10^{-6}$ at $T=0.1$. It is the error of the reference itself: against the exact solution of Appendix~\ref{app:colehopf}, on 2000 points, $u_{\rm FDM}$ has an MSE of $6.9\times10^{-6}$ at $T=0.1$ and $4.0\times10^{-6}$ at $T=1$.
 
-\section{Proof of Proposition~\ref{prop:trig} and light-cone structure}\label{app:trig}
+\emph{Metrics.} $\mathrm{MSE}=\frac1P\sum_p[u(x_p,T)-u_{\rm FDM}(x_p,T)]^2$, $\mathrm{MAE}$ analogously, and $\epsilon_{L_2}=\|u-u_{\rm FDM}\|_2/\|u_{\rm FDM}\|_2$, on $P=200$ equispaced points $x_p\in[0,1]$. At $T=0.1$, $\langle u_{\rm FDM}^2\rangle=0.453$, so $\epsilon_{L_2}=\sqrt{\mathrm{MSE}/0.453}$. A model that does not evolve the initial condition, $u(x,T)=\sin2\pi x$, has $\mathrm{MSE}=3.93\times10^{-2}$ at $T=0.1$ and $2.82\times10^{-1}$ at $T=1$.
+
+\subsection{Architectures and hyperparameters}\label{app:hyper}
+
+\begin{table}[h]
+\caption{\justifying Network architectures (all hidden layers $\tanh$, linear outputs), for the two problems. The forward simulations use $m=n$; the classical control at the hardware budget and the inverse problem use $m=10$. The two coincide at $n=10$. The learnable $\nu$ is not counted.}
+\label{tab:arch}
+\setlength{\tabcolsep}{2pt}
+\footnotesize
+\begin{ruledtabular}
+\begin{tabular}{lcc}
+ & HQPINN & classical PINN\\
+\colrule
+features & $\bm\xi$, Eq.~\eqref{eq:composition} & same\\
+$\mathcal N_{\rm pre}$ & $3\to10\to n$ & $3\to10\to n$\\
+middle block & $R_Y$, $W_{\rm brick}$, $\langle Z_q\rangle$ & $n\to m\to n$\\
+$\mathcal N_{\rm post}$ & $n\to10\to1$ & $n\to10\to1$\\
+param., middle & 0 & $2nm+m+n$\\
+param., total & $21n+61$ & $2n^2+23n+61$ $(m{=}n)$\\
+ & & $42n+71$ $(m{=}10)$\\
+$n=3,7,10$ & 124, 208, 271 & 197, 365, 491 $(m{=}10)$\\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\begin{table}[h]
+\caption{\justifying Training hyperparameters of the forward simulations (Figs.~\ref{fig:width} and~\ref{fig:points}), identical for both models.}
+\label{tab:hyper_sim}
+\setlength{\tabcolsep}{2pt}
+\footnotesize
+\begin{ruledtabular}
+\begin{tabular}{lc}
+$\Ncol$ per step & 10--100\\
+stencil $(h,\tau)$ & $(1/512,10^{-3})$\\
+optimizer & AdamW, L-BFGS\\
+steps & $\le2{\times}10^4+10^3$\\
+learning rate & $10^{-3}$, plateau $\times\frac12$\\
+weight decay; gradient clip & $10^{-6}$; 1\\
+L-BFGS & lr 0.5, history 50\\
+stopping & FDM floor\\
+seeds & 0--49\\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\subsection{Simulation protocol}\label{app:sim}
+Both models are trained with the same algorithm and hyperparameters (Algorithm~\ref{alg:sim}): AdamW~\cite{loshchilov2019decoupled} with learning rate $10^{-3}$ reduced on plateaus, a fresh batch of $\Ncol$ collocation points at every step, up to $2\times10^4$ steps, followed by at most $10^3$ L-BFGS iterations~\cite{liu1989limited} on the last batch. The residual is monitored on a fixed validation set of $\Ncol$ random points, and training stops when it reaches the FDM floor on the same points and with the same stencil (Appendix~\ref{app:reference}). The best monitored snapshot is returned. We sweep $n=2,\dots,15$, $\Ncol\in\{10,100\}$ and $T\in\{0.1,1\}$, with 50 seeds per configuration and model (5600 runs), seed $s$ fixing the initialization and the validation set. Complementary sweeps under the same protocol cover $\Ncol$ from 10 to 100, for both models at $n\in\{3,5,7,10,15\}$. \TODO{arquivar no reposit\'orio o script que gerou a varredura (\texttt{Experiment1Modified}, protocolo \texttt{fixed\_validation\_v2}); \texttt{run\_qubit\_sweep.py --fixed-validation} reproduz o protocolo, conferido em 14 seeds.} The ideal quantum layer is evaluated with the closed form~\eqref{eq:parity}, which is exact for the noiseless circuit and differentiable. Neither model has failed runs at $T=0.1$ (largest MSE $2.2\times10^{-3}$ for the classical PINN and $1.2\times10^{-3}$ for the HQPINN among 1400 runs each).
+
+\begin{algorithm}{Forward simulation training (classical PINN and ideal HQPINN), long budget.}\label{alg:sim}
+\item \textbf{input:} width $n$, $\Ncol$, horizon $T$, seed $s$; stencil $(h,\tau)$; $K_{\rm A}=2\times10^4$, $K_{\rm B}=10^3$
+\item set seed $s$; initialize $\Theta$; draw a fixed validation set $\mathcal V$ of $\Ncol$ points (seed $10^6+s$)
+\item $\mathcal L_{\rm FDM}\gets$ residual of the reference on $\mathcal V$ (Appendix~\ref{app:reference})
+\item \textbf{for} $k=1,\dots,K_{\rm A}$: draw $\Ncol$ points; build the $5\Ncol$ stencil nodes; $\Theta\gets$ AdamW$(\nabla_\Theta\mathcal L)$; evaluate $\mathcal L(\mathcal V)$; keep the best snapshot; \textbf{stop} if $\mathcal L(\mathcal V)\le\mathcal L_{\rm FDM}$
+\item restore the best snapshot; \textbf{for} $k=1,\dots,K_{\rm B}$: one L-BFGS iteration on the last batch; evaluate $\mathcal L(\mathcal V)$; \textbf{stop} at the target or after 50 iterations without improvement
+\item \textbf{return} the best snapshot
+\end{algorithm}
+
+\subsection{The noiseless quantum layer}\label{app:parity}
+The first sublayer of $W_{\rm brick}$ acts on the pairs $(1,2),(3,4),\dots$ and the second on $(2,3),(4,5),\dots$ ($n-1$ gates in total).
+\begin{remark}\label{rem:parity}
+    A CNOT network acts on the computational basis as a linear map over $\mathrm{GF}(2)$, $\bm b\mapsto M\bm b$. For the noiseless circuit~\eqref{eq:circuit} the Heisenberg evolution of $Z_q$ is the Pauli string $\prod_{j\in\mathcal S_q}Z_j$ with $\mathcal S_q=\{j:M_{qj}=1\}\subseteq\mathcal C_q$, and
+    \begin{equation}
+      y_q(\bm\theta)=\prod_{j\in\mathcal S_q}\cos\theta_j ,\qquad |\mathcal S_q|\le3 .
+      \label{eq:parity}
+    \end{equation}
+    The ideal layer is therefore efficiently classically computable: the noiseless HQPINN is a classical network with cosine-product activations. Its simulation results measure the merit of this \emph{architecture}, not a quantum advantage, in line with the general results on classical surrogates of quantum learning models~\cite{schreiber2023classical}. For angles spread over a full period, $\operatorname{Var}[y_q]=2^{-|\mathcal S_q|}$, so deeper entangling layers trade expressivity (longer products) against concentration.
+\end{remark}
+
+\emph{Proof.} CNOT conjugation maps $Z_c\mapsto Z_c$ and $Z_t\mapsto Z_cZ_t$, so $Z_q$ evolves into the string $Z_{\mathcal S_q}$ whose support is the $q$th row of the GF(2) matrix $M$ of the network. On $\bigotimes_jR_Y(\theta_j)|0\rangle$, $\langle Z_j\rangle=\cos\theta_j$ and the state is a product, which gives Eq.~\eqref{eq:parity}. For one brickwork layer on $n=10$ qubits the supports are $\mathcal S_1=\{1\}$, $\mathcal S_2=\{1,2\}$, $\mathcal S_{q}=\{q-2,q-1,q\}$ for odd $q\ge3$, $\mathcal S_q=\{q-1,q\}$ for even $q\ge4$, so that, e.g., $y_3=\cos\theta_1\cos\theta_2\cos\theta_3$ and $y_{10}=\cos\theta_9\cos\theta_{10}$; hence $|\mathcal S_q|\le3$ and $\mathcal S_q\subsetneq\mathcal C_q$ for most outputs. If the $\theta_j$ are independent and uniform on a period, $\mathbb E[\cos^2\theta_j]=1/2$, hence $\operatorname{Var}[y_q]=2^{-|\mathcal S_q|}$ and $\mathbb E[(\partial_{\theta_j}y_q)^2]=2^{-|\mathcal S_q|}$.
+
+% ---------------------------------------------------------------------
+\section{Forward problem: real hardware}\label{app:fqpu}
+% ---------------------------------------------------------------------
+
+\subsection{Proof of Proposition~\ref{prop:trig}}\label{app:trig}
+On hardware, $\hat y_q=y_q+\xi_q$ with $\mathbb E[\xi_q]=0$ and $\operatorname{Var}[\xi_q]=(1-y_q^2)/S\le1/S$. The hypothesis of Proposition~\ref{prop:trig} holds on IBM devices because $R_Y(\theta)$ is compiled into fixed microwave pulses and a \emph{virtual} $R_Z$ rotation, so the physical operations, and hence their errors, do not depend on $\theta$. Equation~\eqref{eq:trigpoly} has three consequences. (i) The quantum layer injects a finite Fourier structure into the latent representation~\cite{schuld2021effect}: the pre-network learns where to place the angles, and the circuit multiplies harmonics of different latent coordinates, $\cos\theta_a\cos\theta_b=\tfrac12[\cos(\theta_a+\theta_b)+\cos(\theta_a-\theta_b)]$, in the spirit of Fourier-feature networks~\cite{tancik2020fourier,rahimi2007random}. (ii) Noise does not change the function class, only the coefficients; this is what makes a calibrated surrogate of the device possible. (iii) The quantum layer has no trainable parameter, so what remains of the barren-plateau question is the possible concentration of the map $\bm\theta\mapsto\bm y$ itself, which is controlled by the size of the light cones (Remark~\ref{rem:parity}). The fixed layer connects the HQPINN to fixed-substrate approaches such as quantum feature maps~\cite{havlicek2019supervised}, quantum reservoir computing and extreme learning machines~\cite{fujii2017harnessing,mujal2021opportunities} and quanvolutional networks~\cite{henderson2020quanvolutional}, none of which has been used to minimize a PDE residual.
+
 \emph{Trigonometric structure.} For a single rotation,
 \begin{align}
   R_Y(\theta)\,\rho\,R_Y^\dagger(\theta)={}&\tfrac12(\rho+Y\rho Y)+\tfrac12\cos\theta\,(\rho-Y\rho Y)\nonumber\\
@@ -339,22 +433,14 @@ so the map $\rho\mapsto R_Y(\theta)\rho R_Y^\dagger(\theta)$ is an affine combin
 
 \emph{Light cone.} In the Heisenberg picture $y_q=\operatorname{Tr}[\rho_0\,\mathcal E^\dagger_{\bm\theta}(Z_q)]$. The adjoint of a trace-preserving channel is unital, so every gate (and every gate-local noise channel) whose support does not intersect the current support of the evolved operator leaves it unchanged. The support grows only through gates that touch it; the set of qubits reached is $\mathcal C_q$, and rotations outside $\mathcal C_q$ drop out. Going backwards through one brickwork layer, the second sublayer adds at most the partner of $q$ and the first sublayer at most one qubit on each side, so $|\mathcal C_q|\le4$; for $D$ layers, $|\mathcal C_q|\le\min(n,4D)$. For $n=10$ the cones are $\{1,2\}$, $\{1,\dots,4\}$ (twice), $\{3,\dots,6\}$ (twice), $\{5,\dots,8\}$ (twice), $\{7,\dots,10\}$ (twice) and $\{9,10\}$. Crosstalk or non-local noise invalidates this bound and enlarges the effective cone.
 
-\emph{Noiseless case (Remark~\ref{rem:parity}).} CNOT conjugation maps $Z_c\mapsto Z_c$ and $Z_t\mapsto Z_cZ_t$, so $Z_q$ evolves into the string $Z_{\mathcal S_q}$ whose support is the $q$th row of the GF(2) matrix $M$ of the network. On $\bigotimes_jR_Y(\theta_j)|0\rangle$, $\langle Z_j\rangle=\cos\theta_j$ and the state is a product, which gives Eq.~\eqref{eq:parity}. For one brickwork layer on $n=10$ qubits the supports are $\mathcal S_1=\{1\}$, $\mathcal S_2=\{1,2\}$, $\mathcal S_{q}=\{q-2,q-1,q\}$ for odd $q\ge3$, $\mathcal S_q=\{q-1,q\}$ for even $q\ge4$, so that, e.g., $y_3=\cos\theta_1\cos\theta_2\cos\theta_3$ and $y_{10}=\cos\theta_9\cos\theta_{10}$; hence $|\mathcal S_q|\le3$ and $\mathcal S_q\subsetneq\mathcal C_q$ for most outputs. If the $\theta_j$ are independent and uniform on a period, $\mathbb E[\cos^2\theta_j]=1/2$, hence $\operatorname{Var}[y_q]=2^{-|\mathcal S_q|}$ and $\mathbb E[(\partial_{\theta_j}y_q)^2]=2^{-|\mathcal S_q|}$.
-
 \emph{Conditioning of the calibration.} With $\theta_j\sim\mathcal U(-\pi,\pi)$ i.i.d., the features $\prod_{j\in\mathcal C_q}g_{\alpha_j}(\theta_j)$ are orthogonal, with $\mathbb E[g_0^2]=1$ and $\mathbb E[g_c^2]=\mathbb E[g_s^2]=1/2$. The Gram matrix of the least-squares problem is therefore diagonal in expectation, with condition number $2^{|\mathcal C_q|}\le16$, and the standard error of a coefficient with $k$ non-constant factors is $\simeq\sigma\,2^{k/2}/\sqrt{N_{\rm cal}}$. With $N_{\rm cal}=1024$ samples and $\sigma\simeq1/32$, the highest-order coefficients ($k=4$) are determined to $\simeq4\times10^{-3}$, well below the shot noise of a single measurement.
 
-\section{Training algorithms}\label{app:training}
+\subsection{The loop on a device}\label{app:hil}
+\paragraph{Why a surrogate.} The device returns $\hat{\bm y}$ but not $\partial\bm y/\partial\bm\theta$. Parameter-shift rules~\cite{mitarai2018quantum,schuld2019evaluating,wierichs2022general} give unbiased derivatives at the price of $2n$ extra circuits per evaluation point, and SPSA~\cite{spall1992multivariate,kandala2017hardware} gives a single random directional derivative per step. If the five stencil nodes were measured independently, the shot noise $\sigma_u$ of $u$ would also enter $\partial_x^2u$ amplified by $\sqrt6/h^2\approx6.4\times10^5$ (Appendix~\ref{app:ste}).
 
-\begin{algorithm}{Simulation training (classical PINN and ideal HQPINN), long budget.}\label{alg:sim}
-\item \textbf{input:} width $n$, $\Ncol$, horizon $T$, seed $s$; stencil $(h,\tau)$; $K_{\rm A}=2\times10^4$, $K_{\rm B}=10^3$
-\item set seed $s$; initialize $\Theta$; draw a fixed validation set $\mathcal V$ of $\Ncol$ points (seed $10^6+s$)
-\item $\mathcal L_{\rm FDM}\gets$ residual of the reference on $\mathcal V$ (Appendix~\ref{app:reference})
-\item \textbf{for} $k=1,\dots,K_{\rm A}$: draw $\Ncol$ points; build the $5\Ncol$ stencil nodes; $\Theta\gets$ AdamW$(\nabla_\Theta\mathcal L)$; evaluate $\mathcal L(\mathcal V)$; keep the best snapshot; \textbf{stop} if $\mathcal L(\mathcal V)\le\mathcal L_{\rm FDM}$
-\item restore the best snapshot; \textbf{for} $k=1,\dots,K_{\rm B}$: one L-BFGS iteration on the last batch; evaluate $\mathcal L(\mathcal V)$; \textbf{stop} at the target or after 50 iterations without improvement
-\item \textbf{return} the best snapshot
-\end{algorithm}
+\paragraph{The three stages.} \emph{Calibration:} before training, one job evaluates the circuit at random angles $\theta_j\sim\mathcal U(-\pi,\pi)$ on every $n$-qubit chain of the chip in parallel; the coefficients of Eq.~\eqref{eq:trigpoly} are obtained by linear least squares, which yields a surrogate $\hat f(\bm\theta)$ of the device with its average noise built in~\cite{sung2020using}. \emph{Training:} Eq.~\eqref{eq:ste} at each epoch. At the centre $\tilde{\bm y}=\hat{\bm y}^{\,\rm QPU}$, so the value of $u$ entering the nonlinear term $u\,\partial_xu$ is the measured one; across the stencil the variation of $\tilde{\bm y}$ is that of the smooth surrogate; and the gradient is $\partial\tilde{\bm y}/\partial\bm\theta=\partial\hat f/\partial\bm\theta$, available analytically. Every $K_{\rm fit}$ epochs the surrogate is refitted with the calibration data and all measurements accumulated so far, so that it tracks the device in the region of angles actually visited by the network. \emph{Validation:} a final job evaluates $u(x,T)$ with the trained network and the circuit run on the device. Because the surrogate has the exact functional form of the device response, the method does not approximate the circuit; its only bias is the statistical error of the fitted coefficients and the part of the device behaviour that the time-independent, chip-averaged model~\eqref{eq:trigpoly} cannot capture (chain-to-chain variation, drift, crosstalk). The construction applies to any circuit whose light cones are small enough for the $3^{|\mathcal C_q|}$ coefficients of Eq.~\eqref{eq:trigpoly} to be calibrated, which bounds the entangling depth to a few brickwork layers, and it is compatible with error mitigation schemes that are affine in the measured data (e.g., readout mitigation~\cite{vandenberg2022model}, Pauli twirling, linear zero-noise extrapolation~\cite{temme2017error}).
 
-\begin{algorithm}{HQPINN training with the quantum processor in the loop.}\label{alg:hil}
+\begin{algorithm}{Forward HQPINN training with the quantum processor in the loop.}\label{alg:hil}
 \item \textbf{input:} chains $\{\mathcal Q_b\}_{b=1}^{B}$, shots $S$, epochs $K$, $\Ncol$, refit period $K_{\rm fit}$, schedule $\eta_k$
 \item \emph{calibration job}: $\lceil1024/B\rceil$ random angle sets on all chains $\to(\bm\theta,\hat{\bm y})$; screen chains; fit $\hat f$ [Eq.~\eqref{eq:trigpoly}]
 \item set seed; initialize $\Theta=(\bm\phi,\bm\psi)$
@@ -367,9 +453,74 @@ so the map $\rho\mapsto R_Y(\theta)\rho R_Y^\dagger(\theta)$ is an affine combin
 \item \emph{validation job}: $u(x,T)$ on 200 points, each measured on every chain and averaged
 \end{algorithm}
 
-Both models are trained with Algorithm~\ref{alg:sim} in the long-budget simulations; the HQPINN on FakeBerlin and on \texttt{ibm\_berlin} with Algorithm~\ref{alg:hil}; the classical control and the hardware-budget simulations follow the loop of Algorithm~\ref{alg:hil} with the device replaced by the classical middle block or by the ideal layer (with or without sampled shot noise). The learning rate is set at every epoch, $\eta_k=\max\{0.1-0.01\lfloor(k-1)/10\rfloor,\,0.01\}$, and the AdamW state is kept across epochs.
+The learning rate is set at every epoch, $\eta_k=\max\{0.1-0.01\lfloor(k-1)/10\rfloor,\,0.01\}$, and the AdamW state is kept across epochs.
 
-\section{Straight-through estimator and finite differences}\label{app:ste}
+\begin{table}[h]
+\caption{\justifying Hyperparameters at the hardware budget: \texttt{ibm\_berlin}, FakeBerlin, classical control and hardware-budget simulations (Fig.~\ref{fig:qpu}, Appendix~\ref{app:controls}).}
+\label{tab:hyper_hw}
+\setlength{\tabcolsep}{2pt}
+\footnotesize
+\begin{ruledtabular}
+\begin{tabular}{lc}
+$\Ncol$ per epoch & 10\\
+stencil $(h,\tau)$ & $(1/512,10^{-3})$\\
+optimizer; steps & AdamW; 110\\
+learning rate & 0.1 to 0.01\\
+weight decay; gradient clip & $10^{-6}$; 1\\
+stopping & fixed budget\\
+shots $S$ & 1024\\
+calibration & 1024 samples\\
+refit $K_{\rm fit}$ & 10 epochs\\
+seeds & 0 (QPU), 0--4\\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\subsection{The run at \texorpdfstring{$T=0.1$}{T=0.1}}\label{app:run}
+The hardware experiment ran on \texttt{ibm\_berlin}, an IBM Nighthawk processor with 120 transmon qubits on a square lattice and native CZ gates, on 8 October 2026, within a single dedicated runtime \texttt{Session}. The circuit~\eqref{eq:circuit} with $n=10$ was laid out on 8 disjoint chains of 10 coupled qubits (Fig.~\ref{fig:chip}), selected from the current calibration data (12 candidate chains, 4 discarded for a high error score), and the 8 copies were transpiled into a single packed circuit of depth 12 with 72 CZ gates and no SWAPs. All expectation values were estimated with $S=1024$ shots (precision $1/32$) and \emph{without} error suppression or mitigation (raw counts). The run consisted of one calibration job (128 parameter sets on 8 chains, 1024 samples per output), 110 training jobs (one per epoch, the 10 stencil centres distributed over the chains) and one validation job (200 points, each measured once on every chain and averaged), i.e., 112 jobs, 548 parameter sets and $5.6\times10^5$ shots in 54~min of wall-clock time. Training used AdamW with learning rate $0.1$ decreased by $0.01$ every 10 epochs down to $0.01$, gradient-norm clipping at 1 and $K_{\rm fit}=10$. The hardware seed (seed 0) is the best of an earlier FakeBerlin batch of five seeds. Device characteristics are listed in Table~\ref{tab:device}.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.72\linewidth]{figB1_chip.pdf}
+  \caption{\justifying The 120-qubit square lattice of \texttt{ibm\_berlin} and the 8 disjoint 10-qubit chains on which the circuit ran in parallel (alternating shades and numbers distinguish neighbouring chains).}
+  \label{fig:chip}
+\end{figure}
+
+\begin{table}[b]
+\caption{\justifying \texttt{ibm\_berlin} on 8 October 2026: the 80 qubits and 72 couplers used (median and range).}
+\label{tab:device}
+\setlength{\tabcolsep}{4pt}
+\footnotesize
+\begin{ruledtabular}
+\begin{tabular}{lcc}
+quantity & median & range\\
+\colrule
+$T_1$ & 322~$\mu$s & 110--528~$\mu$s\\
+$T_2$ & 255~$\mu$s & 34--510~$\mu$s\\
+readout error & 1.7\% & 0.5--6.3\%\\
+$\sqrt X$ error & $1.7\times10^{-4}$ & $(0.7$--$9.9)\times10^{-4}$\\
+CZ error & $1.7\times10^{-3}$ & $(0.6$--$14)\times10^{-3}$\\
+\colrule
+qubits used / total & \multicolumn{2}{c}{80 / 120 (8 chains $\times$ 10)}\\
+packed circuit & \multicolumn{2}{c}{depth 12, 72 CZ, no SWAP}\\
+jobs / shots / time & \multicolumn{2}{c}{112 / $5.6\times10^5$ / 54 min}\\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\paragraph{Chains.} All disjoint chains of $n$ physically coupled qubits are searched on the coupling map with a randomized greedy depth-first search that starts from the qubits with fewest free neighbours (100 trials; the largest set is kept). Each chain is scored by the sum of its readout and $\sqrt X$ errors and of the CZ errors of its links, and chains with a score above $0.05\,n$ are discarded; on \texttt{ibm\_berlin} 8 of 12 candidate chains were kept (rejected scores 0.51, 0.57, 1.27, 3.83). The circuit is laid out on all kept chains in a single packed circuit, so that one parameter set yields one sample per chain; transpilation with an initial layout on the chains produced no SWAP (72 CZ, depth 12).
+
+\paragraph{Calibration and screening.} The calibration job evaluates 128 random angle sets on the 8 chains (1024 samples per output). Since the chains are physically different, each chain is also screened: its RMS misfit to the chip-averaged surrogate is computed, and chains above three times the median are discarded. On \texttt{ibm\_berlin} the misfits were 0.032--0.080 and all chains were kept. The surrogate is a single set of coefficients for the whole chip; the per-output fit RMS was 0.025--0.095 (mean 0.039, shot noise 0.031) and the RMS difference between the device and the ideal formula 0.064 (FakeBerlin: 0.028 and 0.039).
+
+\paragraph{Training jobs.} The 10 stencil centres of each epoch fill 2 parameter sets on the 8 chains; centre $p$ runs on chain $(p+k)\bmod8$ at epoch $k$, which rotates the points over the chains and prevents a systematic assignment of points to poor chains. The surrogate is refitted every 10 epochs with the calibration data and all training measurements (1124 to 2124 samples). An epoch took 16~s on average, dominated by job latency inside the session; on the emulator, 3.5~s.
+
+\paragraph{Validation.} The validation job evaluates the 200 points at $t=T$ with 8 replicas, one on every chain, and averages $\hat{\bm y}$ over the replicas before the post-network, so the average matches the chip-averaged surrogate. Three evaluations of the same weights give $\epsilon_{L_2}=5.7\%$ with the circuit on the device, 5.5\% with the surrogate and 6.0\% with the ideal formula.
+
+\paragraph{Offline replay.} The run log contains the initial weights, the calibration data and, for every epoch, the collocation points, the angles sent to the device and the measured $\hat{\bm y}$. Replaying Algorithm~\ref{alg:hil} with the recorded measurements in place of the device reproduces the trained weights, the training losses and the angles of every epoch exactly (maximum difference zero, for both \texttt{ibm\_berlin} and FakeBerlin), which we use to evaluate the network after each epoch [Fig.~\ref{fig:qpu}(b)] without additional quantum resources. This holds on the software stack of the run (Windows, PyTorch 2.14.1). On Linux, with the same PyTorch version and the same recorded measurements, the angles differ by $6\times10^{-8}$ at the first epoch: the rounding error, amplified by the finite differences of a single-precision residual, grows to order one, and the replay ends at another network, with a surrogate MSE of $6.3\times10^{-3}$ ($\epsilon_{L_2}\simeq12\%$) instead of $1.4\times10^{-3}$. The training is therefore chaotic at this learning rate, and the difference lies within the seed-to-seed spread of the noiseless model. It is one more reason to read a single run with care. The same happens to the noiseless simulations of Appendix~\ref{app:controls}, which on Linux give a median of 8.3\% (4.6--13.4\%), against the recorded 9.1\% (3.9--15.1\%). \TODO{avaliar se esta sensibilidade deve ir para o texto principal, e se vale repetir o treino em dupla precis\~ao.}
+
+\paragraph{The run at $T=1$.} \TODO{A rodada ainda n\~ao existe; caso proposto em \texttt{QPU\_CASES}: $n=10$, $\Ncol=20$, seed 0, 110 \'epocas. Acrescentar aqui os detalhes t\'ecnicos dela.}
+
+\subsection{Straight-through estimator and finite differences}\label{app:ste}
 \emph{Stencil formulas and truncation.} On the cross stencil,
 \begin{align}
   \partial_tu&\approx\frac{u(x,t+\tau)-u(x,t-\tau)}{2\tau},\qquad \partial_xu\approx\frac{u_{+}-u_{-}}{2h},\nonumber\\
@@ -408,100 +559,178 @@ finite differences in $\bm\theta$ & $\simeq1050$ & $\times\,h^{-2}$\\
 \end{ruledtabular}
 \end{table}
 
-\section{Implementation of the hardware loop}\label{app:hil_impl}
-\paragraph{Chains.} All disjoint chains of $n$ physically coupled qubits are searched on the coupling map with a randomized greedy depth-first search that starts from the qubits with fewest free neighbours (100 trials; the largest set is kept). Each chain is scored by the sum of its readout and $\sqrt X$ errors and of the CZ errors of its links, and chains with a score above $0.05\,n$ are discarded; on \texttt{ibm\_berlin} 8 of 12 candidate chains were kept (rejected scores 0.51, 0.57, 1.27, 3.83). The circuit is laid out on all kept chains in a single packed circuit, so that one parameter set yields one sample per chain; transpilation with an initial layout on the chains produced no SWAP (72 CZ, depth 12).
+\subsection{Controls at the hardware budget}\label{app:controls}
+All controls use the protocol of the run at $T=0.1$ (110 epochs, $\Ncol=10$, same learning-rate schedule and collocation stream per seed): they follow the loop of Algorithm~\ref{alg:hil} with the device replaced by the classical middle block, by the ideal layer (with or without sampled shot noise), or by the emulator.
 
-\paragraph{Calibration and screening.} The calibration job evaluates 128 random angle sets on the 8 chains (1024 samples per output). Since the chains are physically different, each chain is also screened: its RMS misfit to the chip-averaged surrogate is computed, and chains above three times the median are discarded. On \texttt{ibm\_berlin} the misfits were 0.032--0.080 and all chains were kept. The surrogate is a single set of coefficients for the whole chip; the per-output fit RMS was 0.025--0.095 (mean 0.039, shot noise 0.031) and the RMS difference between the device and the ideal formula 0.064 (FakeBerlin: 0.028 and 0.039).
+\paragraph{Classical control.} The classical PINN is trained with exactly the hardware protocol for $n=1,\dots,10$ and seeds 0--4 (50 runs, $m=10$ in Table~\ref{tab:arch}). It ends between 4.6\% and 35.9\% (median 24.7\%), and 28\% of its runs end above the error of a network that does not evolve the initial condition. For $n=10$ the best of ten schedules (the step decay of the HQPINN rescaled to $\eta_0$, or a cosine decay from $\eta_0$ to $\eta_0/10$, with $\eta_0\in\{1,3,10,30,100\}\times10^{-3}$), selected on the test error itself, is a cosine decay from $\eta_0=0.03$; it lowers the median $\epsilon_{L_2}$ from 31.1\% to 11.4\% (6.2--19.5\%, MSE $5.8\times10^{-3}$). For $n=3$ the schedule of the HQPINN is already the best (13.7\%). Replacing $\tanh$ by $\sin$ in the classical middle block at $n=10$ lowers the median $\epsilon_{L_2}$ from 31.1\% to 20.9\% (7.0--27.2\%) under the schedule of the HQPINN and from 11.4\% to 10.6\% (8.7--12.5\%) under the best classical schedule: a periodic activation closes part of the gap at a common schedule and has little effect once the schedule is tuned. \TODO{repetir o controle com \texttt{seno=True} no protocolo longo ($T=1$), onde est\'a a vantagem.}
 
-\paragraph{Training jobs.} The 10 stencil centres of each epoch fill 2 parameter sets on the 8 chains; centre $p$ runs on chain $(p+k)\bmod8$ at epoch $k$, which rotates the points over the chains and prevents a systematic assignment of points to poor chains. The surrogate is refitted every 10 epochs with the calibration data and all training measurements (1124 to 2124 samples). An epoch took 16~s on average, dominated by job latency inside the session; on the emulator, 3.5~s.
+\paragraph{Hardware-budget simulations.} To separate the effect of noise from that of the short training, the HQPINN is trained offline, seeds 0--4, with (i) the ideal layer on all stencil nodes, reaching $\epsilon_{L_2}$ between 3.9\% and 15.1\% (median 9.1\%; 5.5\% for seed 0), and (ii) the ideal layer plus binomial shot noise with $S=1024$ at the stencil centres, propagated with Eq.~\eqref{eq:ste} and a perfect surrogate, which does not degrade it (3.8\%--16.2\%, median 5.5\%).
 
-\paragraph{Validation.} The validation job evaluates the 200 points at $t=T$ with 8 replicas, one on every chain, and averages $\hat{\bm y}$ over the replicas before the post-network, so the average matches the chip-averaged surrogate. Three evaluations of the same weights are reported: with the circuit on the device, with the surrogate, and with the ideal formula.
+\paragraph{Noisy emulation.} The device is emulated with the \texttt{FakeBerlin} noise model of Qiskit~\cite{javadiabhari2024qiskit}, which reproduces the calibrated gate errors, $T_1/T_2$ relaxation, readout errors and coupling map of \texttt{ibm\_berlin} but not crosstalk or temporal drift. Each 10-qubit chain is simulated exactly as a density matrix and $S=1024$ shots are sampled. The emulated training uses the same physical chains, seed, collocation stream and protocol as the real run (Algorithm~\ref{alg:hil}), and gives 4.1\% for seed 0 and 6.9\%--8.1\% for seeds 1--4. \TODO{Seeds 1--4: valores da vers\~ao anterior do texto; os arquivos brutos n\~ao est\~ao no reposit\'orio nem no hist\'orico. Seed 0 e os 4,8\% abaixo foram conferidos em \texttt{data/quantum\_ibm\_faker/T\_0.1/}.} The network trained on FakeBerlin and evaluated on \texttt{ibm\_berlin} (one prediction job) gives 4.8\%: the noise model transfers to the real device with a small loss. With one seed each, training on the device (5.7\%) and on the emulator (4.8\% on the device) both lie within the seed-to-seed spread of the noiseless model, so neither strategy can be declared superior.
 
-\paragraph{Offline replay.} The run log contains the initial weights, the calibration data and, for every epoch, the collocation points, the angles sent to the device and the measured $\hat{\bm y}$. Replaying Algorithm~\ref{alg:hil} with the recorded measurements in place of the device reproduces the trained weights, the training losses and the angles of every epoch exactly (maximum difference zero, for both \texttt{ibm\_berlin} and FakeBerlin), which we use to evaluate the network after each epoch [Fig.~\ref{fig:hardware}(d)] without additional quantum resources.
+% ---------------------------------------------------------------------
+\section{Inverse problem: simulation}\label{app:isim}
+% ---------------------------------------------------------------------
 
-\begin{table}[b]
-\caption{\justifying \texttt{ibm\_berlin} on 8 October 2026: the 80 qubits and 72 couplers used (median and range).}
-\label{tab:device}
+\subsection{Exact solution}\label{app:colehopf}
+The Cole--Hopf transformation~\cite{cole1951quasi,hopf1950partial} $u=-2\nu\,\partial_x\ln\varphi$ maps Eq.~\eqref{eq:burgers} onto the heat equation $\partial_t\varphi=\nu\,\partial_x^2\varphi$. For $u(x,0)=\sin(2\pi x)$,
+\begin{equation}
+  \varphi(x,0)=\exp\!\left[-\frac{1}{2\nu}\int_0^x\sin(2\pi s)\,ds\right]\propto e^{z\cos(2\pi x)},
+\end{equation}
+with $z=1/(4\pi\nu)$. Using $e^{z\cos\vartheta}=I_0(z)+2\sum_{m\ge1}I_m(z)\cos m\vartheta$, with $I_m$ the modified Bessel functions, each Fourier mode decays as $e^{-4\pi^2m^2\nu t}$ and
+\begin{equation}
+  u(x,t)=\frac{8\pi\nu\sum_{m\ge1}m\,I_m(z)\,e^{-4\pi^2m^2\nu t}\sin(2\pi m x)}{I_0(z)+2\sum_{m\ge1}I_m(z)\,e^{-4\pi^2m^2\nu t}\cos(2\pi m x)}.
+  \label{eq:colehopf}
+\end{equation}
+The series is evaluated in double precision with exponentially scaled Bessel functions $I_m(z)e^{-z}$ (the common factor cancels) and $m<4z+64$ terms. It reproduces the initial condition to machine precision and satisfies Eq.~\eqref{eq:burgers} to the accuracy of a finite-difference check ($\sim10^{-5}$); for $\nu=0.01$, $\max_x u\simeq0.961$ at $T=0.1$ and $0.331$ at $T=1$. The series loses precision for $z\gtrsim16$ ($\nu\lesssim5\times10^{-3}$), where a Gauss--Hermite integral representation~\cite{basdevant1986spectral} must be used instead.
+
+\subsection{Training algorithm}\label{app:training}
+Both models are trained with Algorithm~\ref{alg:inv}; for the classical model the branches marked HQPINN are skipped.
+
+\begin{algorithm}{Inverse training of the classical PINN and the HQPINN.}\label{alg:inv}
+\item \textbf{input:} epochs $K$, $\Ncol$, stencil $(h,\tau)$, schedules $\eta_k,\beta_k,\rho_k$, weight $w_d$; HQPINN: shots $S$, refit period $K_{\rm fit}$
+\item \textbf{HQPINN:} calibration job, shared by all runs of a size $\to$ fit $\hat f$ [Eq.~\eqref{eq:trigpoly}]
+\item set seed; draw $\nu_0\sim\mathcal U(0,1)$; initialize $\Theta$
+\item \textbf{for} $k=0,\dots,K-1$:
+\item \quad draw $\Ncol$ centres; stencil nodes; data $u^\star_i$ at the centres
+\item \quad \textbf{HQPINN:} \textbf{if} $k>0$ and $k\bmod K_{\rm fit}=0$: refit $\hat f$; \emph{one job}: measure $\hat{\bm y}_c$ at the centres; keep the offsets of Eq.~\eqref{eq:ste}
+\item \quad \textbf{repeat 16 times:} forward pass; $A_i,B_i\gets$ finite differences; $\Theta\gets$ AdamW$(\nabla_\Theta\mathcal L_k;\eta_k)$ with $\nu_k$ fixed, Eq.~\eqref{eq:loss}
+\item \quad $\nu^\star\gets\wmed(\{A_i/B_i\};\{|B_i|\})$ from the last forward pass, clipped to $[10^{-4},10]$
+\item \quad $\log\nu_{k+1}\gets\log\nu_k+\beta_k(\log\nu^\star-\log\nu_k)$
+\item \textbf{return} $\hat\nu=\nu_K$, $u_\Theta$; validation job on $u(x,T)$
+\end{algorithm}
+
+\paragraph{Collocation and residual.} At every epoch a fresh batch of $\Ncol$ points is drawn uniformly, $x_i\in[0,1)$ and $t_i\in[\tau,T-\tau]$. The \emph{same} points are used for the residual and for the data term, so that each evaluation of the model enters both. The stencil is that of Appendix~\ref{app:ste}, with nodes wrapped modulo 1 in $x$. The noise amplification described there would be worse here, because it would enter $B$ and hence $\nu^\star$ directly. At the centre $\tilde{\bm y}=\hat{\bm y}^{\,\rm QPU}$, so the data term and the factor $u$ of $u\,\partial_xu$ use the measured value.
+
+\paragraph{Loss and network step.} The network parameters $\Theta=(\bm\phi,\bm\psi)$ [plus $\bm\chi$ in the classical model] are updated with AdamW~\cite{loshchilov2019decoupled} on Eq.~\eqref{eq:loss} with $p=1$ and $\nu_k$ held fixed. The residual weight $\rho_k=\min\{1,(k+1)/K_{\rm ramp}\}$ is ramped up so that the networks first fit the data, and the data weight $w_d\gg1$ is fixed. There are 16 steps per epoch on the batch; in the HQPINN all of them reuse the single measurement of the epoch. The learning rate follows a cosine decay~\cite{loshchilov2017sgdr} over the $K$ epochs and the gradient norm is clipped. The final state is that of the last epoch, with no L-BFGS and no snapshot.
+
+\subsection{Variable projection for the viscosity}\label{app:varpro}
+The estimate~\eqref{eq:wmed} comes from the same forward pass as the network step and is clipped to $[10^{-4},10]$. The relaxation~\eqref{eq:logrelax} reads $\nu_{k+1}=\nu_k^{1-\beta_k}(\nu^\star_k)^{\beta_k}$, with $\beta_k$ decaying from $\beta_0$ to $\beta_K$ with a cosine schedule. It is an exponentially weighted geometric average of the batch estimates; it keeps $\nu>0$, is scale invariant, and its effective memory $\sim1/\beta_k$ grows during training, damping the noise of late batches. The initial value $\nu_0$ is drawn uniformly in $(0,1)$.
+
+\emph{Weighted-median solution.} Write $\sum_i|A_i-\nu B_i|=\sum_iw_i|r_i-\nu|$ with $r_i=A_i/B_i$ and $w_i=|B_i|$ (points with $B_i=0$ do not depend on $\nu$ and are discarded). This is a convex piecewise-linear function of $\nu$ whose subgradient is $\sum_{r_i<\nu}w_i-\sum_{r_i>\nu}w_i+[-1,1]\sum_{r_i=\nu}w_i$. It contains zero when the weight on each side of $\nu$ is at most half of the total, i.e., at the weighted median of $\{r_i\}$. Points with small curvature $|B_i|$, for which the ratio $A_i/B_i$ is ill-conditioned, receive proportionally small weight. Under the $L_2$ norm the minimizer would instead be $\nu^\star=\sum_iA_iB_i/\sum_iB_i^2$, which is not robust to outliers. In the implementation the ratios are sorted, the cumulative weight is formed, and the first ratio at which it reaches half of the total is returned.
+
+\subsection{Adjusted training at \texorpdfstring{$T=1$}{T=1}}\label{app:adjust}
+At $T=1$ the algorithm above fails to represent the solution: with the hard constraint of Eq.~\eqref{eq:composition} the network has to cancel $\sin(2\pi x)$ linearly in $t$ while forming the front, and after 110 epochs the classical model reconstructs $u(x,T)$ with a relative $L_2$ error of 0.2--0.4. For this case only, and identically for both models and both budgets, three changes are made: (i) the network output is $u$ itself, and the initial condition enters as $\mathcal L_{\rm ic}$ in Eq.~\eqref{eq:loss}, the mean absolute error at $\Ncol$ random points of $t=0$ per epoch with weight $w_0=10$ (for the HQPINN these points are measured in the same job as the collocation centres, so the number of jobs is unchanged); (ii) during the first $K_0=10$ epochs only the data term is used and $\nu$ is not updated, after which the residual weight is ramped up; (iii) the learning rate of the networks is kept constant and divided by 1.5 whenever the epoch loss has not decreased by 1\% for 5 epochs, with a floor of 1\% of its initial value, instead of following a cosine decay. These changes were selected on the classical model among 147 variants of the training (other optimizers, including L-BFGS; loss-balancing schemes~\cite{wang2021understanding}; learning-rate rules driven by the loss; warm-up lengths), on 60 runs with seeds not used in this paper: the median $\epsilon_\nu$ dropped from 38.5\% to 12.7\% and the median $L_2$ error of $u(x,T)$ from 0.23 to 0.067. On a proxy of the device (calibrated surrogate plus shot noise) the same changes reduce the median $\epsilon_\nu$ of the HQPINN from 32.7\% to 20.7\%; no other change of its hyperparameters gave a significant further gain, whereas more collocation points per epoch did (10.5\% with $\Ncol=20$, 4.2\% with $\Ncol=40$). Here $\Ncol=10$ is kept for both models. \TODO{Estes n\'umeros dos testes de treino v\^em de \texttt{data/Inverso\_110/README.md}: os dados e scripts dos testes foram apagados e n\~ao est\~ao no hist\'orico, ent\~ao n\~ao foram reconferidos.}
+
+\subsection{Hyperparameters}\label{app:ihyper}
+The hyperparameters were selected independently for each model with one protocol, for $\nu_{\rm true}=0.1$ and $T=0.1$: search on seeds 100--105, selection on seeds 200--219, and test on seeds 0--2. The same values are used at both budgets, and the cosine decays stretch over the $K$ epochs. With the hyperparameters of the HQPINN, the classical model reaches there a median $\epsilon_\nu$ of 6.7\% on the selection seeds, against 4.0\% with its own.
+
+\begin{table}[h]
+\caption{\justifying Hyperparameters of the inverse problem. The last three rows apply to $T=1$ only (Appendix~\ref{app:adjust}).}
+\label{tab:hyper_inv}
+\setlength{\tabcolsep}{2pt}
+\footnotesize
+\begin{ruledtabular}
+\begin{tabular}{lcc}
+ & HQPINN & classical\\
+\colrule
+epochs $K$ & 110, 500 & 110, 500\\
+$\Ncol$ & 10 & 10\\
+stencil $(h,\tau)$ & $(1/512,\,10^{-3})$ & same\\
+lr, initial & $3.07\times10^{-2}$ & $2.53\times10^{-2}$\\
+lr, final (cosine, $T=0.1$) & $1.2\times10^{-3}$ & $3.2\times10^{-4}$\\
+AdamW steps per epoch & 16 & 16\\
+AdamW $(\beta_1,\beta_2)$ & (0.77, 0.99) & (0.73, 0.99)\\
+weight decay & $6.4\times10^{-6}$ & $9.3\times10^{-4}$\\
+gradient-norm clip & 10 & 10\\
+data weight $w_d$ & 85.8 & 37.8\\
+residual ramp $K_{\rm ramp}$ & 20 & 10\\
+$\beta_k$, initial (final) & 0.97 (0.128) & 0.50 (0.163)\\
+$\nu^\star$ clip & $[10^{-4},10]$ & same\\
+shots $S$ & 1024 & --\\
+surrogate refit $K_{\rm fit}$ & 10 & --\\
+\colrule
+initial-condition weight $w_0$ & 10 & 10\\
+warm-up $K_0$ (data only, $\nu$ frozen) & 10 & 10\\
+lr on plateau (patience; factor) & 5; 1/1.5 & 5; 1/1.5\\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\subsection{Emulators}\label{app:emu}
+The devices are the noise models of \texttt{ibm\_berlin} (\texttt{FakeBerlin}) and \texttt{ibm\_aachen} (\texttt{FakeAachen}), simulated with Qiskit Aer~\cite{javadiabhari2024qiskit}; no job was sent to IBM (Table~\ref{tab:emu}). They reproduce the calibrated gate and readout errors and the coupling map, but not crosstalk, temporal drift or the error mitigation of the runtime service. The simulator does not fix its seed, so rerunning a case gives slightly different numbers. A calibration is cached and shared by all runs of a size, and it is the record of the chains used: for \texttt{FakeBerlin} the chains come from the chain search available when the runs were made, and for \texttt{FakeAachen} they were computed from the error table of the backend (all paths of $n$ coupled qubits, scored as in Appendix~\ref{app:run}, then disjoint chains from the best to the worst). The misfit of the calibration is at or below the shot-noise bound $1/\sqrt S=3.125\times10^{-2}$. A run costs $K+1$ jobs besides the shared calibration: one per epoch and one validation job, which evaluates $u(x,T)$ on 100 points at $t=T$ with one replica of each point per chain, and the replicas are averaged. Three versions are reported: the model with the circuit run on the emulator, the model with the surrogate it was trained through, and the same weights with the ideal circuit.
+
+\begin{table}[h]
+\caption{\justifying Emulators and cost. Backend data over the whole chip, from the snapshot in the \texttt{FakeBerlin} and \texttt{FakeAachen} objects of \texttt{qiskit-ibm-runtime} 0.51 (medians). Time per run, median, with 12 runs sharing 16 CPU cores; the classical model takes about 3~s at $K=110$ and 20--24~s at $K=500$.}
+\label{tab:emu}
+\setlength{\tabcolsep}{2pt}
+\footnotesize
+\begin{ruledtabular}
+\begin{tabular}{lcc}
+ & \texttt{FakeBerlin} & \texttt{FakeAachen}\\
+\colrule
+processor; qubits & Nighthawk; 120 & Heron; 156\\
+readout error & $2.1\times10^{-2}$ & $7.4\times10^{-3}$\\
+$\sqrt X$ error & $2.1\times10^{-4}$ & $1.9\times10^{-4}$\\
+CZ error & $2.2\times10^{-3}$ & $1.5\times10^{-3}$\\
+$T_1$; $T_2$ ($\mu$s) & 324; 248 & 232; 255\\
+chains, $n=3,7,10$ & 33, 14, 9 & 41, 14, 10\\
+calibration misfit (RMS) & 0.032--0.034 & 0.027--0.028\\
+epochs $K$ & 110 & 500\\
+jobs per run & 111 & 501\\
+time, $n=3,7,10$ (s) & 374, 436, 1182 & 1001, 1318, 3608\\
+\end{tabular}
+\end{ruledtabular}
+\end{table}
+
+\subsection{Results at 110 epochs and per size}\label{app:isize}
+Figure~\ref{fig:invnu110} is the counterpart of Fig.~\ref{fig:invnu} at $K=110$ on \texttt{FakeBerlin}. At $T=0.1$ both models approach $\nu_{\rm true}$ within $\sim20$ epochs and then keep improving as $\beta_k$ decays: the median error of the HQPINN goes from 21.5\% at epoch 60 and 7.9\% at epoch 80 to 6.0\% at the end, and that of the classical model from 26.1\% and 12.2\% to 7.3\%. The HQPINN has the smaller tail (90th percentile 15\% against 20\%) and is more uniform across sizes, and both models slightly overestimate $\nu$ (in 79\% of the runs for the HQPINN and 76\% for the classical model). At $T=1$ the HQPINN at $n=7$ has a median $\epsilon_\nu$ of 15.9\%, below the 17.1--28.5\% of the classical model, whereas $n=3$ and 10 give 36.9\% and 39.6\%. The best runs of either model reach $\epsilon_\nu\simeq1$--2\% in both cases at this budget, and the classical model at $T=1$ has a median $\epsilon_\nu$ of 10.1\% on the first three seeds alone, half of its value over the 33 runs, so comparisons require many seeds. Table~\ref{tab:persize} gives the results per size at both budgets.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figC1_inv_nu_E110.pdf}
+  \caption{\justifying Inverse problem at $K=110$ epochs, with the HQPINN on \texttt{FakeBerlin}. Same panels as Fig.~\ref{fig:invnu}.}
+  \label{fig:invnu110}
+\end{figure*}
+
+\begin{table}[h]
+\caption{\justifying Relative error of the learned viscosity, $\epsilon_\nu$ (median / mean / max over seeds 0--10, in \%), and median relative $L_2$ error of $u(x,T)$, per size $n$; $\nu_{\rm true}=0.01$.}
+\label{tab:persize}
+\setlength{\tabcolsep}{1pt}
+\footnotesize
+\begin{ruledtabular}
+\input{tables/inverse_per_size.tex}
+\end{ruledtabular}
+\end{table}
+
+\subsection{Older long-budget sweeps}\label{app:long}
+Earlier sweeps with a long budget (20\,000 AdamW steps plus L-BFGS, $\nu_{\rm true}=0.01$, with 100 data points at $t=T$ only) give context but are not comparable with the results above, nor with each other. In the classical PINN (50 seeds, no early stopping), the median $\epsilon_\nu$ at $n=3,7,10$ is 1.6--1.9\% for $T=0.1$, $\Ncol=100$, 11--14\% for $T=0.1$, $\Ncol=10$, and above 100\% at $T=1$ (111--122\% with $\Ncol=100$, 274--302\% with $\Ncol=10$). The noiseless hybrid runs of that period used another circuit (a linear CNOT network), a stopping target and 10 seeds, with some configurations incomplete: their median is 6.6--7.6\% for $T=0.1$, $\Ncol=100$ and at best 62\% at $T=1$. Under the rule of the rest of this paper, the two are not compared. The contrast with Table~\ref{tab:inverse} at $T=1$ suggests, but does not establish, the value of data at the collocation points themselves and of the adjusted training.
+
+% ---------------------------------------------------------------------
+\section{Inverse problem: real hardware}\label{app:iqpu}
+% ---------------------------------------------------------------------
+\TODO{Nenhuma rodada real do problema inverso foi executada: este ap\^endice descreve o que est\'a pronto e o que falta decidir. Substituir pelos detalhes da rodada quando ela existir, como no Ap\^endice~\ref{app:run}.}
+
+\subsection{Protocol}\label{app:iprot}
+The script of the emulated runs also drives a real processor. It uses the machinery of Appendix~\ref{app:hil} (chain search and screening, packed circuit in a runtime \texttt{Session}, chip-averaged surrogate, refit every 10 epochs, final validation on the device). The differences with respect to the forward run are the following. (i) The measured values at the centres also enter the data term. (ii) Each measurement serves 16 AdamW steps, all with the same offsets, so the number of steps does not change the number of jobs. (iii) At $T=1$ the $\Ncol$ points of the initial-condition term are measured in the same job as the centres (20 points per job). (iv) The validation job uses 100 points instead of 200.
+
+\subsection{Proposed cases and cost}\label{app:icost}
+The cases listed in the code (\texttt{INVERSE\_QPU\_CASES}) are a proposal: $n=10$, $\Ncol=10$, 110 epochs, seed 0, at $T=0.1$ and $T=1$, the same size and budget as the forward run. Table~\ref{tab:icost} gives the cost estimated from the forward run, assuming the same 8 chains and the same latency of 16~s per epoch. A run at $K=500$ would take about 2.2~h at that latency, above the limit of 2~h per \texttt{Session} set in the script.
+
+\begin{table}[h]
+\caption{\justifying Estimated cost of an inverse run on \texttt{ibm\_berlin} ($n=10$, 8 chains, $K=110$, $S=1024$). These are estimates, not measurements: 128 calibration sets, $\lceil\text{points}/8\rceil$ sets per training job, 100 validation sets.}
+\label{tab:icost}
 \setlength{\tabcolsep}{4pt}
 \footnotesize
 \begin{ruledtabular}
 \begin{tabular}{lcc}
-quantity & median & range\\
+ & $T=0.1$ & $T=1$\\
 \colrule
-$T_1$ & 322~$\mu$s & 110--528~$\mu$s\\
-$T_2$ & 255~$\mu$s & 34--510~$\mu$s\\
-readout error & 1.7\% & 0.5--6.3\%\\
-$\sqrt X$ error & $1.7\times10^{-4}$ & $(0.7$--$9.9)\times10^{-4}$\\
-CZ error & $1.7\times10^{-3}$ & $(0.6$--$14)\times10^{-3}$\\
-\colrule
-qubits used / total & \multicolumn{2}{c}{80 / 120 (8 chains $\times$ 10)}\\
-packed circuit & \multicolumn{2}{c}{depth 12, 72 CZ, no SWAP}\\
-jobs / shots / time & \multicolumn{2}{c}{112 / $5.6\times10^5$ / 54 min}\\
+jobs & 112 & 112\\
+points per training job & 10 & 20\\
+parameter sets & 448 & 558\\
+shots & $4.6\times10^5$ & $5.7\times10^5$\\
+wall-clock time & $\sim1$~h & $\sim1$~h\\
 \end{tabular}
 \end{ruledtabular}
 \end{table}
 
-\section{Architectures and hyperparameters}\label{app:hyper}
-
-\begin{table}[h]
-\caption{\justifying Network architectures (all hidden layers $\tanh$, linear outputs).}
-\label{tab:arch}
-\setlength{\tabcolsep}{2pt}
-\footnotesize
-\begin{ruledtabular}
-\begin{tabular}{lcc}
- & HQPINN & classical PINN\\
-\colrule
-features & $\bm\xi$, Eq.~\eqref{eq:composition} & same\\
-$\mathcal N_{\rm pre}$ & $3\to10\to n$ & $3\to10\to n$\\
-middle block & $R_Y$, $W_{\rm brick}$, $\langle Z_q\rangle$ & $n\to m\to n$\\
-$\mathcal N_{\rm post}$ & $n\to10\to1$ & $n\to10\to1$\\
-param., middle & 0 & $2nm+m+n$\\
-param., total & $21n+61$ & $2n^2+23n+61$ $(m{=}n)$\\
- & & $42n+71$ $(m{=}10)$\\
-$n=10$ & 271 & 491\\
-\end{tabular}
-\end{ruledtabular}
-\end{table}
-
-\begin{table}[h]
-\caption{\justifying Training hyperparameters. Long budget: same-protocol simulations (Fig.~\ref{fig:sim}). Hardware budget: FakeBerlin, \texttt{ibm\_berlin}, classical control and hardware-budget simulations (Figs.~\ref{fig:hardware}--\ref{fig:device}).}
-\label{tab:hyper}
-\setlength{\tabcolsep}{2pt}
-\footnotesize
-\begin{ruledtabular}
-\begin{tabular}{lcc}
- & long budget & hardware budget\\
-\colrule
-$\Ncol$ per step & 10, 100 & 10\\
-stencil $(h,\tau)$ & $(1/512,10^{-3})$ & same\\
-optimizer & AdamW, L-BFGS & AdamW\\
-steps & $\le2{\times}10^4+10^3$ & 110\\
-learning rate & $10^{-3}$, plateau $\times\frac12$ & 0.1 to 0.01\\
-weight decay; clip & $10^{-6}$; 1 & $10^{-6}$; 1\\
-L-BFGS & lr 0.5, hist.\ 50 & --\\
-stopping & FDM floor & fixed budget\\
-shots $S$ & -- & 1024\\
-calibration & -- & 1024 samples\\
-refit $K_{\rm fit}$ & -- & 10 epochs\\
-seeds & 0--49 & 0 (QPU), 0--4\\
-\end{tabular}
-\end{ruledtabular}
-\end{table}
-
-\section{Additional simulation results}\label{app:extra}
-
-\begin{figure*}[t]
-  \centering
-  \includegraphics[width=\textwidth]{figS1_exact_ncol.pdf}
-  \caption{\justifying (a,b) Median MSE of the noiseless HQPINN versus the number of collocation points per step for $n=3,5,7,10,15$ qubits (light to dark), at $T=0.1$ and $T=1$ (50 seeds, long-budget protocol); squares, classical PINN with $n=10$. (c) Median MSE versus the number of trainable parameters at $T=1$, $\Ncol=100$, for widths $n=2,\dots,15$; bands, interquartile range.}
-  \label{fig:extra}
-\end{figure*}
-
-At $T=0.1$ the HQPINN reaches the FDM-limited floor for every $\Ncol\ge30$, independently of the number of qubits [Fig.~\ref{fig:extra}(a)]. At $T=1$ the error keeps decreasing up to $\Ncol\simeq100$ and saturates at $\simeq5\times10^{-5}$ for $n\ge7$ [Fig.~\ref{fig:extra}(b)]; the three-qubit model saturates an order of magnitude higher, which identifies the width of the latent space, and not the collocation budget, as the limiting factor at the long horizon.
-
-\section{Data and code availability}\label{app:data}
-\TODO{Reposit\'orio/Zenodo.} Every figure is generated by the scripts in \texttt{manuscript/scripts/} from the data in \texttt{data/}: \texttt{fig2\_simulations.py} (same-protocol sweep), \texttt{fig3\_hardware.py}, \texttt{fig4\_noise\_ladder.py} and \texttt{fig5\_device\_model.py} (hardware and emulator runs, classical control), \texttt{figS1\_exact\_ncol.py}; \texttt{replay\_training.py} and \texttt{simulate\_same\_budget.py} produce the replayed learning curves and the hardware-budget simulations without any quantum job. The IBM job identifiers of all 113 hardware jobs are recorded in the run logs.
+\subsection{Open choices}\label{app:iopen}
+\TODO{Decidir antes de rodar:
+(1) \emph{mitiga\c{c}\~ao:} o padr\~ao do script \'e \texttt{suppress} (TREX, desacoplamento din\^amico e twirling), mas a rodada do problema direto foi sem mitiga\c{c}\~ao e o emulador n\~ao reproduz a mitiga\c{c}\~ao do runtime; para comparar, use \texttt{none};
+(2) \emph{QPU:} \texttt{ibm\_berlin} (compara com o direto e com $K=110$) ou \texttt{ibm\_aachen} (compara com $K=500$);
+(3) \emph{seed:} fix\'a-la antes de ver o QPU; se for a melhor de um lote no emulador, dizer no texto;
+(4) \emph{estat\'istica:} uma rodada s\'o n\~ao se compara com o emulador em $\nu$, porque o $\nu$ final de uma rodada oscila muito; ao menos algumas seeds seriam necess\'arias, sobretudo em $T=1$.}
 
 \end{appendices}
 

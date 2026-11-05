@@ -1,0 +1,47 @@
+Sweep configuration
+  protocol: fixed_validation_v2
+  model families: ('classical_mlp',)
+  internal widths: 7..7 (1 values)
+  collocation counts: (20, 30, 40, 50, 60, 70, 80, 90)
+  Tfin: (0.1, 1.0)
+  seeds: (7,)
+  CNOT network: brickwork_cnot, 1 layer(s)
+  classical replacement: 1 hidden tanh layer(s), hidden width matched to each internal width
+  collocation distribution: random
+  stopping monitor: fixed validation set
+  planned total: 16 runs
+  results: /home/gubio/CODESPACE/forward-problem-hqpinn/data/Forward/classical_same_protocol_ncol
+Training: model=classical_mlp, T=0.1, N=20, width=7, seed=7
+Saved: MSE=9.424391e-06, steps=20050, target=False, time=124.5s
+Training: model=classical_mlp, T=0.1, N=30, width=7, seed=7
+Saved: MSE=9.994400e-06, steps=20050, target=False, time=133.7s
+Training: model=classical_mlp, T=0.1, N=40, width=7, seed=7
+Saved: MSE=9.159577e-06, steps=20050, target=False, time=133.1s
+Training: model=classical_mlp, T=0.1, N=50, width=7, seed=7
+Saved: MSE=9.845584e-06, steps=20050, target=False, time=135.4s
+Training: model=classical_mlp, T=0.1, N=60, width=7, seed=7
+Saved: MSE=9.856326e-06, steps=20051, target=False, time=134.1s
+Training: model=classical_mlp, T=0.1, N=70, width=7, seed=7
+Saved: MSE=9.113314e-06, steps=20050, target=False, time=136.0s
+Training: model=classical_mlp, T=0.1, N=80, width=7, seed=7
+Saved: MSE=1.055674e-05, steps=19654, target=True, time=84.4s
+Training: model=classical_mlp, T=0.1, N=90, width=7, seed=7
+Saved: MSE=1.119156e-05, steps=20050, target=False, time=43.0s
+Training: model=classical_mlp, T=1, N=20, width=7, seed=7
+Saved: MSE=6.015287e-04, steps=20050, target=False, time=39.7s
+Training: model=classical_mlp, T=1, N=30, width=7, seed=7
+Saved: MSE=2.735811e-04, steps=20050, target=False, time=40.4s
+Training: model=classical_mlp, T=1, N=40, width=7, seed=7
+Saved: MSE=3.883346e-04, steps=20050, target=False, time=41.2s
+Training: model=classical_mlp, T=1, N=50, width=7, seed=7
+Saved: MSE=9.103158e-04, steps=20050, target=False, time=41.6s
+Training: model=classical_mlp, T=1, N=60, width=7, seed=7
+Saved: MSE=1.933124e-03, steps=20050, target=False, time=41.4s
+Training: model=classical_mlp, T=1, N=70, width=7, seed=7
+Saved: MSE=8.516355e-04, steps=20050, target=False, time=41.8s
+Training: model=classical_mlp, T=1, N=80, width=7, seed=7
+Saved: MSE=2.290531e-04, steps=20050, target=False, time=41.9s
+Training: model=classical_mlp, T=1, N=90, width=7, seed=7
+Saved: MSE=9.355382e-04, steps=18397, target=True, time=37.8s
+New runs completed: 16
+Results available at: /home/gubio/CODESPACE/forward-problem-hqpinn/data/Forward/classical_same_protocol_ncol

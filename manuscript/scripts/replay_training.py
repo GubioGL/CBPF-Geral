@@ -15,8 +15,29 @@ error exists for the last epoch only.
 The classical control (run_classical_vs_qpu.py, same protocol, widths 1..10, seeds 0-4) is
 re-run in the same way (it is deterministic) and checked against its saved MSE.
 
-Output: manuscript/cache/learning_curves.npz
+Output: data/derived/learning_curves.npz
+
+The reproduction holds only on the software stack of the run (Windows, see "versions" in run_*.json). On Linux the angles
+differ by about 6e-8 at the first epoch, and the rounding error, amplified by the finite-difference residual, grows
+to order one: the replay ends at another network. So the file is written only with --force, and only if the weights
+of the recorded run are reproduced.
 """
+
+# --- repository layout: src/ and run/ go on the import path, and relative paths
+# --- such as "data/..." are resolved from the repository root.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_HERE = _Path(__file__).resolve().parent if "__file__" in globals() else _Path.cwd()
+_ROOT = next(p for p in (_HERE, *_HERE.parents) if (p / "src").is_dir() and (p / "run").is_dir())
+for _p in (_ROOT / "run", _ROOT / "src", _ROOT / "src" / "quantum_hardware", _HERE):
+    if str(_p) not in _sys.path:
+        _sys.path.insert(0, str(_p))
+_os.chdir(_ROOT)
+# ---------------------------------------------------------------------------------
+
+import sys
 import time
 
 import numpy as np
@@ -175,13 +196,27 @@ def replay_classical():
                 classical_seeds=np.array(list(seeds)), classical_final_err=np.array(final_err))
 
 
+WEIGHT_TOLERANCE = 1e-5
+
+
 def main():
     t0 = time.time()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    if "--force" not in sys.argv and (CACHE_DIR / "learning_curves.npz").exists():
+        print(f"reused {CACHE_DIR / 'learning_curves.npz'} (--force recomputes it)")
+        return
     out = {}
-    for kind in ("real", "fake"):
-        res, x_plot, u_ref = replay_quantum(kind)
-        out.update(res)
+    res, x_plot, u_ref = replay_quantum("real")
+    if res["real_weight_err"] > WEIGHT_TOLERANCE:
+        raise SystemExit(f"The replay does not reproduce the recorded run (max weight difference {res['real_weight_err']:.2e}): "
+                         "this platform differs from the one of the run. data/derived/learning_curves.npz was NOT changed.")
+    out.update(res)
+    if fake_file("history").exists():
+        out.update(replay_quantum("fake")[0])
+    elif (CACHE_DIR / "learning_curves.npz").exists():   # raw FakeBerlin history not on this machine: keep the old replay
+        with np.load(CACHE_DIR / "learning_curves.npz") as cached:
+            out.update({k: cached[k] for k in cached.files if k.startswith("fake_")})
+        print("fake: raw history not found, cached replay kept (the figures do not use it)")
     out.update(replay_classical())
     out.update(x=x_plot.ravel(), u_reference=u_ref.ravel(), epochs=np.arange(EPOCHS + 1))
     np.savez(CACHE_DIR / "learning_curves.npz", **out)

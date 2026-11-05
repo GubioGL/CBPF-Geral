@@ -16,10 +16,25 @@ Same loop as run_classical_vs_qpu.py (same initialisation, same point stream per
 reference), which favours the classical model. Metrics: MSE and relative L2 of u(x, 0.1) against
 the FDM reference on 200 points. Cheap (CPU, about a minute, no QPU or Aer job).
 
-    C:/Users/Gubio/anaconda3/envs/qiskit/python.exe manuscript/scripts/controls_hardware_budget.py [--force]
+    python manuscript/scripts/controls_hardware_budget.py [--force]
 
-Output: manuscript/cache/controls_hardware_budget.npz (reused unless --force); prints the summary.
+Output: data/derived/controls_hardware_budget.npz (reused unless --force); prints the summary.
 """
+
+# --- repository layout: src/ and run/ go on the import path, and relative paths
+# --- such as "data/..." are resolved from the repository root.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_HERE = _Path(__file__).resolve().parent if "__file__" in globals() else _Path.cwd()
+_ROOT = next(p for p in (_HERE, *_HERE.parents) if (p / "src").is_dir() and (p / "run").is_dir())
+for _p in (_ROOT / "run", _ROOT / "src", _ROOT / "src" / "quantum_hardware", _HERE):
+    if str(_p) not in _sys.path:
+        _sys.path.insert(0, str(_p))
+_os.chdir(_ROOT)
+# ---------------------------------------------------------------------------------
+
 import json
 import math
 import sys

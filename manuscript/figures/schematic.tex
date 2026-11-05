@@ -1,8 +1,8 @@
-% Fig. 1 -- classical PINN and hybrid quantum PINN (HQPINN): architecture and training workflow.
+% Fig. 1 -- classical PINN and hybrid quantum PINN (HQPINN), forward and inverse: architecture and training workflow.
 % \input inside a figure* (main.tex wraps it in \resizebox{\textwidth}{!}{...}).
 % Needs the TikZ libraries arrows.meta, positioning, calc, decorations.pathreplacing, the package bm,
 % and the colours qcol (HQPINN / QPU) and ccol (classical) defined in main.tex.
-% Preview alone: pdflatex schematic_preview.tex
+% Preview alone: see manuscript/figures/schematic_preview.tex
 \begin{tikzpicture}[
   font=\footnotesize, >={Stealth[length=3.4pt]},
   arr/.style={->, line width=0.55pt, black!70},
@@ -71,9 +71,9 @@
 \node[anchor=north west, font=\scriptsize\bfseries, text=ccol!80!black] at (6.13,2.37) {classical PINN: trainable bottleneck};
 \nlinks{8.15}{4}{8.85}{5}{1.15}\nlinks{8.85}{5}{9.55}{4}{1.15}
 \ncol{8.15}{4}{1.15}\ncol{8.85}{5}{1.15}\ncol{9.55}{4}{1.15}
-\node[note] at (7.05,1.15) {$\mathcal N_{\rm mid}(\,\cdot\,;\bm\chi)$\\[-1pt]$n\to10\to n$\\[-1pt]$\tanh$};
+\node[note] at (7.05,1.15) {$\mathcal N_{\rm mid}(\,\cdot\,;\bm\chi)$\\[-1pt]$n\to m\to n$\\[-1pt]$\tanh$};
 \node[note] at (10.95,1.15) {$\bm y\in\mathbb R^{n}$};
-\node[font=\tiny, anchor=south east, black!85] at (11.98,0.06) {$\bm{21n+10}$ trainable parameters};
+\node[font=\tiny, anchor=south east, black!85] at (11.98,0.06) {$\bm{2nm+m+n}$ trainable parameters};
 \node[font=\scriptsize\itshape, black!60] at (9.05,2.61) {or};
 
 % ---- routing theta -> middle block -> post-network
@@ -87,7 +87,10 @@
 \node[note] at (13.35,1.85) {$\mathcal N_{\rm post}(\,\cdot\,;\bm\psi)$\\[-1pt]$n\to10\to1$};
 \node[draw=black!45, rounded corners=2pt, fill=white, font=\scriptsize, align=center, inner sep=3pt] (u) at (16.0,2.75)
   {$u_\Theta(x,t)=\sin 2\pi x+\dfrac{t}{T}\,\mathcal N_\Theta(x,t)$\\[2pt]
-   {\tiny initial condition and periodicity exact}};
+   {\tiny initial condition and periodicity exact}\\[1pt]
+   {\tiny (inverse at $T=1$: $u_\Theta=\mathcal N_\Theta$, soft initial condition)}};
+\node[draw=black!45, dashed, rounded corners=2pt, fill=white, font=\scriptsize, align=center, inner sep=3pt] at (16.0,1.15)
+  {\textbf{inverse problem}\\[1pt]learnable $\nu$, data $u^\star_i$ at the points};
 \draw[arr] (14.07,2.75) -- (u.west);
 
 % =====================================================================================
@@ -106,24 +109,25 @@
 \node[tnote, align=left, anchor=west] at (0.15,-5.3)
   {\tikz\fill[qcol] (0,0) circle (2.4pt); centre: measured on the QPU\\[1pt]
    \tikz\draw[qcol, line width=0.6pt] (0,0) circle (2.1pt); neighbours: surrogate $+$ offset};
-\node[font=\scriptsize, align=left, anchor=west] at (0.15,-6.15)
-  {$r_i=u_t+u\,u_x-\nu\,u_{xx}$\\[2pt]$\mathcal L(\Theta)=\frac{1}{N_{\rm col}}\sum_i r_i^2$\\[1pt]
-   {\tiny central differences, $h=1/512$, $\tau=10^{-3}$}};
+\node[font=\scriptsize, align=left, anchor=north west, inner sep=0pt] at (0.15,-5.72)
+  {$r_i=A_i-\nu B_i$\\[0pt]{\tiny $A=u_t+u\,u_x$, $B=u_{xx}$; central differences,}\\[-2pt]{\tiny $h=1/512$, $\tau=10^{-3}$}\\[2pt]
+   forward: $\mathcal L=\frac{1}{N_{\rm col}}\sum_i r_i^2$\\[2pt]
+   inverse: $\mathcal L=\rho_k\langle|r_i|\rangle+w_d\langle|u_i-u^\star_i|\rangle$};
 
 % =====================================================================================
 % (c) training workflows
 % =====================================================================================
 \node[plabel] at (4.2,-0.5) {(c)};
-\node[rotate=90, font=\scriptsize\bfseries, black!70] at (4.6,-1.95) {simulation};
-\node[rotate=90, font=\scriptsize\bfseries, text=qcol!80!black] at (4.6,-4.45) {QPU in the loop};
+\node[rotate=90, font=\scriptsize\bfseries, black!70] at (4.6,-1.95) {no device};
+\node[rotate=90, font=\scriptsize\bfseries, text=qcol!80!black, align=center] at (4.6,-4.45) {in the loop\\[-1pt]{\tiny (QPU or emulator)}};
 \draw[black!20, line width=0.4pt] (4.4,-3.13) -- (17.5,-3.13);
 
 % lane 1: simulation (classical PINN and ideal HQPINN)
 \node[box] (s1) at (6.2,-1.95) {draw $N_{\rm col}$ new\\points $(x_i,t_i)$};
 \node[box] (s2) at (8.7,-1.95) {forward pass on\\the $5N_{\rm col}$ nodes};
 \node[box] (s3) at (11.2,-1.95) {$\mathcal L$ and $\nabla_\Theta\mathcal L$\\by autodiff};
-\node[box] (s4) at (13.7,-1.95) {AdamW, then\\L-BFGS};
-\node[box] (s5) at (16.2,-1.95) {stop at the FDM\\residual floor};
+\node[box] (s4) at (13.7,-1.95) {AdamW\\{\tiny (forward: then L-BFGS)}};
+\node[box] (s5) at (16.2,-1.95) {forward: stop at the\\FDM residual floor\\{\tiny (inverse: $K$ epochs)}};
 \draw[arr] (s1) -- (s2); \draw[arr] (s2) -- (s3); \draw[arr] (s3) -- (s4); \draw[arr] (s4) -- (s5);
 \draw[arr] (s4.north) -- ++(0,0.22) -| (s1.north);
 \node[tnote, fill=white, inner sep=1pt] at (9.95,-1.08) {next step};
@@ -132,7 +136,7 @@
 \node[qbox] (q0) at (6.2,-4.45) {\textbf{(1) calibration}\\random angles;\\least-squares $\hat f$};
 \node[qbox] (q1) at (8.7,-4.45) {\textbf{(2) QPU job}\\$\hat{\bm y}_c$ at the centres\\(8 chains)};
 \node[box] (q2) at (11.2,-4.45) {straight-through:\\[1pt]$\tilde{\bm y}=\hat f(\bm\theta)$\\$+\,\mathrm{sg}\big[\hat{\bm y}_c-\hat f(\bm\theta_c)\big]$};
-\node[box] (q3) at (13.7,-4.45) {AdamW step\\on $\mathcal L$};
+\node[box] (q3) at (13.7,-4.45) {AdamW on $\mathcal L$\\{\tiny (forward: 1 step;}\\[-2pt]{\tiny inverse: 16 per epoch)}};
 \node[qbox] (q4) at (16.2,-4.45) {\textbf{(3) validation}\\$u(x,T)$ on the QPU};
 \draw[arr] (q0) -- (q1); \draw[arr] (q1) -- (q2); \draw[arr] (q2) -- (q3); \draw[arr] (q3) -- (q4);
 \draw[arr] (q3.north) -- ++(0,0.22) -| (q1.north);
@@ -142,4 +146,7 @@
   {backward through $\hat f$ (no parameter shift):\\$\partial\tilde{\bm y}/\partial\bm\theta=\partial\hat f/\partial\bm\theta$};
 \draw[arr, black!50] (q1.south) -- ++(0,-0.25) -| (q0.south);
 \node[tnote, align=center] at (7.45,-5.5) {every $K_{\rm fit}$ epochs:\\refit $\hat f$ with all data};
+% inverse problem: the extra step of every epoch, in both lanes
+\node[draw=black!45, dashed, rounded corners=2pt, fill=white, inner sep=3pt, font=\scriptsize, anchor=west] at (5.3,-6.25)
+  {\textbf{inverse problem, every epoch, both lanes:}\ \ $\nu^\star=\mathrm{wmed}\big(\{A_i/B_i\};\{|B_i|\}\big)$,\ \ $\log\nu\leftarrow\log\nu+\beta_k(\log\nu^\star-\log\nu)$};
 \end{tikzpicture}

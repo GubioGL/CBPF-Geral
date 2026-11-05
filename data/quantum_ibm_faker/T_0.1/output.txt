@@ -1,0 +1,23 @@
+﻿Cadeias do run real (8): mesmos qubits físicos no fake_berlin
+Treino: fake_berlin (Aer density matrix) | seed 0 | 8 cadeias × 10 qubits | profundidade ISA 12 | 72 portas cz | 1024 shots | 110 épocas × 2 conjuntos
+Saída em C:\Users\Gubio\CODESACE\CBPF-Geral\data\quantum_ibm_faker\T_0.1
+1/4 calibração no fake: 1 job × 128 conjuntos...
+  35 s | ajuste: RMS do resíduo 0.0285 (ruído de shot ≈ 0.0312) | contraste 0.935–0.957 | RMS fake − fórmula exata 0.0390
+2/4 treino no fake: 110 épocas, lr 0.1 -> 0.01 (−0.01 a cada 10 épocas), polinômio reajustado a cada 10 épocas...
+  época 10/110 | lr 0.10 | loss fake 5.6731e+00 | loss monitor 1.1635e+00 | 3.4 s/época, faltam ~6 min
+  época 20/110 | lr 0.09 | loss fake 6.5936e+00 | loss monitor 2.7693e+00 | 3.4 s/época, faltam ~5 min
+  época 30/110 | lr 0.08 | loss fake 5.0602e+00 | loss monitor 1.5405e+00 | 3.4 s/época, faltam ~5 min
+  época 40/110 | lr 0.07 | loss fake 1.0187e+00 | loss monitor 1.3511e+00 | 3.4 s/época, faltam ~4 min
+  época 50/110 | lr 0.06 | loss fake 4.0237e-01 | loss monitor 1.4298e+00 | 3.4 s/época, faltam ~3 min
+  época 60/110 | lr 0.05 | loss fake 8.5584e+00 | loss monitor 9.6601e-01 | 3.5 s/época, faltam ~3 min
+  época 70/110 | lr 0.04 | loss fake 7.3924e-01 | loss monitor 3.4735e-01 | 3.5 s/época, faltam ~2 min
+  época 80/110 | lr 0.03 | loss fake 2.7319e-01 | loss monitor 1.4299e+00 | 3.5 s/época, faltam ~2 min
+  época 90/110 | lr 0.02 | loss fake 2.8271e-01 | loss monitor 1.5182e-01 | 3.5 s/época, faltam ~1 min
+  época 100/110 | lr 0.01 | loss fake 2.0044e-01 | loss monitor 8.9919e-02 | 3.5 s/época, faltam ~1 min
+  época 110/110 | lr 0.01 | loss fake 1.4212e-01 | loss monitor 8.9903e-02 | 3.5 s/época, faltam ~0 min
+3/4 validação no fake: 200 pontos × 8 réplicas...
+  MSE de u(x,0.1) no fake 7.730e-04 | antes do treino 3.896e-02
+4/4 predição no QPU real ibm_berlin: 1 job × 200 conjuntos (200 pontos × 8 réplicas) | 8 cadeias, profundidade ISA 12, 72 portas cz | mitigação 'none'
+  job db4i61h2p4ds73bjt9n0 enviado (200 conjuntos de parâmetros)
+u(x,0.1) vs FDM (MSE): fake 7.730e-04 | modelo medido 7.741e-04 | circuito ideal 4.576e-04 | QPU real (treinado no fake) 1.056e-03 | QPU real (treinado no real) 1.454e-03
+saída em C:\Users\Gubio\CODESACE\CBPF-Geral\data\quantum_ibm_faker\T_0.1

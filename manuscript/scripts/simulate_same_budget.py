@@ -8,8 +8,25 @@ initialisation and point stream per seed), but with a simulated quantum layer:
            (the same straight-through estimator as on the QPU, with a perfect surrogate).
 
 Cheap (CPU seconds, no Aer). Seeds 0-4 (seed 0 = the seed of the hardware runs).
-Output: manuscript/cache/same_budget_sims.npz
+Output: data/derived/same_budget_sims.npz
 """
+
+# --- repository layout: src/ and run/ go on the import path, and relative paths
+# --- such as "data/..." are resolved from the repository root.
+import os as _os
+import sys as _sys
+from pathlib import Path as _Path
+
+_HERE = _Path(__file__).resolve().parent if "__file__" in globals() else _Path.cwd()
+_ROOT = next(p for p in (_HERE, *_HERE.parents) if (p / "src").is_dir() and (p / "run").is_dir())
+for _p in (_ROOT / "run", _ROOT / "src", _ROOT / "src" / "quantum_hardware", _HERE):
+    if str(_p) not in _sys.path:
+        _sys.path.insert(0, str(_p))
+_os.chdir(_ROOT)
+# ---------------------------------------------------------------------------------
+
+import sys
+
 import numpy as np
 import torch as tc
 import torch.nn as nn
@@ -78,6 +95,10 @@ def train(seed, mode, xt_plot, u_ref):
 
 
 def main():
+    if "--force" not in sys.argv and (CACHE_DIR / "same_budget_sims.npz").exists():
+        print(f"reused {CACHE_DIR / 'same_budget_sims.npz'} (--force recomputes it; the recorded numbers come from "
+              "the author's Windows machine and change on another platform)")
+        return
     x_ref, t_ref, U_ref = solve_burgers_fd(L=L, Tfin=TFIN, nu=NU)
     x_plot = np.linspace(0.0, L, N_EVAL).reshape(-1, 1)
     u_ref, _ = reference_at_time(TFIN, t_ref, x_ref, U_ref, x_plot, L=L)

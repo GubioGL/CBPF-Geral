@@ -1,0 +1,20 @@
+{
+ "neurons": 3,
+ "seed": 0,
+ "nu_init": 0.5488135039273248,
+ "nu": 0.003745046444237232,
+ "nu_rel_err": 0.6254953555762768,
+ "rel_l2_T": 0.05250684703263265,
+ "adjustments": {
+  "hard_ic": false,
+  "n_ic": 10,
+  "w_ic": 10.0,
+  "warmup": 10,
+  "plateau": {
+   "patience": 5,
+   "factor": 1.5,
+   "threshold": 0.01
+  }
+ },
+ "time_s": 37.2139458656311
+}

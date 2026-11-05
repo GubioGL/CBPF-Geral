@@ -1,10 +1,12 @@
-"""Pack the files Overleaf needs into manuscript/manuscript_overleaf.zip."""
+"""Pack the files Overleaf needs into manuscript/manuscript_overleaf.zip (compiler: pdfLaTeX, with BibTeX)."""
 import zipfile
 from pathlib import Path
 
 MS = Path(__file__).resolve().parents[1]
 files = [MS / "main.tex", MS / "references.bib", MS / "figures" / "schematic.tex"]
 files += sorted(p for p in (MS / "figures").glob("*.pdf") if p.stem != "schematic_preview")
+files += sorted((MS / "tables").glob("*.tex"))
+files += sorted(p for p in (MS / "data").rglob("*") if p.is_file())
 with zipfile.ZipFile(MS / "manuscript_overleaf.zip", "w", zipfile.ZIP_DEFLATED) as z:
     for f in files:
         z.write(f, f.relative_to(MS).as_posix())
