@@ -20,6 +20,11 @@ Layout e comandos: `README.md` e `manuscript/README.md`.
 - `--real` em `Inverser_quantum_hardware_pinn_E110.py` agora grava em `data/Inverso_real/<backend>/`. Antes sobrescreveria as runs do emulador, que têm os mesmos nomes de arquivo.
 - As cadeias do FakeBerlin gravadas em `Inverso_110` (33, 14, 9) vieram do `find_chains` original e não são reproduzidas pelo `find_chains` atual (31, 11, 7 mantidas). As do FakeAachen são (41, 14, 10). O que vale é a calibração em cache; sem ela, o FakeBerlin usaria outras cadeias.
 
+## Figuras no texto: escolhas do autor (05/11/2026)
+
+- Fig. 1: só a arquitetura, sem os painéis de resíduo e de fluxo de treino, sem tamanhos de rede e com a saída apenas `u_Θ`. O resíduo e o laço de treino estão no texto da Sec. II e no Apêndice B.
+- Figuras do problema inverso (5, 6, 7 e 9): fora do texto por enquanto, com o espaço reservado (`\figspace` no `main.tex`). Os números citados na Sec. IV continuam valendo; os scripts seguem gerando os PDFs, e os `\includegraphics` estão comentados.
+
 ## Organização dos resultados: problema direto
 
 | Grupo | Conjunto | Dados | Saída |

@@ -25,6 +25,10 @@
 \newif\ifshowtodos \showtodostrue
 \newcommand{\TODO}[1]{\ifshowtodos\textcolor{red}{\textbf{[TODO:} #1\textbf{]}}\fi}
 
+% Space reserved for a figure: \figspace{height}. The author asked to leave the inverse-problem plots out for now; to put one
+% back, uncomment its \includegraphics line (the PDFs are still written by manuscript/scripts/) and delete the \figspace.
+\newcommand{\figspace}[1]{\fbox{\parbox[c][#1][c]{0.97\textwidth}{\centering\small\color{gray!70!black}espa\c{c}o reservado para a figura}}}
+
 \newtheorem{proposition}{Proposition}
 \newtheorem{remark}{Remark}
 \newcommand{\sg}{\operatorname{sg}}
@@ -107,7 +111,7 @@ A PINN~\cite{raissi2019physics,karniadakis2021physics} represents the solution b
 \end{equation}
 We use the hard constraint everywhere except in the inverse problem at $T=1$, where the soft constraint gave better results in training tests (Appendix~\ref{app:adjust}).
 
-The classical pre-network $\mathcal N_{\rm pre}(\cdot;\bm\phi):\mathbb R^3\to\mathbb R^n$ maps the features to a latent vector $\bm\theta\in\mathbb R^n$, a middle block $\mathcal M:\mathbb R^n\to\mathbb R^n$ transforms it into $\bm y$, and the classical post-network $\mathcal N_{\rm post}(\cdot;\bm\psi):\mathbb R^n\to\mathbb R$ produces the output [Fig.~\ref{fig:schematic}(a)]. The middle block is the only part that distinguishes the two models compared here, and its size $n$ is the quantity we vary. In the \emph{classical PINN} it is a trainable network with one hidden layer of $m$ units,
+The classical pre-network $\mathcal N_{\rm pre}(\cdot;\bm\phi):\mathbb R^3\to\mathbb R^n$ maps the features to a latent vector $\bm\theta\in\mathbb R^n$, a middle block $\mathcal M:\mathbb R^n\to\mathbb R^n$ transforms it into $\bm y$, and the classical post-network $\mathcal N_{\rm post}(\cdot;\bm\psi):\mathbb R^n\to\mathbb R$ produces the output (Fig.~\ref{fig:schematic}). The middle block is the only part that distinguishes the two models compared here, and its size $n$ is the quantity we vary. In the \emph{classical PINN} it is a trainable network with one hidden layer of $m$ units,
 \begin{equation}
   \mathcal M_{\rm C}(\bm\theta)=\mathcal N_{\rm mid}(\bm\theta;\bm\chi).
   \label{eq:bottleneck}
@@ -130,10 +134,7 @@ where $\mathcal E_{\bm\theta}$ is the channel actually implemented by the device
   \centering
   \resizebox{\textwidth}{!}{\input{figures/schematic.tex}}
   \caption{\justifying
-  Classical PINN and hybrid quantum PINN (HQPINN), for the forward and inverse problems.
-  (a) Architecture. Both models share the classical pre-network $\mathcal N_{\rm pre}$, which maps the periodic features $\bm\xi$ to the latent vector $\bm\theta\in\mathbb R^n$, and the classical post-network $\mathcal N_{\rm post}$. In the HQPINN (orange) the middle block is a \emph{fixed} quantum circuit---one $R_Y(\theta_q)$ rotation per qubit followed by one brickwork layer of CNOTs---whose output is the vector of local expectation values $y_q=\langle Z_q\rangle$, estimated with $S$ shots; the circuit has no trainable parameter. Six of the $n=10$ qubits used on hardware are drawn. In the classical PINN (blue) the middle block is a trainable bottleneck $\mathcal N_{\rm mid}$. In the inverse problem (dashed) $\nu$ is learned and solution data enter the loss.
-  (b) Physics-informed residual. The derivatives in $r_i$ are central differences of the network on a five-point stencil; with a device in the loop only the centre is measured, and the neighbours receive the surrogate value plus the same measured offset [Eq.~\eqref{eq:ste}].
-  (c) Training workflows. Without a device, the full stencil is evaluated exactly and the gradient is obtained by automatic differentiation. With a device in the loop, (1) one calibration job fits the trigonometric surrogate $\hat f$ of the device [Eq.~\eqref{eq:trigpoly}]; (2) at every epoch one job measures the circuit at the $\Ncol$ stencil centres on all chains in parallel, the forward pass uses the measured values and the backward pass goes through $\hat f$ (straight-through estimator, dashed); $\hat f$ is refitted every $K_{\rm fit}$ epochs with all measurements; (3) one final job evaluates the trained network on the device. In the inverse problem, $\nu$ is relaxed every epoch towards its closed-form minimizer [Eqs.~\eqref{eq:wmed} and~\eqref{eq:logrelax}].}
+  Classical PINN and hybrid quantum PINN (HQPINN). Both models share the classical pre-network $\mathcal N_{\rm pre}$, which maps the periodic features $\bm\xi$ to the latent vector $\bm\theta$, and the classical post-network $\mathcal N_{\rm post}$, which leads to the solution $u_\Theta$ [Eq.~\eqref{eq:composition}]. In the HQPINN (orange) the middle block is a \emph{fixed} quantum circuit---one $R_Y(\theta_q)$ rotation per qubit followed by one brickwork layer of CNOTs---whose output is the vector of local expectation values $y_q=\langle Z_q\rangle$, estimated with $S$ shots; the circuit has no trainable parameter. Six of the $n=10$ qubits used on hardware are drawn. In the classical PINN (blue) the middle block is a trainable bottleneck $\mathcal N_{\rm mid}$.}
   \label{fig:schematic}
 \end{figure*}
 
@@ -143,7 +144,7 @@ At every epoch $k$ a fresh batch of $\Ncol$ collocation points $(x_i,t_i)$ is dr
   \mathcal L_k(\Theta)=\frac{\rho_k}{\Ncol}\sum_{i} |r_i|^p+\frac{w_d}{\Ncol}\sum_{i}\big|u_\Theta(x_i,t_i)-u^\star_i\big|+w_0\,\mathcal L_{\rm ic},
   \label{eq:loss}
 \end{equation}
-with $r_i=r(x_i,t_i;\nu_k)$, and they differ in the terms that are switched on (Table~\ref{tab:problems}). The forward problem uses the squared residual alone ($p=2$, $\rho_k=1$, $w_d=w_0=0$), so that with the hard constraint Eq.~\eqref{eq:loss} is the complete loss. The inverse problem uses the absolute residual ($p=1$), which is robust to the heavy-tailed residuals of a few badly resolved points and of measurement noise, with a weight $\rho_k$ ramped up from zero and a large fixed data weight $w_d$; the data term fixes the particular solution and the residual term constrains $\nu$. At $T=1$ it also has the soft initial-condition term $\mathcal L_{\rm ic}$. In all cases the derivatives in Eq.~\eqref{eq:residual} are central differences on the five-point stencil $\{(x_i,t_i),(x_i\pm h,t_i),(x_i,t_i\pm\tau)\}$ with $h=1/512$ and $\tau=10^{-3}$, because device outputs are not differentiable with respect to the inputs [Fig.~\ref{fig:schematic}(b)].
+with $r_i=r(x_i,t_i;\nu_k)$, and they differ in the terms that are switched on (Table~\ref{tab:problems}). The forward problem uses the squared residual alone ($p=2$, $\rho_k=1$, $w_d=w_0=0$), so that with the hard constraint Eq.~\eqref{eq:loss} is the complete loss. The inverse problem uses the absolute residual ($p=1$), which is robust to the heavy-tailed residuals of a few badly resolved points and of measurement noise, with a weight $\rho_k$ ramped up from zero and a large fixed data weight $w_d$; the data term fixes the particular solution and the residual term constrains $\nu$. At $T=1$ it also has the soft initial-condition term $\mathcal L_{\rm ic}$. In all cases the derivatives in Eq.~\eqref{eq:residual} are central differences on the five-point stencil $\{(x_i,t_i),(x_i\pm h,t_i),(x_i,t_i\pm\tau)\}$ with $h=1/512$ and $\tau=10^{-3}$, because device outputs are not differentiable with respect to the inputs.
 
 \begin{table}[t]
 \caption{\justifying What changes between the two problems. In the forward problem the first value of a pair refers to the simulations, the second to the real QPU. Details in Appendices~\ref{app:fsim}--\ref{app:iqpu}.}
@@ -196,7 +197,7 @@ with $g_0=1$, $g_c=\cos$, $g_s=\sin$, and device-dependent real coefficients $c^
 Noise therefore does not change the function class, only the coefficients. Without noise the layer reduces to products of cosines, $y_q=\prod_{j\in\mathcal S_q}\cos\theta_j$ with $|\mathcal S_q|\le3$ (Appendix~\ref{app:parity}), which a classical computer evaluates efficiently: the noiseless HQPINN is a classical network with cosine-product activations. Simulations of it measure the merit of this architecture, not a quantum advantage~\cite{schreiber2023classical}.
 
 \subsection{Training with a device in the loop}\label{sec:hil}
-Training on a quantum processor raises two problems: the device returns $\hat{\bm y}$ but not its gradient, and the finite differences of the residual amplify shot noise by a factor of order $h^{-2}$. Both are solved by Proposition~\ref{prop:trig}. A classical surrogate $\hat f$ fitted to measurements describes the device, in a scheme analogous to the physics-aware training of physical neural networks~\cite{wright2022deep} [Fig.~\ref{fig:schematic}(c)]. One job calibrates $\hat f$ at random angles. At each epoch, one job measures the circuit only at the $\Ncol$ stencil centres $\bm\theta_c$, and every node $\bm\theta$ of the stencil centred at $c$ receives
+Training on a quantum processor raises two problems: the device returns $\hat{\bm y}$ but not its gradient, and the finite differences of the residual amplify shot noise by a factor of order $h^{-2}$. Both are solved by Proposition~\ref{prop:trig}. A classical surrogate $\hat f$ fitted to measurements describes the device, in a scheme analogous to the physics-aware training of physical neural networks~\cite{wright2022deep}. One job calibrates $\hat f$ at random angles. At each epoch, one job measures the circuit only at the $\Ncol$ stencil centres $\bm\theta_c$, and every node $\bm\theta$ of the stencil centred at $c$ receives
 \begin{equation}
   \tilde{\bm y}(\bm\theta)=\hat f(\bm\theta)+\sg\!\big[\hat{\bm y}^{\,\rm QPU}(\bm\theta_c)-\hat f(\bm\theta_c)\big],
   \label{eq:ste}
@@ -267,7 +268,8 @@ Both models are trained with the same algorithm (Algorithm~\ref{alg:inv} in Appe
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{fig5_inv_nu_E500.pdf}
+  % \includegraphics[width=\textwidth]{fig5_inv_nu_E500.pdf}
+  \figspace{0.55\textwidth}
   \caption{\justifying Inverse problem, identification of $\nu_{\rm true}=0.01$ in $K=500$ epochs over the 33 paired runs of each model ($n\in\{3,7,10\}$, seeds 0--10), for $T=0.1$ (top) and $T=1$ (bottom). Blue, classical PINN; aqua, HQPINN on the noisy emulator \texttt{FakeAachen}. (a,d) Learned viscosity versus epoch: median and 10--90\% range; at $T=1$ the viscosity is frozen during the first 10 epochs. (b,e) Relative error of $\nu_k$: median and interquartile range; dotted, 5\%. (c,f) Final relative error of each run, grouped by size; black ticks, medians per size. The same figure at $K=110$ is Fig.~\ref{fig:invnu110}.}
   \label{fig:invnu}
 \end{figure*}
@@ -289,7 +291,8 @@ At $T=1$ the problem is harder for both models and more epochs do not solve it. 
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{fig6_inv_field.pdf}
+  % \includegraphics[width=\textwidth]{fig6_inv_field.pdf}
+  \figspace{0.55\textwidth}
   \caption{\justifying Inverse problem, reconstruction of the field at the final time, for $T=0.1$ (top) and $T=1$ (bottom). (a,c) $u(x,T)$ at $K=500$ for the paired run $n=10$, seed 0: exact solution, classical PINN and HQPINN with the circuit on \texttt{FakeAachen} (every fourth point). (b,d) Relative $L_2$ error of $u(x,T)$ of every run at $K=110$ (\texttt{FakeBerlin}) and $K=500$ (\texttt{FakeAachen}), 33 runs per column; grey, the HQPINN weights evaluated with the ideal circuit; black ticks, medians.}
   \label{fig:invfield}
 \end{figure*}
@@ -300,12 +303,13 @@ The networks of the HQPINN are trained through the noisy device, and they adapt 
 
 \subsection{Real quantum processor}\label{sec:i_qpu}
 \TODO{Ainda n\~ao h\'a nenhuma rodada do problema inverso em hardware real: todos os resultados acima v\^em de emuladores. Esta se\c{c}\~ao e a Fig.~\ref{fig:invqpu} aguardam os dados. Sugest\~ao de texto a preencher: $\hat\nu$, $\epsilon_\nu$ e $\epsilon_{L_2}$ da rodada, comparados com a mediana e a dispers\~ao do emulador no mesmo or\c{c}amento.}
-The training loop, the protocol and the comparison are ready. A run on a device uses the machinery of Sec.~\ref{sec:hil}, with the same training as on the emulator; at the budget of the forward run it costs 112 jobs (Appendix~\ref{app:iqpu}). Figure~\ref{fig:invqpu} holds the place of the result, and shows the emulator medians at the same budget against which it will be compared.
+The training loop, the protocol and the comparison are ready. A run on a device uses the machinery of Sec.~\ref{sec:hil}, with the same training as on the emulator; at the budget of the forward run it costs 112 jobs (Appendix~\ref{app:iqpu}). Figure~\ref{fig:invqpu} holds the place of the result, which will be compared with the emulator medians at the same budget.
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{fig7_inv_qpu.pdf}
-  \caption{\justifying Inverse problem on the real QPU. \TODO{Sem dados ainda: a figura mostra s\'o as refer\^encias e se preenche sozinha quando a rodada existir (\texttt{INVERSE\_QPU\_CASES} em \texttt{paper\_common.py}).} (a,c) Learned viscosity versus epoch at $K=110$: medians of the classical PINN and of the HQPINN on \texttt{FakeBerlin} over 33 runs; dashed, $\nu_{\rm true}$. (b,d) $u(x,T)$: exact solution.}
+  % \includegraphics[width=\textwidth]{fig7_inv_qpu.pdf}
+  \figspace{0.50\textwidth}
+  \caption{\justifying Inverse problem on the real QPU. \TODO{A rodada ainda n\~ao existe; o script \texttt{fig7\_inv\_qpu.py} preenche os dados dela sozinho (\texttt{INVERSE\_QPU\_CASES} em \texttt{paper\_common.py}).} (a,c) Learned viscosity versus epoch at $K=110$: QPU run, and medians of the classical PINN and of the HQPINN on \texttt{FakeBerlin} over 33 runs; dashed, $\nu_{\rm true}$. (b,d) $u(x,T)$: QPU run and exact solution.}
   \label{fig:invqpu}
 \end{figure*}
 
@@ -678,7 +682,8 @@ Figure~\ref{fig:invnu110} is the counterpart of Fig.~\ref{fig:invnu} at $K=110$ 
 
 \begin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figC1_inv_nu_E110.pdf}
+  % \includegraphics[width=\textwidth]{figC1_inv_nu_E110.pdf}
+  \figspace{0.55\textwidth}
   \caption{\justifying Inverse problem at $K=110$ epochs, with the HQPINN on \texttt{FakeBerlin}. Same panels as Fig.~\ref{fig:invnu}.}
   \label{fig:invnu110}
 \end{figure*}

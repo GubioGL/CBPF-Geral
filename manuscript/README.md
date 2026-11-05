@@ -35,6 +35,9 @@ reproduzir o run; os outros dois recalculam). Ver Apêndice B, "Offline replay".
 
 ## Figuras
 
+A pedido do autor, a Fig. 1 mostra só a arquitetura, sem tamanhos de rede, e as figuras do problema inverso (5, 6, 7 e 9) não entram no texto: fica um espaço reservado
+do mesmo tamanho (`\figspace` no `main.tex`). Os scripts continuam gerando os PDFs; para recolocar uma figura, descomente o `\includegraphics` dela e apague o `\figspace`.
+
 | Figura | Arquivo | Script | Dados |
 |---|---|---|---|
 | 1 | `figures/schematic.tex` | TikZ | -- |
