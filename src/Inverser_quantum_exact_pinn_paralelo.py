@@ -64,7 +64,7 @@ FIXED_LAYER_REPEATS = 1
 # below rather than silently producing a degenerate feature map.
 INPUT_ROTATION_AXIS = "ry"         # 'rx' or 'ry'
 
-OUT_DIR = "data/Inverso/quantum_inverse_exact"   # new folder: the resume logic skips existing .pt files
+OUT_DIR = "data/Inverso_antigo/quantum_inverse_exact"   # new folder: the resume logic skips existing .pt files
 
 # ---- parallelization --------------------------------------------------------
 N_WORKERS_CPU = 6 # max(1, (os.cpu_count() or 1) - 1)

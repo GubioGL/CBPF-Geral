@@ -1,5 +1,5 @@
 # --- repository layout: src/ and run/ go on the import path, and relative paths
-# --- such as "data/Inverso/..." are resolved from the repository root.
+# --- such as "data/..." are resolved from the repository root.
 import os as _os
 import sys as _sys
 from pathlib import Path as _Path
@@ -49,7 +49,7 @@ FIXED_LAYER = "linear_cnot"        # see FIXED_LAYERS below for every option
 FIXED_LAYER_REPEATS = 1
 INPUT_ROTATION_AXIS = "ry"         # 'rx', 'ry' or 'rz'
 
-OUT_DIR = "data/Inverso/quantum_simple"
+OUT_DIR = "data/Inverso_antigo/quantum_simple"
 
 
 def set_seed(seed=42):

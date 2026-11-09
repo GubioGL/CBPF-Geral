@@ -1,5 +1,5 @@
 # --- repository layout: src/ and run/ go on the import path, and relative paths
-# --- such as "data/Inverso/..." are resolved from the repository root.
+# --- such as "data/..." are resolved from the repository root.
 import os as _os
 import sys as _sys
 from pathlib import Path as _Path
@@ -39,7 +39,7 @@ INTRA_NEURON = 3          # bottleneck width
 INTRA_NEURONS, INTRA_DEPTH = 10, 1
 POST_NEURONS, POST_DEPTH = 10, 1
 
-OUT_DIR = "data/Inverso/classical_simple"
+OUT_DIR = "data/Inverso_antigo/classical_simple"
 
 
 def set_seed(seed=42):

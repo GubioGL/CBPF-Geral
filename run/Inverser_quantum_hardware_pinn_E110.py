@@ -178,7 +178,7 @@ def nu_minimizer(a, b):
 
 
 def train(model, seed, measure=None, cfg=CONFIG, Tfin=TFIN, nu_true=NU_TRUE, n_col=N_COLLOCATION, epochs=EPOCHS,
-          adj=None):
+          adj=None, on_epoch=None):
     """Trains `model` for `epochs` epochs, one batch of n_col fresh random points per epoch.
     measure(epoch, xt, xt_ic), optional (QPU in the loop): gets the epoch's stencil points (and the
     IC points, or None) before the forward pass and returns the offsets added to the output of
@@ -249,6 +249,8 @@ def train(model, seed, measure=None, cfg=CONFIG, Tfin=TFIN, nu_true=NU_TRUE, n_c
         hist["loss_r"].append(float(loss_r.detach()))
         hist["loss_d"].append(float(loss_d.detach()))
         hist["nu"].append(float(nu.detach()))
+        if on_epoch is not None:   # optional callback, once per epoch (run/Inverser_runs_paralelo.py: progress bar)
+            on_epoch()
     return hist
 
 
@@ -301,9 +303,10 @@ def calibrate(backend, n_qubits, real, out_dir):
 # One run: training with the QPU in the loop + validation on the QPU
 # ----------------------------------------------------------------------
 def run_one(n_qubits, seed, real=False, threads=0, tfin=TFIN, nu_true=NU_TRUE, cfg=CONFIG, epochs=EPOCHS, adj=None,
-            backend_name=BACKEND, out_root=OUT_DIR):
+            backend_name=BACKEND, out_root=OUT_DIR, on_epoch=None):
     """Initialization as Inverser_quantum_exact_pinn_paralelo.run_one (set_seed,
-    nu_init = np.random.random(), then the network). adj: ADJUSTMENTS or None (unadjusted)."""
+    nu_init = np.random.random(), then the network). adj: ADJUSTMENTS or None (unadjusted).
+    on_epoch: optional callback once per epoch (run/Inverser_runs_paralelo.py: progress bar)."""
     tc.set_num_threads(1)
     t0 = time.time()
     backend = get_backend(real, backend_name)
@@ -339,7 +342,8 @@ def run_one(n_qubits, seed, real=False, threads=0, tfin=TFIN, nu_true=NU_TRUE, c
     with (Session(backend=backend, max_time=SESSION_MAX_TIME) if real else nullcontext()) as session:
         if real:
             qpu.set_mode(session)
-        hist = train(model, seed, measure=measure, cfg=cfg, Tfin=tfin, nu_true=nu_true, epochs=epochs, adj=adj)
+        hist = train(model, seed, measure=measure, cfg=cfg, Tfin=tfin, nu_true=nu_true, epochs=epochs, adj=adj,
+                     on_epoch=on_epoch)
 
         # ---------- validation: the trained network running on the QPU ----------
         x_val = np.linspace(0.0, L, VAL_POINTS, endpoint=False).reshape(-1, 1)

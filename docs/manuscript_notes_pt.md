@@ -24,7 +24,7 @@ Layout e comandos: `README.md` e `manuscript/README.md`.
 
 - Fig. 1: só a arquitetura, sem os painéis de resíduo e de fluxo de treino, sem tamanhos de rede e com a saída apenas `u_Θ`. O resíduo e o laço de treino estão no texto da Sec. II e no Apêndice B.
 - Figs. 2(b,e) e 3(b,d) (09/11/2026): razão entre os passos médios da clássica e da HQPINN, em escala log; na Fig. 3, uma só cor (marrom) e a largura pelo marcador.
-- Problema inverso no texto (09/11/2026): Fig. 5 (melhor run de cada modelo com 110 épocas e o treino dela; a figura de MSE por tamanho foi retirada a pedido do autor) e Fig. 8 no Apêndice C (varreduras longas antigas, MSE de ν × N_col, n ≤ 10). "MSE de ν" = média sobre as seeds de (ν − ν_verdadeiro)²; é sensível a runs ruins (ex.: clássica, T = 0,1, n = 7, N = 20: 2×10⁻⁴ por causa de um outlier). Legendas só com os dois modelos. A Fig. 6 (QPU real) segue como espaço reservado.
+- Problema inverso no texto (09/11/2026, atualizado): Fig. 5 = melhor run de cada modelo e T com 20 000 épocas e circuito ideal (`data/Inverso`) e o treino dela; Fig. 8 no Apêndice C = MSE de ν × tamanho n com 20 000 épocas. As varreduras longas antigas foram apagadas a pedido do autor (estão no histórico do git, commit 201f0b3c6).
 
 ## Organização dos resultados: problema direto
 
@@ -142,9 +142,9 @@ Medidas nesta máquina (i7-13620H):
 
 | Grupo | Conjunto | Dados | Saída |
 |---|---|---|---|
-| Simulação | 500 épocas, clássica × HQPINN no FakeAachen, n = 3, 7, 10, seeds 0–10 (33 pares por T) | `data/Inverso_500/` | Figs. 5, 6, Tabs. II, X |
-| Simulação | 110 épocas, clássica × HQPINN no FakeBerlin, mesmo desenho | `data/Inverso_110/` | Figs. 6, 9, Tabs. II, X |
-| Simulação | varreduras longas antigas, outro protocolo | `data/Inverso/` | Apêndice C, sem comparar |
+| Simulação | 500 épocas, clássica × HQPINN no FakeAachen, n = 3, 7, 10, seeds 0–10 (33 pares por T) | `data/Inverso_500/` (apagada em 09/11/2026; commit 201f0b3c6) | Tabs. II, X |
+| Simulação | 110 épocas, clássica × HQPINN no FakeBerlin, mesmo desenho | `data/Inverso_110/` (apagada em 09/11/2026; commit 201f0b3c6) | Tabs. II, X |
+| Simulação | 20 000 épocas, circuito ideal, mesmo treino | `data/Inverso/` | Fig. 5, Apêndice C, Tabelas II e X |
 | QPU real | **não existe nenhuma rodada** | `data/Inverso_real/<backend>/` | Fig. 7, Sec. IV B, Apêndice D |
 
 Todos os números abaixo saem de `manuscript/data/inverse/` e foram conferidos com os READMEs de `Inverso_110` e `Inverso_500`:

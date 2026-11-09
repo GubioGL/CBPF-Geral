@@ -15,7 +15,7 @@ the two models differ only in the bottleneck:
 """
 
 # --- repository layout: src/ and run/ go on the import path, and relative paths
-# --- such as "data/Inverso/..." are resolved from the repository root.
+# --- such as "data/..." are resolved from the repository root.
 import os as _os
 import sys as _sys
 from pathlib import Path as _Path
@@ -60,7 +60,7 @@ INTRA_NEURONS, INTRA_DEPTH = 10, 1        # width/depth around the bottleneck, f
 POST_NEURONS, POST_DEPTH = 10, 1
 
 SAVE_EXTRAS = True  # also save the model checkpoint + full loss/nu history
-OUT_DIR = "data/Inverso/classical_inverse"   # new folder: the resume logic skips existing .pt files
+OUT_DIR = "data/Inverso_antigo/classical_inverse"   # new folder: the resume logic skips existing .pt files
 
 # ---- device / parallelization -----------------------------------------------
 DEVICE = tc.device("cpu")

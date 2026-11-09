@@ -1,0 +1,30 @@
+{
+ "n_qubits": 10,
+ "seed": 0,
+ "model": "quantum",
+ "Tfin": 0.1,
+ "nu_true": 0.01,
+ "nu_init": 0.5488135039273248,
+ "nu": 0.010027153417468071,
+ "nu_rel_err": 0.0027153417468070776,
+ "rel_l2_T": 0.0033200092208217104,
+ "epochs": 20000,
+ "adjustments": null,
+ "cfg": {
+  "lr_net": 0.0307,
+  "lr_net_min": 0.0012,
+  "betas_net": [
+   0.77,
+   0.99
+  ],
+  "weight_decay": 6.4e-06,
+  "grad_clip": 10.0,
+  "r_ramp": 20,
+  "w_d": 85.8,
+  "lr_nu": 0.97,
+  "lr_nu_min": 0.128,
+  "inner_steps": 16
+ },
+ "time_s": 539.5373611450195,
+ "s_per_epoch": 0.026976647460460662
+}

@@ -78,9 +78,19 @@ python run/Inverser_quantum_hardware_pinn_E110.py --tfin 0.1 --nu 0.01 --epochs 
 
 `--workers 12` fits a 16-core, 16 GB machine. The classical runs reproduce bit by bit on the same machine; the emulator does not fix its seed.
 
+**Many runs at once, with a progress bar and a time estimate** (`run/Inverser_runs_paralelo.py`, same training as above):
+
+```bash
+python run/Inverser_runs_paralelo.py --benchmark                  # how long everything takes
+python run/Inverser_runs_paralelo.py                              # 20 000 epochs, ideal circuit -> data/Inverso (done)
+python run/Inverser_runs_paralelo.py --preset aachen200           # 200 epochs, n = 10, seeds 0-9, FakeAachen -> data/Inverso_200 (~20 min)
+```
+
+`data/Inverso_110` and `data/Inverso_500` were deleted on 09/11/2026; they are in the git history (commit `201f0b3c6`).
+
 **What changes at T = 1.** With ν = 0.01 a shock forms before T = 1. For this case only (`ADJUSTED_CASES` in `run/Inverser_classical_pinn_E110.py`),
 both scripts apply the same three adjustments, with no extra flag: the initial condition as a soft loss, 10 warm-up epochs on the data only with ν frozen,
-and a plateau learning rate. `--treino-antigo` runs T = 1 without them. Why these: `data/Inverso_110/README.md`.
+and a plateau learning rate. `--treino-antigo` runs T = 1 without them. Why these: `data/Inverso_110/README.md` (git history, commit `201f0b3c6`).
 
 **Real QPU** (not run yet): `--real` writes to `data/Inverso_real/<backend>/` and never over the emulator runs; `manuscript/scripts/build_inverse_data.py` picks up
 the cases of `INVERSE_QPU_CASES` by themselves. Before running, see the open choices in Appendix D of the paper: the default mitigation of the script is `suppress`, whereas the forward

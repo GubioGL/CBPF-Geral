@@ -19,7 +19,7 @@ Outputs in data/quantum_simple/:
 """
 
 # --- repository layout: src/ and run/ go on the import path, and relative paths
-# --- such as "data/Inverso/..." are resolved from the repository root.
+# --- such as "data/..." are resolved from the repository root.
 import os as _os
 import sys as _sys
 from pathlib import Path as _Path
@@ -46,7 +46,7 @@ try:
 except Exception:
     plt.style.use("seaborn-v0_8-whitegrid")
 
-DATA_DIR = "data/Inverso/quantum_simple"
+DATA_DIR = "data/Inverso_antigo/quantum_simple"
 PREFIX = "inverse_Qmodel_linear_cnot_2q_random_100_"
 
 plt.rcParams.update({

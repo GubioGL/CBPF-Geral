@@ -31,9 +31,8 @@ configuration. A run that misses the target stops at the step budget, so `steps_
 | `inverse/per_size.csv` | Table X | the same errors per size |
 | `inverse/budget_effect.csv` | text, Sec. IV A | 110 vs 500 epochs, same size and seed. For the HQPINN the backend changes too |
 | `inverse/devices.csv` | Table IX | chains, calibration misfit, jobs and time per backend and size |
-| `inverse/long_budget.csv` | Appendix C | older long-budget sweeps, another protocol: never compared with the runs above |
-| `inverse/best_profile.csv`, `best_history.csv` | Fig. 5 | best run of each model and T at 110 epochs: u(x,T); nu and the two loss terms per epoch |
-| `inverse/long_budget_ncol.csv` | Fig. 8 | mean squared error of nu, mean over seeds of (nu - nu_true)^2, for the older long-budget sweeps, per model, T, width and N_col |
+| `inverse/best_profile.csv`, `best_history.csv` | Fig. 5 | best run of each model and T at 20 000 epochs (ideal circuit): u(x,T); nu and the two loss terms, medians over logarithmic bins of epochs |
+| `inverse/mse_size.csv` | Fig. 8 | 20 000 epochs: mean squared error of nu, mean over seeds of (nu - nu_true)^2, per model, T and size |
 | `inverse/qpu_cases.csv` | Fig. 7 | the real-QPU cases and their status. All `pending`: no real run exists yet |
 
 `manuscript/tables/inverse_summary.tex` and `inverse_per_size.tex` are written from the same data and `\input` by `main.tex`.

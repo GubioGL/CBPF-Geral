@@ -1,5 +1,5 @@
 # --- repository layout: src/ and run/ go on the import path, and relative paths
-# --- such as "data/Inverso/..." are resolved from the repository root.
+# --- such as "data/..." are resolved from the repository root.
 import os as _os
 import sys as _sys
 from pathlib import Path as _Path
@@ -26,8 +26,8 @@ try:
 except Exception:
     plt.style.use("seaborn-v0_8-whitegrid")
 
-CLASSICAL_INVERSE_DIR = "data/Inverso/classical_inverse"
-QUANTUM_INVERSE_DIR = "data/Inverso/quantum_inverse_exact"
+CLASSICAL_INVERSE_DIR = "data/Inverso_antigo/classical_inverse"
+QUANTUM_INVERSE_DIR = "data/Inverso_antigo/quantum_inverse_exact"
 T_LABELS = ["0.1", "1"]
 INTRA_NEURO_LIST = [3, 7, 15]  # widths with a full N_COLLOCATION sweep
 N_QUBITS_LIST = [3, 7,15]  # quantum widths with a full N_COLLOCATION sweep

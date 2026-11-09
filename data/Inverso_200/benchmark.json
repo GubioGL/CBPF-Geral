@@ -1,0 +1,11 @@
+{
+ "workers": 12,
+ "bench_epochs": 10,
+ "backend": "ibm_aachen",
+ "s_per_epoch": {
+  "quantum_n10_T0.1": 2.350228618692469,
+  "quantum_n10_T1.0": 3.9015238373367875,
+  "classical_n10_T0.1": 0.01461878529301396,
+  "classical_n10_T1.0": 0.01632773434674298
+ }
+}

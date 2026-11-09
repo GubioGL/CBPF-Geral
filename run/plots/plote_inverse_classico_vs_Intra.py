@@ -29,8 +29,8 @@ try:
 except Exception:
     plt.style.use("seaborn-v0_8-whitegrid")
 
-CLASSICAL_INVERSE_DIR = "data/Inverso/classical_inverse"
-QUANTUM_INVERSE_DIR = "data/Inverso/quantum_inverse_exact"
+CLASSICAL_INVERSE_DIR = "data/Inverso_antigo/classical_inverse"
+QUANTUM_INVERSE_DIR = "data/Inverso_antigo/quantum_inverse_exact"
 T_LABELS = ["0.1", "1"]
 INTRA_NEURO_LIST = [3, 7, 15]  # widths with a full N_COLLOCATION sweep
 N_QUBITS_LIST = [3, 7, 15]  # quantum widths with a full N_COLLOCATION sweep

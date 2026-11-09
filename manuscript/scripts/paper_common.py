@@ -20,9 +20,10 @@ Raw results behind the manuscript, grouped as in the paper:
     data/Forward/classical_vs_qpu/T_<T>/           classical control, same protocol as the QPU run
     data/derived/                                  replayed learning curves, same-budget simulations
   INVERSE PROBLEM, SIMULATION (33 paired runs per model and final time, listed in INVERSE_BUDGETS)
-    data/Inverso_110/                              110 epochs, classical vs HQPINN on FakeBerlin
-    data/Inverso_500/                              500 epochs, classical vs HQPINN on FakeAachen
-    data/Inverso/                                  older long-budget sweeps (another protocol; Appendix C only)
+    data/Inverso_110/                              110 epochs, classical vs HQPINN on FakeBerlin   } deleted on 09/11/2026 (git
+    data/Inverso_500/                              500 epochs, classical vs HQPINN on FakeAachen   } commit 201f0b3c6); their
+                                                   tables stay in manuscript/data/inverse/
+    data/Inverso/                                  20 000 epochs, classical vs HQPINN with the ideal circuit (Fig. 5, App. C)
   INVERSE PROBLEM, REAL QPU (listed in INVERSE_QPU_CASES): no run yet
     data/Inverso_real/<backend>/quantico/<case>/   where Inverser_quantum_hardware_pinn_E110.py --real writes
 """
@@ -89,7 +90,9 @@ INV_CASES = {0.1: "T_0.1_nu_0.01", 1.0: "T_1.0_nu_0.01"}
 # from the effect of the backend. The classical model has no backend, so its 110 -> 500 change is the epochs alone.
 INVERSE_BUDGETS = {110: dict(root=DATA / "Inverso_110", backend="FakeBerlin"),
                    500: dict(root=DATA / "Inverso_500", backend="FakeAachen")}
-INVERSE_LONG = DATA / "Inverso"
+# Long budget with the noiseless layer: same training, CONFIGs and adjustments, 20 000 epochs, ideal circuit
+# (run/Inverser_runs_paralelo.py, preset ideal). The HQPINN runs are in quantico_ideal/.
+INVERSE_IDEAL = dict(root=DATA / "Inverso", epochs=20000, backend="noiseless")
 # Real-QPU inverse runs: none exists yet, every entry is a proposal. A case fills in by itself once its raw files
 # are found. Keep them out of data/Inverso_110 (see --out-dir in Inverser_quantum_hardware_pinn_E110.py).
 INVERSE_REAL_ROOT = DATA / "Inverso_real" / "ibm_berlin"

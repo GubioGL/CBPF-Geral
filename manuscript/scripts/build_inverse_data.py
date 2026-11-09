@@ -2,19 +2,20 @@
 
     python manuscript/scripts/build_inverse_data.py
 
-Reads the runs of data/Inverso_110 (FakeBerlin) and data/Inverso_500 (FakeAachen), and writes:
+Reads the runs of data/Inverso_110 (FakeBerlin), data/Inverso_500 (FakeAachen) and data/Inverso (20 000 epochs, ideal
+circuit), and writes:
 
-  runs.csv            one row per run (264 rows)
+  runs.csv            one row per run (396 rows)
   summary.csv         per budget, T and model: error of nu and of u(x,T) over the 33 runs
   per_size.csv        the same per size n = k = 3, 7, 10
   paired.csv          per budget and T: paired wins and two-sided Wilcoxon p, HQPINN vs classical
   budget_effect.csv   per T and model: 110 vs 500 epochs, same size and seed (HQPINN: confounded with the backend)
-  nu_curves.csv       per budget, T, model and epoch: nu and its relative error over the 33 runs
-  field.csv           u(x,T) of the paired run n = k = 10, seed 0, at each budget
+  nu_curves.csv       per emulator budget, T, model and epoch: nu and its relative error over the 33 runs
+  field.csv           u(x,T) of the paired run n = k = 10, seed 0, at each emulator budget
   devices.csv         chains and calibration misfit per backend and n
-  long_budget.csv     older long-budget sweeps (another protocol, never compared with the runs above)
-  long_budget_ncol.csv  the same sweeps: mean squared error of nu per model, T, width and N_col (Appendix C figure)
-  best_profile.csv, best_history.csv  best run of each model and T at 110 epochs: u(x,T), and nu and loss per epoch
+  mse_size.csv        20 000 epochs: mean squared error of nu per model, T and size (Appendix C figure)
+  best_profile.csv, best_history.csv  best run of each model and T at 20 000 epochs: u(x,T), and nu and the loss terms
+                      (medians over logarithmic bins of epochs)
   qpu_cases.csv       the real-QPU cases and their status; qpu/T_<T>/ holds the data of a case that exists
 
 and the two LaTeX tables the manuscript \\input-s, so that they cannot drift from the data:
@@ -40,18 +41,26 @@ _os.chdir(_ROOT)
 # ---------------------------------------------------------------------------------
 
 import json
-import re
 
 import numpy as np
 import pandas as pd
 from scipy.stats import wilcoxon
 
-from paper_common import (INV_CASES, INV_N, INV_NU, INV_SIZES, INVERSE_BUDGETS, INVERSE_LONG, INVERSE_QPU_CASES,
+from paper_common import (INV_CASES, INV_N, INV_NU, INV_SIZES, INVERSE_BUDGETS, INVERSE_IDEAL, INVERSE_QPU_CASES,
                           INVERSE_REAL_ROOT, PAPER_DATA, ROOT)
 
 TABLES = ROOT / "manuscript" / "tables"
 
 MODELS = {"classical": ("classico", "NE", "neurons"), "hqpinn": ("quantico", "NQ", "n_qubits")}
+IDEAL = INVERSE_IDEAL["epochs"]
+# every budget: its folder, emulator (or "noiseless") and the folder of its HQPINN runs
+BUDGETS = {**{k: dict(v, quantum="quantico") for k, v in INVERSE_BUDGETS.items()},
+           IDEAL: dict(root=INVERSE_IDEAL["root"], backend=INVERSE_IDEAL["backend"], quantum="quantico_ideal")}
+
+
+def run_dir(epochs, model, T):
+    b = BUDGETS[epochs]
+    return b["root"] / (b["quantum"] if model == "hqpinn" else MODELS[model][0]) / INV_CASES[T]
 
 
 def tag(prefix, size, seed, epochs):
@@ -59,12 +68,12 @@ def tag(prefix, size, seed, epochs):
 
 
 def load_runs():
-    """One row per run, with the per-epoch nu of each run kept apart (it does not go in the table)."""
+    """One row per run, with the per-epoch nu of each emulator run kept apart (it does not go in the table)."""
     rows, nu = [], {}
-    for epochs, budget in INVERSE_BUDGETS.items():
-        for T, case in INV_CASES.items():
-            for model, (folder, prefix, size_key) in MODELS.items():
-                path = budget["root"] / folder / case
+    for epochs in BUDGETS:
+        for T in INV_CASES:
+            for model, (_, prefix, size_key) in MODELS.items():
+                path = run_dir(epochs, model, T)
                 for run in json.loads((path / "summary.json").read_text())["runs"]:
                     size, seed = run[size_key], run["seed"]
                     if size not in INV_SIZES or seed not in range(11):
@@ -73,12 +82,15 @@ def load_runs():
                                eps_nu=abs(run["nu"] - INV_NU) / INV_NU, time_s=run["time_s"])
                     if model == "classical":
                         row.update(backend="", l2=run["rel_l2_T"])
+                    elif epochs == IDEAL:
+                        row.update(backend="ideal", l2=run["rel_l2_T"])
                     else:
                         row.update(backend=run["backend"], l2=run["rel_l2_T_qpu"],
                                    l2_surrogate=run["rel_l2_T_measured_model"], l2_ideal=run["rel_l2_T_ideal_circuit"],
                                    n_jobs=run["n_jobs"], chains=run["chains"], fit_rms=run["fit_rms_calibration"])
                     rows.append(row)
-                    nu[epochs, T, model, size, seed] = np.load(path / f"losshist_{tag(prefix, size, seed, epochs)}.npz")["nu"]
+                    if epochs in INVERSE_BUDGETS:
+                        nu[epochs, T, model, size, seed] = np.load(path / f"losshist_{tag(prefix, size, seed, epochs)}.npz")["nu"]
     df = pd.DataFrame(rows)
     counts = df.groupby(["epochs", "Tfin", "model"]).size()
     if not (counts == 33).all():
@@ -110,7 +122,7 @@ def compare(a, b, column):
 
 def paired(df):
     rows = []
-    for (epochs, T), g in df.groupby(["epochs", "Tfin"]):
+    for (epochs, T), g in df.groupby(["epochs", "Tfin"]):   # same size, seed, nu_0 and collocation stream
         q = g[g.model == "hqpinn"].sort_values(["size", "seed"])
         c = g[g.model == "classical"].sort_values(["size", "seed"])
         if not (q[["size", "seed"]].values == c[["size", "seed"]].values).all():
@@ -161,59 +173,44 @@ def field(size=10, seed=0):
     return pd.concat(rows, ignore_index=True)
 
 
-def best_110(df):
-    """The run of each model and T with the smallest error of nu at 110 epochs: u(x,T) and its training history."""
-    best = df[df.epochs == 110]
+def log_bins(values, per_decade=60):
+    """Medians of a per-epoch series over logarithmic bins of epochs: single epochs at the start, wide bins at the end
+    (the per-epoch loss fluctuates by tens of percent from one batch to the next)."""
+    n = len(values)
+    edges = np.unique(np.round(np.logspace(0, np.log10(n + 1), int(per_decade * np.log10(n + 1)) + 1)).astype(int))
+    rows = [(np.sqrt(a * (b - 1)), np.median(values[a - 1:b - 1])) for a, b in zip(edges[:-1], edges[1:])]
+    return np.array(rows).T
+
+
+def best_runs(df, epochs=IDEAL):
+    """The run of each model and T with the smallest error of nu at that budget: u(x,T) and its training history."""
+    best = df[df.epochs == epochs]
     best = best.loc[best.groupby(["Tfin", "model"]).eps_nu.idxmin()]
     prof, hist = [], []
     for r in best.itertuples():
-        folder, prefix, _ = MODELS[r.model]
-        path = INVERSE_BUDGETS[110]["root"] / folder / INV_CASES[r.Tfin]
-        t = tag(prefix, r.size, r.seed, 110)
+        path = run_dir(epochs, r.model, r.Tfin)
+        t = tag(MODELS[r.model][1], r.size, r.seed, epochs)
         v, h = np.load(path / f"validation_{t}.npz"), np.load(path / f"losshist_{t}.npz")
-        u = v["u_qpu"] if r.model == "hqpinn" else v["u_pred"]
-        prof.append(pd.DataFrame(dict(Tfin=r.Tfin, model=r.model, size=r.size, seed=r.seed, nu=r.nu, eps_nu=r.eps_nu, l2=r.l2,
-                                      x=v["x"].ravel(), u_exact=v["u_exact"].ravel(), u=u.ravel())))
-        hist.append(pd.DataFrame(dict(Tfin=r.Tfin, model=r.model, epoch=np.arange(1, len(h["nu"]) + 1), nu=h["nu"],
-                                      loss_residual=h["loss_r"], loss_data=h["loss_d"])))
+        u = v["u_qpu"] if "u_qpu" in v else v["u_pred"]
+        prof.append(pd.DataFrame(dict(Tfin=r.Tfin, model=r.model, size=r.size, seed=r.seed, epochs=epochs, nu=r.nu,
+                                      eps_nu=r.eps_nu, l2=r.l2, x=v["x"].ravel(), u_exact=v["u_exact"].ravel(), u=u.ravel())))
+        epoch, nu = log_bins(h["nu"])
+        hist.append(pd.DataFrame(dict(Tfin=r.Tfin, model=r.model, epoch=epoch, nu=nu, loss_residual=log_bins(h["loss_r"])[1],
+                                      loss_data=log_bins(h["loss_d"])[1])))
     return pd.concat(prof, ignore_index=True), pd.concat(hist, ignore_index=True)
 
 
+def mse_size(df, epochs=IDEAL):
+    """Mean squared error of nu, the mean over the 11 seeds of (nu - nu_true)^2, per model, T and size."""
+    g = df[df.epochs == epochs].assign(se=lambda d: (d.nu - INV_NU) ** 2).groupby(["Tfin", "model", "size"])
+    return pd.DataFrame(dict(mse_nu=g.se.mean(), eps_median=g.eps_nu.median(), runs=g.size())).reset_index()
+
+
 def devices(df):
-    g = df[df.model == "hqpinn"]
+    g = df[(df.model == "hqpinn") & df.epochs.isin(list(INVERSE_BUDGETS))]
     return g.groupby(["epochs", "backend", "size"]).agg(chains=("chains", "first"), fit_rms=("fit_rms", "first"),
                                                          jobs=("n_jobs", "first"), time_median_s=("time_s", "median"),
                                                          time_max_s=("time_s", "max")).reset_index()
-
-
-def long_budget():
-    """data/Inverso: data only at t = T, 20 000 AdamW + L-BFGS. The two folders differ in circuit, stopping rule and
-    number of seeds, so they are tabulated side by side but never tested against each other."""
-    rows = []
-    for model, folder, pattern in (("classical", "classical_inverse", r"T_([\d.]+)/losshist_(\d+)_INTRA(\d+)_(\d+)"),
-                                   ("hqpinn_older", "quantum_inverse", r"T_([\d.]+)/losshist_(\d+)_NQ(\d+)_(\d+)")):
-        h = pd.read_csv(INVERSE_LONG / folder / "histories_summary.csv")
-        keys = pd.DataFrame([re.match(pattern, f).groups() for f in h.file], columns=["Tfin", "n_collocation", "size", "seed"])
-        h = pd.concat([h, keys.astype(dict(Tfin=float, n_collocation=int, size=int, seed=int))], axis=1)
-        h["eps_nu"] = (h.nu_final - INV_NU).abs() / INV_NU
-        s = h.groupby(["Tfin", "n_collocation", "size"]).agg(runs=("eps_nu", "size"), eps_median=("eps_nu", "median")).reset_index()
-        rows.append(s.assign(model=model))
-    out = pd.concat(rows, ignore_index=True)
-    return out[out["size"].isin(INV_SIZES) & out.n_collocation.isin([10, 100])]
-
-
-def long_budget_ncol():
-    """Long budget: mean squared error of nu, mean over the seeds of (nu - nu_true)^2, per model, T, width and N_col."""
-    rows = []
-    for model, folder, pattern in (("classical", "classical_inverse", r"T_([\d.]+)/losshist_(\d+)_INTRA(\d+)_(\d+)"),
-                                   ("hqpinn_older", "quantum_inverse", r"T_([\d.]+)/losshist_(\d+)_NQ(\d+)_(\d+)")):
-        h = pd.read_csv(INVERSE_LONG / folder / "histories_summary.csv")
-        keys = pd.DataFrame([re.match(pattern, f).groups() for f in h.file], columns=["Tfin", "n_collocation", "size", "seed"])
-        h = pd.concat([h, keys.astype(dict(Tfin=float, n_collocation=int, size=int, seed=int))], axis=1)
-        h["se"] = (h.nu_final - INV_NU) ** 2
-        g = h.groupby(["Tfin", "size", "n_collocation"])
-        rows.append(pd.DataFrame(dict(mse_nu=g.se.mean(), runs=g.size())).reset_index().assign(model=model))
-    return pd.concat(rows, ignore_index=True)
 
 
 def qpu_cases(out):
@@ -250,13 +247,18 @@ def triple(row, prefix, scale, digits):
     return " / ".join(f"{scale * row[f'{prefix}_{k}']:.{digits}f}" for k in ("median", "mean", "max"))
 
 
+def budget_label(epochs):
+    k = f"{epochs:,}".replace(",", r"\,")
+    return rf"$K={k}$ ({BUDGETS[epochs]['backend']})"
+
+
 def write_summary_table(summary, paired_table):
     lines = [r"\begin{tabular}{lcc}", r" & HQPINN$^{b}$ & classical\\", r"\colrule"]
-    for epochs, T in ((500, 0.1), (500, 1.0), (110, 0.1), (110, 1.0)):
+    for epochs, T in ((500, 0.1), (500, 1.0), (110, 0.1), (110, 1.0), (IDEAL, 0.1), (IDEAL, 1.0)):
         s = summary[(summary.epochs == epochs) & (summary.Tfin == T)].set_index("model")
         p = paired_table[(paired_table.epochs == epochs) & (paired_table.Tfin == T)].iloc[0]
         q, c = s.loc["hqpinn"], s.loc["classical"]
-        lines += [rf"\multicolumn{{3}}{{c}}{{$T={T:g}$, $K={epochs}$ ({INVERSE_BUDGETS[epochs]['backend']})}}\\", r"\colrule",
+        lines += [rf"\multicolumn{{3}}{{c}}{{$T={T:g}$, {budget_label(epochs)}}}\\", r"\colrule",
                   rf"$\epsilon_\nu$ (\%)$^{{a}}$ & {triple(q, 'eps', 100, 1)} & {triple(c, 'eps', 100, 1)}\\",
                   rf"$\epsilon_{{L_2}}$$^{{a}}$ & {triple(q, 'l2', 1, 3)} & {triple(c, 'l2', 1, 3)}\\",
                   rf"wins ($\epsilon_\nu$; $\epsilon_{{L_2}}$) & {p.nu_wins_hqpinn:.0f}; {p.l2_wins_hqpinn:.0f} & {p.nu_wins_classical:.0f}; {p.l2_wins_classical:.0f}\\",
@@ -269,8 +271,8 @@ def write_summary_table(summary, paired_table):
 def write_per_size_table(per_size):
     lines = [r"\begin{tabular}{lcccc}", r" & \multicolumn{2}{c}{$T=0.1$} & \multicolumn{2}{c}{$T=1$}\\",
              r"\cline{2-3}\cline{4-5}", r" & $\epsilon_\nu$ (\%) & $\epsilon_{L_2}$ & $\epsilon_\nu$ (\%) & $\epsilon_{L_2}$\\"]
-    for epochs in (500, 110):
-        lines += [r"\colrule", rf"\multicolumn{{5}}{{c}}{{$K={epochs}$ ({INVERSE_BUDGETS[epochs]['backend']})}}\\", r"\colrule"]
+    for epochs in (500, 110, IDEAL):
+        lines += [r"\colrule", rf"\multicolumn{{5}}{{c}}{{{budget_label(epochs)}}}\\", r"\colrule"]
         for model, label in (("hqpinn", "HQPINN"), ("classical", "classical")):
             for size in INV_SIZES:
                 cells = []
@@ -285,14 +287,21 @@ def write_per_size_table(per_size):
 
 def main():
     out = PAPER_DATA / "inverse"
+    missing = [str(b["root"].relative_to(ROOT)) for b in BUDGETS.values() if not b["root"].is_dir()]
+    if missing:
+        # data/Inverso_110 and data/Inverso_500 were deleted by the author on 09/11/2026 (they are in the git history).
+        # The tables already in manuscript/data/inverse/ and manuscript/tables/ were built from them: keep them as the record.
+        print(f"build_inverse_data: {', '.join(missing)} not found; manuscript/data/inverse/ and the inverse tables are kept "
+              "as they are (built while those runs existed)")
+        return
     out.mkdir(parents=True, exist_ok=True)
     df, nu = load_runs()
     tables = dict(
         runs=df, summary=summary_table(df, ["epochs", "Tfin", "model"]),
         per_size=summary_table(df, ["epochs", "Tfin", "model", "size"]),
         paired=paired(df), budget_effect=budget_effect(df), nu_curves=nu_curves(nu), field=field(), devices=devices(df),
-        long_budget=long_budget(), long_budget_ncol=long_budget_ncol(), qpu_cases=qpu_cases(out))
-    tables["best_profile"], tables["best_history"] = best_110(df)
+        mse_size=mse_size(df), qpu_cases=qpu_cases(out))
+    tables["best_profile"], tables["best_history"] = best_runs(df)
     for name, table in tables.items():
         table.to_csv(out / f"{name}.csv", index=False, float_format="%.6g")
     TABLES.mkdir(parents=True, exist_ok=True)

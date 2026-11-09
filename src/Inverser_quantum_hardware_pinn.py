@@ -120,8 +120,8 @@ MITIGATIONS = {
 }
 MITIGATION = "suppress"
 
-OUT_DIR = ROOT / "data" / "Inverso" / "quantum_inverse_hardware"
-EXACT_DIR = ROOT / "data" / "Inverso" / "quantum_inverse_exact"   # runs of the exact script, for comparison
+OUT_DIR = ROOT / "data" / "Inverso_antigo" / "quantum_inverse_hardware"
+EXACT_DIR = ROOT / "data" / "Inverso_antigo" / "quantum_inverse_exact"   # runs of the exact script, for comparison
 MAX_CONE = 6                                          # 3^6 = 729 coefficients per output
 
 

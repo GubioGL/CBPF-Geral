@@ -143,7 +143,7 @@ def nu_minimizer(a, b):
     return float(ratio[order][tc.searchsorted(cum, 0.5 * cum[-1])])
 
 
-def train(model, seed, cfg=CONFIG, Tfin=TFIN, n_col=N_COLLOCATION, epochs=EPOCHS, adj=None):
+def train(model, seed, cfg=CONFIG, Tfin=TFIN, n_col=N_COLLOCATION, epochs=EPOCHS, adj=None, on_epoch=None):
     """Trains `model` for `epochs` epochs, one batch of n_col fresh random points per epoch.
     adj: ADJUSTMENTS (model.hard_ic must already be False when adj["hard_ic"] is), or None.
     Returns the history of the loss terms and of nu."""
@@ -201,6 +201,8 @@ def train(model, seed, cfg=CONFIG, Tfin=TFIN, n_col=N_COLLOCATION, epochs=EPOCHS
         hist["loss_r"].append(float(loss_r.detach()))
         hist["loss_d"].append(float(loss_d.detach()))
         hist["nu"].append(float(nu.detach()))
+        if on_epoch is not None:   # optional callback, once per epoch (run/Inverser_runs_paralelo.py: progress bar)
+            on_epoch()
     return hist
 
 
