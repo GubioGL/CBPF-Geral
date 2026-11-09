@@ -9,7 +9,9 @@ vision); yellow and aqua are below 3:1 on white, which the markers and the legen
 
 Rows: T = 0.1 (top) and T = 1 (bottom).
   (a,c) median MSE of u(x,T) vs N_col;
-  (b,d) mean optimizer steps vs N_col, over all runs; a run that misses the target counts at the budget.
+  (b,d) mean optimizer steps of the classical PINN divided by those of the HQPINN, vs N_col, one curve per width, all in one colour,
+        told apart by the marker (log axis; above 1, the HQPINN needs fewer steps); a run that misses the target counts
+        at the budget.
 """
 
 # --- repository layout: src/ and run/ go on the import path, and relative paths
@@ -28,14 +30,15 @@ _os.chdir(_ROOT)
 
 from matplotlib.lines import Line2D
 
+from fig2_sim_width import ratio_axis
 from paper_common import COL2, INK, INK2, MUTED, panel_label, read_table, save, set_style
 
 import matplotlib.pyplot as plt
 
-BUDGET = 20.05      # thousands of steps
 WIDTHS = {3: "#eda100", 5: "#dc5620", 7: "#ad2c6c", 10: "#6250d6", 15: "#1baf7a"}   # HQPINN colour of each width
 MARKERS = {3: "o", 5: "s", 7: "D", 10: "^", 15: "v"}
-MARKER_SIZE = {3: 3.4, 5: 3.0, 7: 2.8, 10: 3.4, 15: 3.4}   # same visual area across shapes
+MARKER_SIZE = {3: 4.6, 5: 4.1, 7: 3.8, 10: 4.6, 15: 4.6}   # same visual area across shapes
+C_RATIO = "#7b4b2a"   # (b,d): one colour, none of the colours above, so the ratios are not read as HQPINN curves; the marker gives n
 XTICKS = list(range(10, 101, 10))
 
 
@@ -58,6 +61,16 @@ def draw(ax, df, T, column, scale=1.0):
             ax.plot(g.n_collocation, g[column] / scale, zorder=zorder, **style(df, model, n))
 
 
+def draw_ratio(ax, df, T):
+    """One curve per width, all in C_RATIO, told apart by the marker: classical over HQPINN mean steps vs N_col."""
+    for n in WIDTHS:
+        c = df[(df.model == "classical") & (df.Tfin == T) & (df.n == n)].set_index("n_collocation").steps_mean
+        q = df[(df.model == "hqpinn") & (df.Tfin == T) & (df.n == n)].set_index("n_collocation").steps_mean
+        r = (c / q).dropna().sort_index()
+        ax.plot(r.index, r.values, color=C_RATIO, lw=1.0, marker=MARKERS[n], ms=MARKER_SIZE[n] * 1.15, mec="white", mew=0.5,
+                label=rf"$n={n}$")
+
+
 def main():
     set_style()
     df = read_table("forward/simulation/points_sweep.csv")
@@ -68,12 +81,9 @@ def main():
         draw(ax_mse, df, T, "mse_median")
         ax_mse.set_yscale("log")
         ax_mse.set_ylabel(r"median MSE of $u(x,T)$")
-        ax_steps.axhline(BUDGET, color=MUTED, lw=0.7, zorder=1)
-        ax_steps.text(100, BUDGET + 0.15, "step budget", ha="right", va="bottom", fontsize=5.6, color=INK2)
-        draw(ax_steps, df, T, "steps_mean", scale=1e3)
-        ax_steps.set_ylim(0, BUDGET + 2.2)
-        ax_steps.set_yticks([0, 5, 10, 15, 20])
-        ax_steps.set_ylabel(r"mean steps ($\times10^3$)")
+        ax_steps.text(100, 0.985, "same number of steps", ha="right", va="top", fontsize=5.6, color=INK2)
+        draw_ratio(ax_steps, df, T)
+        ratio_axis(ax_steps)
         for ax in axes[row]:
             ax.set_xticks(XTICKS)
             ax.set_xlabel(r"collocation points $N_{\rm col}$")
@@ -84,6 +94,8 @@ def main():
         handles.append(Line2D([], [], label=rf"HQPINN $n={n}$", **style(df, "hqpinn", n)))
         handles.append(Line2D([], [], label=rf"classical $n={n}$", **style(df, "classical", n)))
     fig.legend(handles=handles, loc="outside upper center", ncol=5, columnspacing=1.4)
+    axes[1][1].legend(loc="upper left", ncol=5, columnspacing=0.9, handlelength=1.4, fontsize=6,
+                      title="classical / HQPINN steps", title_fontsize=6)
     save(fig, "fig3_sim_points")
 
 

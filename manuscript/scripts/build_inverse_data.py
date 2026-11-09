@@ -13,6 +13,8 @@ Reads the runs of data/Inverso_110 (FakeBerlin) and data/Inverso_500 (FakeAachen
   field.csv           u(x,T) of the paired run n = k = 10, seed 0, at each budget
   devices.csv         chains and calibration misfit per backend and n
   long_budget.csv     older long-budget sweeps (another protocol, never compared with the runs above)
+  long_budget_ncol.csv  the same sweeps: mean squared error of nu per model, T, width and N_col (Appendix C figure)
+  best_profile.csv, best_history.csv  best run of each model and T at 110 epochs: u(x,T), and nu and loss per epoch
   qpu_cases.csv       the real-QPU cases and their status; qpu/T_<T>/ holds the data of a case that exists
 
 and the two LaTeX tables the manuscript \\input-s, so that they cannot drift from the data:
@@ -159,6 +161,24 @@ def field(size=10, seed=0):
     return pd.concat(rows, ignore_index=True)
 
 
+def best_110(df):
+    """The run of each model and T with the smallest error of nu at 110 epochs: u(x,T) and its training history."""
+    best = df[df.epochs == 110]
+    best = best.loc[best.groupby(["Tfin", "model"]).eps_nu.idxmin()]
+    prof, hist = [], []
+    for r in best.itertuples():
+        folder, prefix, _ = MODELS[r.model]
+        path = INVERSE_BUDGETS[110]["root"] / folder / INV_CASES[r.Tfin]
+        t = tag(prefix, r.size, r.seed, 110)
+        v, h = np.load(path / f"validation_{t}.npz"), np.load(path / f"losshist_{t}.npz")
+        u = v["u_qpu"] if r.model == "hqpinn" else v["u_pred"]
+        prof.append(pd.DataFrame(dict(Tfin=r.Tfin, model=r.model, size=r.size, seed=r.seed, nu=r.nu, eps_nu=r.eps_nu, l2=r.l2,
+                                      x=v["x"].ravel(), u_exact=v["u_exact"].ravel(), u=u.ravel())))
+        hist.append(pd.DataFrame(dict(Tfin=r.Tfin, model=r.model, epoch=np.arange(1, len(h["nu"]) + 1), nu=h["nu"],
+                                      loss_residual=h["loss_r"], loss_data=h["loss_d"])))
+    return pd.concat(prof, ignore_index=True), pd.concat(hist, ignore_index=True)
+
+
 def devices(df):
     g = df[df.model == "hqpinn"]
     return g.groupby(["epochs", "backend", "size"]).agg(chains=("chains", "first"), fit_rms=("fit_rms", "first"),
@@ -180,6 +200,20 @@ def long_budget():
         rows.append(s.assign(model=model))
     out = pd.concat(rows, ignore_index=True)
     return out[out["size"].isin(INV_SIZES) & out.n_collocation.isin([10, 100])]
+
+
+def long_budget_ncol():
+    """Long budget: mean squared error of nu, mean over the seeds of (nu - nu_true)^2, per model, T, width and N_col."""
+    rows = []
+    for model, folder, pattern in (("classical", "classical_inverse", r"T_([\d.]+)/losshist_(\d+)_INTRA(\d+)_(\d+)"),
+                                   ("hqpinn_older", "quantum_inverse", r"T_([\d.]+)/losshist_(\d+)_NQ(\d+)_(\d+)")):
+        h = pd.read_csv(INVERSE_LONG / folder / "histories_summary.csv")
+        keys = pd.DataFrame([re.match(pattern, f).groups() for f in h.file], columns=["Tfin", "n_collocation", "size", "seed"])
+        h = pd.concat([h, keys.astype(dict(Tfin=float, n_collocation=int, size=int, seed=int))], axis=1)
+        h["se"] = (h.nu_final - INV_NU) ** 2
+        g = h.groupby(["Tfin", "size", "n_collocation"])
+        rows.append(pd.DataFrame(dict(mse_nu=g.se.mean(), runs=g.size())).reset_index().assign(model=model))
+    return pd.concat(rows, ignore_index=True)
 
 
 def qpu_cases(out):
@@ -257,7 +291,8 @@ def main():
         runs=df, summary=summary_table(df, ["epochs", "Tfin", "model"]),
         per_size=summary_table(df, ["epochs", "Tfin", "model", "size"]),
         paired=paired(df), budget_effect=budget_effect(df), nu_curves=nu_curves(nu), field=field(), devices=devices(df),
-        long_budget=long_budget(), qpu_cases=qpu_cases(out))
+        long_budget=long_budget(), long_budget_ncol=long_budget_ncol(), qpu_cases=qpu_cases(out))
+    tables["best_profile"], tables["best_history"] = best_110(df)
     for name, table in tables.items():
         table.to_csv(out / f"{name}.csv", index=False, float_format="%.6g")
     TABLES.mkdir(parents=True, exist_ok=True)

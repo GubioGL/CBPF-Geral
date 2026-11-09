@@ -35,8 +35,8 @@ reproduzir o run; os outros dois recalculam). Ver Apêndice B, "Offline replay".
 
 ## Figuras
 
-A pedido do autor, a Fig. 1 mostra só a arquitetura, sem tamanhos de rede, e as figuras do problema inverso (5, 6, 7 e 9) não entram no texto: fica um espaço reservado
-do mesmo tamanho (`\figspace` no `main.tex`). Os scripts continuam gerando os PDFs; para recolocar uma figura, descomente o `\includegraphics` dela e apague o `\figspace`.
+A pedido do autor, a Fig. 1 mostra só a arquitetura, sem tamanhos de rede. No problema inverso entra a Fig. 5 (melhores runs com 110 épocas e o treino delas) e, no Apêndice C,
+a Fig. 8 (varreduras longas antigas: MSE de ν × N_col). A Fig. 6 (QPU real) continua como espaço reservado (`\figspace`).
 
 | Figura | Arquivo | Script | Dados |
 |---|---|---|---|
@@ -44,10 +44,10 @@ do mesmo tamanho (`\figspace` no `main.tex`). Os scripts continuam gerando os PD
 | 2 | `fig2_sim_width.pdf` | `fig2_sim_width.py` | `data/forward/simulation/width_sweep.csv` |
 | 3 | `fig3_sim_points.pdf` | `fig3_sim_points.py` | `data/forward/simulation/points_sweep.csv` |
 | 4 | `fig4_qpu.pdf` | `fig4_qpu.py` | `data/forward/qpu/` (T = 1 pendente) |
-| 5, 9 | `fig5_inv_nu_E500.pdf`, `figC1_inv_nu_E110.pdf` | `fig5_inv_nu.py` | `data/inverse/nu_curves.csv`, `runs.csv` |
-| 6 | `fig6_inv_field.pdf` | `fig6_inv_field.py` | `data/inverse/field.csv`, `runs.csv` |
-| 7 | `fig7_inv_qpu.pdf` | `fig7_inv_qpu.py` | `data/inverse/qpu_cases.csv` (tudo pendente) |
-| 8 | `figB1_chip.pdf` | `figB1_chip.py` | `data/forward/qpu/T_0.1/chains.csv` |
+| 5 | `fig6_inv_training.pdf` | `fig6_inv_training.py` | `data/inverse/best_profile.csv`, `best_history.csv` |
+| 8 | `figC1_inv_long_ncol.pdf` | `figC1_inv_long.py` | `data/inverse/long_budget_ncol.csv` |
+| 6 | `fig7_inv_qpu.pdf` | `fig7_inv_qpu.py` | `data/inverse/qpu_cases.csv` (tudo pendente) |
+| 7 | `figB1_chip.pdf` | `figB1_chip.py` | `data/forward/qpu/T_0.1/chains.csv` |
 
 Paleta fixa por entidade: azul = PINN clássica, laranja = HQPINN (sem ruído e no QPU real), aqua = HQPINN em emulador com ruído,
 preto = referência. Exceção na Fig. 3, a pedido do autor: preto = clássica, uma cor por n = HQPINN.

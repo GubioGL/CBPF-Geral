@@ -43,7 +43,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 CACHE = ["replay_training.py", "simulate_same_budget.py", "controls_hardware_budget.py"]
 TABLES = ["build_paper_data.py"]
-FIGURES = ["fig2_sim_width.py", "fig3_sim_points.py", "fig4_qpu.py", "fig5_inv_nu.py", "fig6_inv_field.py",
+FIGURES = ["fig2_sim_width.py", "fig3_sim_points.py", "fig4_qpu.py", "fig6_inv_training.py", "figC1_inv_long.py",
            "fig7_inv_qpu.py", "figB1_chip.py"]
 
 def environment():

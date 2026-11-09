@@ -23,7 +23,8 @@ Layout e comandos: `README.md` e `manuscript/README.md`.
 ## Figuras no texto: escolhas do autor (05/11/2026)
 
 - Fig. 1: só a arquitetura, sem os painéis de resíduo e de fluxo de treino, sem tamanhos de rede e com a saída apenas `u_Θ`. O resíduo e o laço de treino estão no texto da Sec. II e no Apêndice B.
-- Figuras do problema inverso (5, 6, 7 e 9): fora do texto por enquanto, com o espaço reservado (`\figspace` no `main.tex`). Os números citados na Sec. IV continuam valendo; os scripts seguem gerando os PDFs, e os `\includegraphics` estão comentados.
+- Figs. 2(b,e) e 3(b,d) (09/11/2026): razão entre os passos médios da clássica e da HQPINN, em escala log; na Fig. 3, uma só cor (marrom) e a largura pelo marcador.
+- Problema inverso no texto (09/11/2026): Fig. 5 (melhor run de cada modelo com 110 épocas e o treino dela; a figura de MSE por tamanho foi retirada a pedido do autor) e Fig. 8 no Apêndice C (varreduras longas antigas, MSE de ν × N_col, n ≤ 10). "MSE de ν" = média sobre as seeds de (ν − ν_verdadeiro)²; é sensível a runs ruins (ex.: clássica, T = 0,1, n = 7, N = 20: 2×10⁻⁴ por causa de um outlier). Legendas só com os dois modelos. A Fig. 6 (QPU real) segue como espaço reservado.
 
 ## Organização dos resultados: problema direto
 

@@ -5,8 +5,8 @@ Marker and line: N_col.
 
 Rows: T = 0.1 (top) and T = 1 (bottom).
   (a,d) median MSE of u(x,T) vs width n (band: interquartile range);
-  (b,e) mean optimizer steps vs n, over all runs. A run that misses the target counts at the budget, so the mean is a
-        lower bound of the steps needed. Band: standard deviation, cut at the budget, which no run exceeds;
+  (b,e) mean optimizer steps of the classical PINN divided by those of the HQPINN, vs n (log axis; above 1, the HQPINN needs fewer
+        steps). A run that misses the target counts at the budget, so both means are lower bounds of the steps needed;
   (c,f) median MSE vs number of trainable parameters.
 """
 
@@ -27,13 +27,12 @@ _os.chdir(_ROOT)
 import numpy as np
 from matplotlib.lines import Line2D
 
-from paper_common import (C_CLASSICAL, C_EXACT, COL2, INK2, MUTED, panel_label, read_table, save, set_style)
+from paper_common import (C_CLASSICAL, C_EXACT, COL2, INK, INK2, MUTED, panel_label, read_table, save, set_style)
 
 import matplotlib.pyplot as plt
 
 MODELS = {"classical": ("Classical PINN", C_CLASSICAL), "hqpinn": ("HQPINN (noiseless)", C_EXACT)}
 NCOL_STYLE = {100: dict(ls="-", lw=1.3, marker="o", ms=3.4, alpha=0.14), 10: dict(ls=(0, (3, 1.5)), lw=1.0, marker="^", ms=3.4, alpha=0.08)}
-BUDGET = 20.05      # thousands of steps: 20 000 AdamW + the L-BFGS iterations until its patience runs out
 
 
 def series(df, model, T, ncol):
@@ -54,20 +53,29 @@ def mse_panel(ax, df, T, x_col):
     ax.set_ylabel(r"median MSE of $u(x,T)$")
 
 
+RATIO_TICKS = [1, 1.5, 2]
+RATIO_LIMITS = (0.9, 2.4)
+
+
+def ratio_axis(ax):
+    """Classical / HQPINN steps on a log axis, with the line of equal cost."""
+    ax.axhline(1.0, color=MUTED, lw=0.7, zorder=1)
+    ax.set_yscale("log")
+    ax.set_ylim(*RATIO_LIMITS)
+    ax.set_yticks(RATIO_TICKS, [f"{t:g}" for t in RATIO_TICKS])
+    ax.set_yticks([], minor=True)
+    ax.set_ylabel("steps, classical / HQPINN")
+
+
 def steps_panel(ax, df, T):
-    ax.axhline(BUDGET, color=MUTED, lw=0.7, zorder=1)
-    ax.text(15.3, BUDGET + 0.15, "step budget", ha="right", va="bottom", fontsize=5.6, color=INK2)
-    for model, (_, color) in MODELS.items():
-        for ncol, st in NCOL_STYLE.items():
-            g = series(df, model, T, ncol)
-            mean, std = g.steps_mean / 1e3, g.steps_std / 1e3
-            top = np.maximum(np.minimum(mean + std, BUDGET), mean)
-            ax.fill_between(g.n, mean - std, top, color=color, alpha=st["alpha"], lw=0)
-            line(ax, g.n, mean, color, st)
-    ax.set_ylim(0, BUDGET + 2.2)
-    ax.set_yticks([0, 5, 10, 15, 20])
+    """One curve per N_col: mean steps of the classical PINN over those of the HQPINN at the same n (above 1: the
+    HQPINN needs fewer steps). Runs that miss the target count at the budget, as in the means themselves."""
+    ax.text(15.3, 0.985, "same number of steps", ha="right", va="top", fontsize=5.6, color=INK2)
+    for ncol, st in NCOL_STYLE.items():
+        c, q = series(df, "classical", T, ncol).set_index("n"), series(df, "hqpinn", T, ncol).set_index("n")
+        line(ax, c.index, c.steps_mean / q.steps_mean, INK, st)
+    ratio_axis(ax)
     ax.set_xlabel(r"width $n$ (qubits / neurons)")
-    ax.set_ylabel(r"mean steps ($\times10^3$)")
 
 
 def main():
