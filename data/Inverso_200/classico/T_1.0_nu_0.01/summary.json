@@ -1,0 +1,413 @@
+{
+ "nu_true": 0.01,
+ "Tfin": 1.0,
+ "epochs": 200,
+ "n_collocation": 10,
+ "model": "classical",
+ "backend": "ibm_aachen",
+ "nu_rel_err_median": 0.18028095364570618,
+ "nu_rel_err_mean": 0.249473275244236,
+ "nu_rel_err_max": 0.5216045528650284,
+ "runs": [
+  {
+   "neurons": 10,
+   "seed": 0,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.010159258730709553,
+   "nu_rel_err": 0.015925873070955256,
+   "rel_l2_T": 0.04058828566730473,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 9.985489130020142,
+   "s_per_epoch": 0.04989540277413986
+  },
+  {
+   "neurons": 10,
+   "seed": 1,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.004847707226872444,
+   "nu_rel_err": 0.5152292773127556,
+   "rel_l2_T": 0.045323168380438865,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 5.413217306137085,
+   "s_per_epoch": 0.02705233899792235
+  },
+  {
+   "neurons": 10,
+   "seed": 2,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.00555210979655385,
+   "nu_rel_err": 0.444789020344615,
+   "rel_l2_T": 0.0467794076071195,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 5.965871810913086,
+   "s_per_epoch": 0.029819087167481082
+  },
+  {
+   "neurons": 10,
+   "seed": 3,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.00969452690333128,
+   "nu_rel_err": 0.030547309666872045,
+   "rel_l2_T": 0.06656247569043107,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 5.138279676437378,
+   "s_per_epoch": 0.025693127857380777
+  },
+  {
+   "neurons": 10,
+   "seed": 4,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.011677884496748447,
+   "nu_rel_err": 0.16778844967484471,
+   "rel_l2_T": 0.04148469685617699,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 5.487959146499634,
+   "s_per_epoch": 0.027394064706773615
+  },
+  {
+   "neurons": 10,
+   "seed": 5,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.008072265423834324,
+   "nu_rel_err": 0.19277345761656764,
+   "rel_l2_T": 0.060507735889359246,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 7.5322370529174805,
+   "s_per_epoch": 0.03773032720364518
+  },
+  {
+   "neurons": 10,
+   "seed": 6,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.004881613422185183,
+   "nu_rel_err": 0.5118386577814817,
+   "rel_l2_T": 0.06240036773690419,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 6.671634197235107,
+   "s_per_epoch": 0.033342325507695954
+  },
+  {
+   "neurons": 10,
+   "seed": 7,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.004783954471349716,
+   "nu_rel_err": 0.5216045528650284,
+   "rel_l2_T": 0.057484990151914564,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 6.638504981994629,
+   "s_per_epoch": 0.033174214051596485
+  },
+  {
+   "neurons": 10,
+   "seed": 8,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.010222425684332848,
+   "nu_rel_err": 0.02224256843328474,
+   "rel_l2_T": 0.044562010493008446,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 6.369514226913452,
+   "s_per_epoch": 0.0316564078307032
+  },
+  {
+   "neurons": 10,
+   "seed": 9,
+   "model": "classical",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.009280064143240452,
+   "nu_rel_err": 0.07199358567595483,
+   "rel_l2_T": 0.05311592418865437,
+   "epochs": 200,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 9.568356990814209,
+   "s_per_epoch": 0.04777442390595249
+  }
+ ]
+}

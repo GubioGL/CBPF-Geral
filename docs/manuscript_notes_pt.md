@@ -24,7 +24,7 @@ Layout e comandos: `README.md` e `manuscript/README.md`.
 
 - Fig. 1: só a arquitetura, sem os painéis de resíduo e de fluxo de treino, sem tamanhos de rede e com a saída apenas `u_Θ`. O resíduo e o laço de treino estão no texto da Sec. II e no Apêndice B.
 - Figs. 2(b,e) e 3(b,d) (09/11/2026): razão entre os passos médios da clássica e da HQPINN, em escala log; na Fig. 3, uma só cor (marrom) e a largura pelo marcador.
-- Problema inverso no texto (09/11/2026, atualizado): Fig. 5 = melhor run de cada modelo e T com 20 000 épocas e circuito ideal (`data/Inverso`) e o treino dela; Fig. 8 no Apêndice C = MSE de ν × tamanho n com 20 000 épocas. As varreduras longas antigas foram apagadas a pedido do autor (estão no histórico do git, commit 201f0b3c6).
+- Problema inverso no texto (10/11/2026): Fig. 5 = melhor run de cada modelo e T com 200 épocas, HQPINN no FakeAachen (`data/Inverso_200`). Apêndice C: Fig. 8 = erro × tamanho n como as Figs. 2(a,d); Fig. 9 = melhores runs com 20 000 épocas e circuito ideal. Não há análogo da Fig. 3: todas as runs do inverso usam N_col = 10. As pastas de 110 e 500 épocas foram apagadas pelo autor (commit 201f0b3c6) e saíram do artigo.
 
 ## Organização dos resultados: problema direto
 
@@ -142,18 +142,17 @@ Medidas nesta máquina (i7-13620H):
 
 | Grupo | Conjunto | Dados | Saída |
 |---|---|---|---|
-| Simulação | 500 épocas, clássica × HQPINN no FakeAachen, n = 3, 7, 10, seeds 0–10 (33 pares por T) | `data/Inverso_500/` (apagada em 09/11/2026; commit 201f0b3c6) | Tabs. II, X |
-| Simulação | 110 épocas, clássica × HQPINN no FakeBerlin, mesmo desenho | `data/Inverso_110/` (apagada em 09/11/2026; commit 201f0b3c6) | Tabs. II, X |
-| Simulação | 20 000 épocas, circuito ideal, mesmo treino | `data/Inverso/` | Fig. 5, Apêndice C, Tabelas II e X |
+| Simulação | 200 épocas, clássica × HQPINN no FakeAachen, n = 10, seeds 0–9 (10 pares por T) | `data/Inverso_200/` | Fig. 5, Tabs. II, IX |
+| Simulação | 20 000 épocas, circuito ideal, n = 3, 7, 10, seeds 0–10 (33 pares por T) | `data/Inverso/` | Figs. 8, 9, Tabs. II, X |
 | QPU real | **não existe nenhuma rodada** | `data/Inverso_real/<backend>/` | Fig. 7, Sec. IV B, Apêndice D |
 
-Todos os números abaixo saem de `manuscript/data/inverse/` e foram conferidos com os READMEs de `Inverso_110` e `Inverso_500`:
+Todos os números abaixo saem de `manuscript/data/inverse/` (conferidos em 10/11/2026):
 
-- **K = 500, T = 0,1:** ε_ν mediano 2,8 % (HQPINN) × 2,3 %; p = 0,76; HQPINN melhor em 16/33. L2 0,013 × 0,005 (clássica melhor em 32/33, p = 2×10⁻⁹).
-- **K = 500, T = 1:** ε_ν 30,5 % × 20,9 %; p = 0,37; HQPINN melhor em 15/33. L2 0,068 × 0,044 (clássica melhor em 28/33, p = 9×10⁻⁷). ν subestimado em 30/33 e 26/33.
-- **K = 110:** T = 0,1: 6,0 % × 7,3 %, p = 0,11. T = 1: 30,2 % × 21,5 %, p = 0,046. L2: 0,021 × 0,014 e 0,107 × 0,073.
-- **Efeito das épocas (só a clássica é limpo; na HQPINN muda também o backend):** T = 0,1: 7,3 → 2,3 % (28/33, p = 6×10⁻⁶) e 6,0 → 2,8 % (24/33, p = 0,001). T = 1: 21,5 → 20,9 % (13/33, p = 0,26) e 30,2 → 30,5 % (17/33, p = 0,82). O campo melhora sempre.
-- **Mesmos pesos com o circuito ideal:** T = 0,1: pior em 22/33 por um fator mediano de 1,05 (K = 500) e 25/33 por 1,14 (K = 110). T = 1: 17/33, fator 1,00.
+- **K = 200, T = 0,1:** ε_ν mediano 1,9 % (HQPINN) × 4,6 %; p = 0,43; HQPINN melhor em 6/10. L2 0,011 × 0,009 (clássica melhor em 6/10, p = 0,32).
+- **K = 200, T = 1:** ε_ν 36,9 % × 18,0 %; p = 0,23; clássica melhor em 7/10. L2 0,063 × 0,050 (7/10, p = 0,11). ν subestimado em 10/10 e 7/10. Oscilação de ν nas últimas 20 épocas ≈ 20 % (2 % em T = 0,1).
+- **K = 200, mesmos pesos com o circuito ideal:** T = 0,1: pior em 9/10, fator mediano 1,09. T = 1: 4/10, fator 0,99.
+- **K = 20 000:** T = 0,1: 1,0 % × 0,6 % (clássica melhor em 22/33, p = 0,024); T = 1: 3,1 % × 2,9 % (21/33, p = 0,023). L2 0,005 × 0,003 e 0,012 × 0,007.
+- **Clássica, só as épocas (n = 10):** T = 1: 18,0 % (K = 200) → 1,8 % (K = 20 000).
 - **Não reconferido (dados apagados, não estão no histórico):** os 147 testes de treino e o proxy (38,5 → 12,7 %, 0,23 → 0,067, 32,7 → 20,7 %, 10,5 % e 4,2 %), e os 6,7 % × 4,0 % da seleção de hiperparâmetros. Vêm de `data/Inverso_110/README.md` e do rascunho; há `\TODO` no Apêndice C. O README cita 0,065 para o L2 só com a IC fraca e o rascunho, 0,067 com os três ajustes.
 
 **Para rodar no QPU real.** Casos propostos em `INVERSE_QPU_CASES` (n = 10, N = 10, seed 0, 110 épocas, T = 0,1 e 1); custo estimado na Tab. XI (112 jobs, cerca de 1 h por run). Decisões abertas no Apêndice D: mitigação (o padrão do script é `suppress`, o direto foi sem mitigação), qual QPU, seed fixada antes, e quantas seeds, porque uma só não se compara em ν.

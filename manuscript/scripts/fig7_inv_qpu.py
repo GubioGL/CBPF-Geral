@@ -4,7 +4,8 @@ Data: manuscript/data/inverse/ (qpu_cases.csv, nu_curves.csv, field.csv and qpu/
 of the inverse problem exists yet: the panels show only the emulator baselines the run will be compared with, and a
 "pending" label. They fill in by themselves when build_inverse_data.py finds the raw files of a case in INVERSE_QPU_CASES.
 
-  (a,c) learned nu vs epoch: classical PINN and HQPINN on FakeBerlin at 110 epochs (median over 33 runs); real QPU, if present;
+  (a,c) learned nu vs epoch: classical PINN and HQPINN on the emulator of INVERSE_BUDGETS (FakeAachen, 200 epochs, median
+        over 10 runs); real QPU, if present;
   (b,d) u(x,T): exact solution; real QPU, if present.
 """
 
@@ -22,13 +23,14 @@ for _p in (_ROOT / "run", _ROOT / "src", _ROOT / "src" / "quantum_hardware", _HE
 _os.chdir(_ROOT)
 # ---------------------------------------------------------------------------------
 
-from paper_common import (C_CLASSICAL, C_EMU, C_QPU, COL2, INK, INK2, INV_NU, MUTED, PAPER_DATA, SURFACE, panel_label,
+from paper_common import (C_CLASSICAL, C_EMU, C_QPU, COL2, INK, INK2, INV_NU, INVERSE_BUDGETS, MUTED, PAPER_DATA, SURFACE, panel_label,
                           read_table, save, set_style)
 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-EPOCHS = 110
+EPOCHS = max(INVERSE_BUDGETS)                     # the emulator baseline (the QPU case has its own budget)
+BACKEND = INVERSE_BUDGETS[EPOCHS]["backend"]
 
 
 def pending_note(ax, text, x, y):
@@ -48,7 +50,7 @@ def main():
             g = curves[(curves.epochs == EPOCHS) & (curves.Tfin == T) & (curves.model == model)]
             ax_nu.plot(g.epoch, g.nu_median, color=color, lw=1.0)
         ax_nu.axhline(INV_NU, color=INK, ls=(0, (3, 1.5)), lw=0.8, zorder=1)
-        ax_nu.set(yscale="log", xlim=(1, EPOCHS), ylim=(INV_NU / 20, 1.2), xlabel=r"epoch $k$", ylabel=r"learned $\nu_k$")
+        ax_nu.set(yscale="log", xlim=(1, max(EPOCHS, case.epochs)), ylim=(INV_NU / 20, 1.2), xlabel=r"epoch $k$", ylabel=r"learned $\nu_k$")
         g = field[(field.epochs == EPOCHS) & (field.Tfin == T)]
         ax_u.plot(g.x, g.u_exact, color=INK, lw=1.2, zorder=3)
         ax_u.set(xlim=(0, 1), xlabel=r"$x$", ylabel=rf"$u(x,T={T:g})$")
@@ -62,7 +64,7 @@ def main():
         panel_label(ax_nu, next(labels), x=-0.13)
         panel_label(ax_u, next(labels), x=-0.13)
     handles = [Line2D([], [], color=C_CLASSICAL, lw=1.0, label="classical PINN (median)"),
-               Line2D([], [], color=C_EMU, lw=1.0, label="HQPINN on FakeBerlin (median)"),
+               Line2D([], [], color=C_EMU, lw=1.0, label=f"HQPINN on {BACKEND} (median)"),
                Line2D([], [], color=C_QPU, lw=1.2, marker="o", ms=3, mec=SURFACE, mew=0.3, label="HQPINN on the QPU"),
                Line2D([], [], color=INK, lw=1.2, label=r"exact solution; $\nu_{\rm true}$ dashed")]
     fig.legend(handles=handles, loc="outside upper center", ncol=4, columnspacing=1.4)

@@ -19,11 +19,11 @@ Raw results behind the manuscript, grouped as in the paper:
     data/quantum_forward_hardware_real/T_<T>/      training on ibm_berlin
     data/Forward/classical_vs_qpu/T_<T>/           classical control, same protocol as the QPU run
     data/derived/                                  replayed learning curves, same-budget simulations
-  INVERSE PROBLEM, SIMULATION (33 paired runs per model and final time, listed in INVERSE_BUDGETS)
-    data/Inverso_110/                              110 epochs, classical vs HQPINN on FakeBerlin   } deleted on 09/11/2026 (git
-    data/Inverso_500/                              500 epochs, classical vs HQPINN on FakeAachen   } commit 201f0b3c6); their
-                                                   tables stay in manuscript/data/inverse/
-    data/Inverso/                                  20 000 epochs, classical vs HQPINN with the ideal circuit (Fig. 5, App. C)
+  INVERSE PROBLEM, SIMULATION (paired runs: same size, seed, nu_0 and collocation stream for both models)
+    data/Inverso_200/                              200 epochs, n = 10, seeds 0-9, classical vs HQPINN on FakeAachen (Fig. 5)
+    data/Inverso/                                  20 000 epochs, n = 3, 7, 10, seeds 0-10, classical vs HQPINN with the
+                                                   ideal circuit (App. C)
+    (data/Inverso_110 and data/Inverso_500, 110 and 500 epochs, were deleted on 09/11/2026: git commit 201f0b3c6)
   INVERSE PROBLEM, REAL QPU (listed in INVERSE_QPU_CASES): no run yet
     data/Inverso_real/<backend>/quantico/<case>/   where Inverser_quantum_hardware_pinn_E110.py --real writes
 """
@@ -81,20 +81,20 @@ QPU_CASES = [
          curves=CACHE_DIR / "learning_curves_T1.npz", sims=CACHE_DIR / "same_budget_sims_T1.npz"),
 ]
 
-# ---- inverse problem: nu = 0.01, N = 10 points per epoch, 3/7/10 qubits or neurons x seeds 0-10 --------
+# ---- inverse problem: nu = 0.01, N = 10 points per epoch --------------------------
 INV_NU = 0.01
 INV_SIZES = (3, 7, 10)
 INV_N = 10
 INV_CASES = {0.1: "T_0.1_nu_0.01", 1.0: "T_1.0_nu_0.01"}
-# The emulator changes together with the budget: the effect of the epochs on the HQPINN cannot be separated
-# from the effect of the backend. The classical model has no backend, so its 110 -> 500 change is the epochs alone.
-INVERSE_BUDGETS = {110: dict(root=DATA / "Inverso_110", backend="FakeBerlin"),
-                   500: dict(root=DATA / "Inverso_500", backend="FakeAachen")}
+# Budgets with the HQPINN on a noisy emulator (run/Inverser_runs_paralelo.py, preset aachen200). The HQPINN runs are in
+# quantico/. Between this budget and the long one both the epochs and the noise change for the HQPINN; the classical
+# model is noiseless in both, so its change is the epochs alone.
+INVERSE_BUDGETS = {200: dict(root=DATA / "Inverso_200", backend="FakeAachen", sizes=(10,), seeds=tuple(range(10)))}
 # Long budget with the noiseless layer: same training, CONFIGs and adjustments, 20 000 epochs, ideal circuit
 # (run/Inverser_runs_paralelo.py, preset ideal). The HQPINN runs are in quantico_ideal/.
-INVERSE_IDEAL = dict(root=DATA / "Inverso", epochs=20000, backend="noiseless")
+INVERSE_IDEAL = dict(root=DATA / "Inverso", epochs=20000, backend="noiseless", sizes=INV_SIZES, seeds=tuple(range(11)))
 # Real-QPU inverse runs: none exists yet, every entry is a proposal. A case fills in by itself once its raw files
-# are found. Keep them out of data/Inverso_110 (see --out-dir in Inverser_quantum_hardware_pinn_E110.py).
+# are found. Keep them out of the emulator folders (see --out-dir in Inverser_quantum_hardware_pinn_E110.py).
 INVERSE_REAL_ROOT = DATA / "Inverso_real" / "ibm_berlin"
 INVERSE_QPU_CASES = [
     dict(Tfin=0.1, backend="ibm_berlin", n=10, n_collocation=10, seed=0, epochs=110, shots=1024, mitigation="none"),

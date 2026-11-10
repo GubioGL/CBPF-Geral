@@ -1,0 +1,313 @@
+{
+ "nu_true": 0.01,
+ "Tfin": 0.1,
+ "epochs": 200,
+ "n_collocation": 10,
+ "model": "classical",
+ "backend": "ibm_aachen",
+ "nu_rel_err_median": 0.045788731426000574,
+ "nu_rel_err_mean": 0.06535321995615957,
+ "nu_rel_err_max": 0.18026277050375936,
+ "runs": [
+  {
+   "neurons": 10,
+   "seed": 0,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.011802627705037594,
+   "nu_rel_err": 0.18026277050375936,
+   "rel_l2_T": 0.014981787397610347,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 4.394259452819824,
+   "s_per_epoch": 0.021650301152138254
+  },
+  {
+   "neurons": 10,
+   "seed": 1,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.009969048202037811,
+   "nu_rel_err": 0.003095179796218893,
+   "rel_l2_T": 0.008492138361723077,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 5.875789403915405,
+   "s_per_epoch": 0.029303097844722882
+  },
+  {
+   "neurons": 10,
+   "seed": 2,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.010933936573565006,
+   "nu_rel_err": 0.0933936573565006,
+   "rel_l2_T": 0.016384091556712676,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 5.818704605102539,
+   "s_per_epoch": 0.029086824637561588
+  },
+  {
+   "neurons": 10,
+   "seed": 3,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.010379752144217491,
+   "nu_rel_err": 0.037975214421749094,
+   "rel_l2_T": 0.009424385175063733,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 3.7252371311187744,
+   "s_per_epoch": 0.018605883996091296
+  },
+  {
+   "neurons": 10,
+   "seed": 4,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.01053602248430252,
+   "nu_rel_err": 0.053602248430252054,
+   "rel_l2_T": 0.008450672651946583,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 4.988928318023682,
+   "s_per_epoch": 0.024924956374431973
+  },
+  {
+   "neurons": 10,
+   "seed": 5,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.011336342431604862,
+   "nu_rel_err": 0.1336342431604862,
+   "rel_l2_T": 0.013743884374704743,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 5.234597206115723,
+   "s_per_epoch": 0.026042082800937057
+  },
+  {
+   "neurons": 10,
+   "seed": 6,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.01020292192697525,
+   "nu_rel_err": 0.020292192697525004,
+   "rel_l2_T": 0.007924707295521489,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 5.1183037757873535,
+   "s_per_epoch": 0.025567440531361642
+  },
+  {
+   "neurons": 10,
+   "seed": 7,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.01021488755941391,
+   "nu_rel_err": 0.02148875594139097,
+   "rel_l2_T": 0.008401057321035237,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 3.7824227809906006,
+   "s_per_epoch": 0.018868312164766705
+  },
+  {
+   "neurons": 10,
+   "seed": 8,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.009738394059240818,
+   "nu_rel_err": 0.02616059407591822,
+   "rel_l2_T": 0.007476365913620003,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 8.181961297988892,
+   "s_per_epoch": 0.040880094221488916
+  },
+  {
+   "neurons": 10,
+   "seed": 9,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.010836273431777954,
+   "nu_rel_err": 0.08362734317779538,
+   "rel_l2_T": 0.01021883285512835,
+   "epochs": 200,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 3.426621437072754,
+   "s_per_epoch": 0.017123815402313693
+  }
+ ]
+}

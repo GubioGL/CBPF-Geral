@@ -35,8 +35,8 @@ reproduzir o run; os outros dois recalculam). Ver Apêndice B, "Offline replay".
 
 ## Figuras
 
-A pedido do autor, a Fig. 1 mostra só a arquitetura, sem tamanhos de rede. No problema inverso entra a Fig. 5 (melhores runs com 20 000 épocas e circuito ideal, e o treino delas) e, no Apêndice C,
-a Fig. 8 (20 000 épocas: MSE de ν × tamanho n). A Fig. 6 (QPU real) continua como espaço reservado (`\figspace`).
+A pedido do autor, a Fig. 1 mostra só a arquitetura, sem tamanhos de rede. No problema inverso entra a Fig. 5 (melhores runs com 200 épocas, HQPINN no FakeAachen, e o treino delas) e, no Apêndice C,
+a Fig. 8 (erro × tamanho n, como as Figs. 2(a,d)) e a Fig. 9 (melhores runs com 20 000 épocas e circuito ideal). A Fig. 6 (QPU real) continua como espaço reservado (`\figspace`).
 
 | Figura | Arquivo | Script | Dados |
 |---|---|---|---|
@@ -45,7 +45,8 @@ a Fig. 8 (20 000 épocas: MSE de ν × tamanho n). A Fig. 6 (QPU real) continua 
 | 3 | `fig3_sim_points.pdf` | `fig3_sim_points.py` | `data/forward/simulation/points_sweep.csv` |
 | 4 | `fig4_qpu.pdf` | `fig4_qpu.py` | `data/forward/qpu/` (T = 1 pendente) |
 | 5 | `fig6_inv_training.pdf` | `fig6_inv_training.py` | `data/inverse/best_profile.csv`, `best_history.csv` |
-| 8 | `figC1_inv_long.pdf` | `figC1_inv_long.py` | `data/inverse/mse_size.csv` |
+| 8 | `figC1_inv_long.pdf` | `figC1_inv_long.py` | `data/inverse/size_errors.csv` |
+| 9 | `figC2_inv_training_long.pdf` | `fig6_inv_training.py` | `data/inverse/best_profile.csv`, `best_history.csv` |
 | 6 | `fig7_inv_qpu.pdf` | `fig7_inv_qpu.py` | `data/inverse/qpu_cases.csv` (tudo pendente) |
 | 7 | `figB1_chip.pdf` | `figB1_chip.py` | `data/forward/qpu/T_0.1/chains.csv` |
 

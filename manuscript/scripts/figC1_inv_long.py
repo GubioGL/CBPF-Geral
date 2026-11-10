@@ -1,8 +1,11 @@
-"""Appendix C -- inverse problem, 20 000 epochs with the ideal circuit: mean squared error of nu versus the size.
+"""Fig. 8 (Appendix C) -- inverse problem, error versus the size n, in the form of Figs. 2(a,d).
 
-Data: manuscript/data/inverse/mse_size.csv (data/Inverso). MSE of nu = mean over the 11 seeds of (nu - nu_true)^2, per
-model, final time and size n = k = 3, 7, 10. Same training, CONFIGs and adjustments as the 110/500-epoch runs; the
-HQPINN with the noiseless layer. Legend: the two models only.
+Data: manuscript/data/inverse/size_errors.csv. Rows: T = 0.1 (top) and T = 1 (bottom).
+  (a,c) MSE of nu, the mean over the seeds of (nu - nu_true)^2;
+  (b,d) median MSE of u(x,T) over the seeds (band: interquartile range), as in Figs. 2(a,d).
+Only the 20 000-epoch runs, classical PINN and HQPINN with the ideal circuit (11 seeds per size; the sizes on the axis are
+those found in the data). Colour and marker: model; legend with the two models only. There is no N_col counterpart of
+Fig. 3: every inverse run uses N_col = 10.
 """
 
 # --- repository layout: src/ and run/ go on the import path, and relative paths
@@ -22,26 +25,38 @@ _os.chdir(_ROOT)
 import numpy as np
 from matplotlib.lines import Line2D
 
-from paper_common import C_CLASSICAL, C_EXACT, COL2, INK2, INV_SIZES, SURFACE, panel_label, read_table, save, set_style
+from paper_common import C_CLASSICAL, C_EXACT, COL2, INK2, SURFACE, panel_label, read_table, save, set_style
 
 import matplotlib.pyplot as plt
 
 MODELS = {"classical": (C_CLASSICAL, "o", "Classical PINN"), "hqpinn": (C_EXACT, "^", "HQPINN")}
+LONG = 20000
+
+
+def decades(values):
+    return 10 ** np.floor(np.log10(np.min(values))), 10 ** np.ceil(np.log10(np.max(values)))
 
 
 def main():
     set_style()
-    df = read_table("inverse/mse_size.csv")
-    fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.3), constrained_layout=True)
-    for ax, T, lab in zip(axes, (0.1, 1.0), "ab"):
+    df = read_table("inverse/size_errors.csv")
+    fig, axes = plt.subplots(2, 2, figsize=(COL2, 3.9), constrained_layout=True)
+    labels = iter("abcd")
+    for row, T in enumerate((0.1, 1.0)):
+        ax_nu, ax_u = axes[row]
+        d = df[(df.Tfin == T) & (df.epochs == LONG)]
         for model, (color, marker, _) in MODELS.items():
-            g = df[(df.model == model) & (df.Tfin == T)].sort_values("size")
-            ax.plot(g["size"], g.mse_nu, color=color, marker=marker, ms=5, mec=SURFACE, mew=0.5, lw=1.1)
-        span = df[df.Tfin == T].mse_nu
-        ax.set(yscale="log", ylim=(10 ** np.floor(np.log10(span.min())), 10 ** np.ceil(np.log10(span.max()))),
-               xticks=INV_SIZES, xlim=(2, 11), xlabel=r"neurons or qubits $n$", ylabel=r"MSE of $\nu$")
-        ax.text(0.97, 0.95, rf"$T={T:g}$", transform=ax.transAxes, ha="right", va="top", fontsize=7.5, color=INK2)
-        panel_label(ax, lab, x=-0.14)
+            g = d[d.model == model].sort_values("size")
+            ax_nu.plot(g["size"], g.mse_nu, color=color, marker=marker, ms=5, mec=SURFACE, mew=0.5, lw=1.1)
+            ax_u.fill_between(g["size"], g.mse_u_q25, g.mse_u_q75, color=color, alpha=0.15, lw=0)
+            ax_u.plot(g["size"], g.mse_u_median, color=color, marker=marker, ms=5, mec=SURFACE, mew=0.5, lw=1.1)
+        ax_nu.set(yscale="log", ylim=decades(d.mse_nu), ylabel=r"MSE of $\nu$")
+        ax_u.set(yscale="log", ylim=decades(np.r_[d.mse_u_q25, d.mse_u_q75]), ylabel=r"median MSE of $u(x,T)$")
+        for ax in (ax_nu, ax_u):
+            sizes = sorted(d["size"].unique())
+            ax.set(xticks=sizes, xlim=(sizes[0] - 1, sizes[-1] + 1), xlabel=r"width $n$ (qubits / neurons)")
+            ax.text(0.03, 0.95, rf"$T={T:g}$", transform=ax.transAxes, ha="left", va="top", fontsize=7.5, color=INK2)
+            panel_label(ax, next(labels), x=-0.14)
     handles = [Line2D([], [], color=c, marker=m, ms=5, mec=SURFACE, lw=1.2, label=lbl) for c, m, lbl in MODELS.values()]
     fig.legend(handles=handles, loc="outside upper center", ncol=2, columnspacing=1.8)
     save(fig, "figC1_inv_long")

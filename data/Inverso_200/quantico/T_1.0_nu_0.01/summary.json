@@ -1,0 +1,473 @@
+{
+ "nu_true": 0.01,
+ "Tfin": 1.0,
+ "epochs": 200,
+ "n_collocation": 10,
+ "model": "quantum",
+ "backend": "ibm_aachen",
+ "nu_rel_err_median": 0.3688915157690644,
+ "nu_rel_err_mean": 0.32081410894170403,
+ "nu_rel_err_max": 0.7139687417075038,
+ "runs": [
+  {
+   "n_qubits": 10,
+   "seed": 0,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.009499396197497845,
+   "nu_rel_err": 0.05006038025021555,
+   "rel_l2_T_qpu": 0.0987702018256685,
+   "rel_l2_T_measured_model": 0.09801052799266927,
+   "rel_l2_T_ideal_circuit": 0.10747274706790257,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1865.1927499771118,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.154362172936674
+  },
+  {
+   "n_qubits": 10,
+   "seed": 1,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.00514964759349823,
+   "nu_rel_err": 0.485035240650177,
+   "rel_l2_T_qpu": 0.054422201835532945,
+   "rel_l2_T_measured_model": 0.05003489547181608,
+   "rel_l2_T_ideal_circuit": 0.05312943607575704,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1859.9628841876984,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 7.991243530158422
+  },
+  {
+   "n_qubits": 10,
+   "seed": 2,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.005421917885541916,
+   "nu_rel_err": 0.4578082114458084,
+   "rel_l2_T_qpu": 0.09328492941432619,
+   "rel_l2_T_measured_model": 0.08821988416718511,
+   "rel_l2_T_ideal_circuit": 0.09529613134423033,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1898.791122674942,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.0985980644897
+  },
+  {
+   "n_qubits": 10,
+   "seed": 3,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.006200711242854595,
+   "nu_rel_err": 0.3799288757145405,
+   "rel_l2_T_qpu": 0.05856699859899291,
+   "rel_l2_T_measured_model": 0.05883488596774155,
+   "rel_l2_T_ideal_circuit": 0.062056281060373676,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1928.4372608661652,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.085331320163593
+  },
+  {
+   "n_qubits": 10,
+   "seed": 4,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.009725776500999928,
+   "nu_rel_err": 0.02742234990000727,
+   "rel_l2_T_qpu": 0.052132788717591846,
+   "rel_l2_T_measured_model": 0.046723308660249846,
+   "rel_l2_T_ideal_circuit": 0.03809123933404295,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1941.95360994339,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.278526971088581
+  },
+  {
+   "n_qubits": 10,
+   "seed": 5,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.005150406621396542,
+   "nu_rel_err": 0.48495933786034584,
+   "rel_l2_T_qpu": 0.06722012691970658,
+   "rel_l2_T_measured_model": 0.06421728829448908,
+   "rel_l2_T_ideal_circuit": 0.06325633886000782,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1862.2011425495148,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.002241199340054
+  },
+  {
+   "n_qubits": 10,
+   "seed": 6,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.006421458441764116,
+   "nu_rel_err": 0.35785415582358837,
+   "rel_l2_T_qpu": 0.04692515275161606,
+   "rel_l2_T_measured_model": 0.045596518267743816,
+   "rel_l2_T_ideal_circuit": 0.045865082987855896,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1932.1186952590942,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.435282130936283
+  },
+  {
+   "n_qubits": 10,
+   "seed": 7,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.002860312582924962,
+   "nu_rel_err": 0.7139687417075038,
+   "rel_l2_T_qpu": 0.04991778425650679,
+   "rel_l2_T_measured_model": 0.04573406580150645,
+   "rel_l2_T_ideal_circuit": 0.04927208688595161,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1903.004046678543,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.10571271330867
+  },
+  {
+   "n_qubits": 10,
+   "seed": 8,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.00877446960657835,
+   "nu_rel_err": 0.12255303934216501,
+   "rel_l2_T_qpu": 0.07768316124248967,
+   "rel_l2_T_measured_model": 0.08291849267682995,
+   "rel_l2_T_ideal_circuit": 0.0829689165899883,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1931.8875505924225,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.148494214867826
+  },
+  {
+   "n_qubits": 10,
+   "seed": 9,
+   "backend": "fake_aachen",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.008714492432773113,
+   "nu_rel_err": 0.1285507567226887,
+   "rel_l2_T_qpu": 0.07812176354506543,
+   "rel_l2_T_measured_model": 0.07434273898087192,
+   "rel_l2_T_ideal_circuit": 0.07725634907396402,
+   "chains": 10,
+   "fit_rms_calibration": 0.02824592940226044,
+   "n_jobs": 201,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "time_s": 1934.962256193161,
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "model": "quantum",
+   "epochs": 200,
+   "s_per_epoch": 8.199183896558369
+  }
+ ]
+}
