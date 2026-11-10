@@ -1,2 +1,0 @@
-epochs,backend,size,chains,fit_rms,jobs,time_median_s,time_max_s
-200,fake_aachen,10,10,0.0282459,201,1618.84,1941.95

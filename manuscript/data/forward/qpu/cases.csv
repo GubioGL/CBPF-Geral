@@ -1,3 +1,0 @@
-Tfin,backend,n,n_collocation,seed,epochs,shots,mitigation,trainable_parameters,status,mse,relative_l2
-0.1,ibm_berlin,10,10,0,110,1024,none,271,done,0.0014541102919788744,0.05666299351429952
-1.0,ibm_berlin,10,20,0,110,1024,none,271,pending,,

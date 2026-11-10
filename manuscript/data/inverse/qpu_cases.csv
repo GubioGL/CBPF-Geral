@@ -1,3 +1,0 @@
-Tfin,backend,n,n_collocation,seed,epochs,shots,mitigation,status,nu,eps_nu,l2,l2_ideal
-0.1,ibm_berlin,10,10,0,110,1024,none,pending,,,,
-1,ibm_berlin,10,10,0,110,1024,none,pending,,,,
