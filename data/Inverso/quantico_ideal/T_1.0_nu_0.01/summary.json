@@ -4,8 +4,9 @@
  "epochs": 20000,
  "n_collocation": 10,
  "model": "quantum",
- "nu_rel_err_median": 0.031017396599054316,
- "nu_rel_err_mean": 0.0835634699712197,
+ "backend": "ideal",
+ "nu_rel_err_median": 0.024601584300398827,
+ "nu_rel_err_mean": 0.06616449474611065,
  "nu_rel_err_max": 0.5141101069748402,
  "runs": [
   {
@@ -449,6 +450,886 @@
    "s_per_epoch": 0.028518898928165434
   },
   {
+   "n_qubits": 12,
+   "seed": 0,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.009976514615118504,
+   "nu_rel_err": 0.0023485384881496638,
+   "rel_l2_T": 0.007692315556532318,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 549.601949930191,
+   "s_per_epoch": 0.02737905871981984
+  },
+  {
+   "n_qubits": 12,
+   "seed": 10,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.771320643266746,
+   "nu": 0.009885008446872234,
+   "nu_rel_err": 0.011499155312776586,
+   "rel_l2_T": 0.009181696553686372,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 579.245502948761,
+   "s_per_epoch": 0.02891278600709439
+  },
+  {
+   "n_qubits": 12,
+   "seed": 1,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.010179984383285046,
+   "nu_rel_err": 0.01799843832850454,
+   "rel_l2_T": 0.004526960613225911,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 545.5858068466187,
+   "s_per_epoch": 0.027237418377552638
+  },
+  {
+   "n_qubits": 12,
+   "seed": 2,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.010740564204752445,
+   "nu_rel_err": 0.0740564204752445,
+   "rel_l2_T": 0.00799639763704215,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 536.6022844314575,
+   "s_per_epoch": 0.026764563032553024
+  },
+  {
+   "n_qubits": 12,
+   "seed": 3,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.009996805340051651,
+   "nu_rel_err": 0.0003194659948349207,
+   "rel_l2_T": 0.01101823423879133,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 658.2124760150909,
+   "s_per_epoch": 0.03286353580546001
+  },
+  {
+   "n_qubits": 12,
+   "seed": 4,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.010057431645691395,
+   "nu_rel_err": 0.00574316456913946,
+   "rel_l2_T": 0.008220209401168826,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 590.9590246677399,
+   "s_per_epoch": 0.02948156989415328
+  },
+  {
+   "n_qubits": 12,
+   "seed": 5,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.00942129734903574,
+   "nu_rel_err": 0.05787026509642603,
+   "rel_l2_T": 0.0045475282365302,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 500.06413531303406,
+   "s_per_epoch": 0.024959768293571386
+  },
+  {
+   "n_qubits": 12,
+   "seed": 6,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.00985532533377409,
+   "nu_rel_err": 0.01446746662259104,
+   "rel_l2_T": 0.009056581034677201,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 633.3144884109497,
+   "s_per_epoch": 0.03160014121054029
+  },
+  {
+   "n_qubits": 12,
+   "seed": 7,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.009288067929446697,
+   "nu_rel_err": 0.07119320705533029,
+   "rel_l2_T": 0.009051032656111744,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 591.4469997882843,
+   "s_per_epoch": 0.02952474007291063
+  },
+  {
+   "n_qubits": 12,
+   "seed": 8,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.010009020566940308,
+   "nu_rel_err": 0.0009020566940307409,
+   "rel_l2_T": 0.009775300337561427,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 603.0702712535858,
+   "s_per_epoch": 0.030087181136419644
+  },
+  {
+   "n_qubits": 12,
+   "seed": 9,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.010118985548615456,
+   "nu_rel_err": 0.011898554861545542,
+   "rel_l2_T": 0.00852540054141206,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 601.621612071991,
+   "s_per_epoch": 0.030015002918801336
+  },
+  {
+   "n_qubits": 15,
+   "seed": 0,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.010043926537036896,
+   "nu_rel_err": 0.004392653703689554,
+   "rel_l2_T": 0.006608662499885596,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 667.4613223075867,
+   "s_per_epoch": 0.03337180746204287
+  },
+  {
+   "n_qubits": 15,
+   "seed": 10,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.771320643266746,
+   "nu": 0.009832282550632954,
+   "nu_rel_err": 0.016771744936704656,
+   "rel_l2_T": 0.004433330248907911,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 583.2592408657074,
+   "s_per_epoch": 0.02916153238215347
+  },
+  {
+   "n_qubits": 15,
+   "seed": 1,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.010073188692331314,
+   "nu_rel_err": 0.007318869233131388,
+   "rel_l2_T": 0.007236583557850162,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 560.740535736084,
+   "s_per_epoch": 0.028036549267896897
+  },
+  {
+   "n_qubits": 15,
+   "seed": 2,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.01019294373691082,
+   "nu_rel_err": 0.01929437369108198,
+   "rel_l2_T": 0.007717832460599866,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 534.7434358596802,
+   "s_per_epoch": 0.026736738455403454
+  },
+  {
+   "n_qubits": 15,
+   "seed": 3,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.009955324232578278,
+   "nu_rel_err": 0.004467576742172262,
+   "rel_l2_T": 0.007045158015650906,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 668.5943286418915,
+   "s_per_epoch": 0.03342964242795651
+  },
+  {
+   "n_qubits": 15,
+   "seed": 4,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.00998838059604168,
+   "nu_rel_err": 0.0011619403958320826,
+   "rel_l2_T": 0.009956204386733333,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 557.1263756752014,
+   "s_per_epoch": 0.027855937925241752
+  },
+  {
+   "n_qubits": 15,
+   "seed": 5,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.007931209169328213,
+   "nu_rel_err": 0.20687908306717875,
+   "rel_l2_T": 0.006739720732266882,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 564.3287389278412,
+   "s_per_epoch": 0.028216085658561492
+  },
+  {
+   "n_qubits": 15,
+   "seed": 6,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.010175306349992752,
+   "nu_rel_err": 0.017530634999275187,
+   "rel_l2_T": 0.004971902497284476,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 491.93087458610535,
+   "s_per_epoch": 0.024596008743499004
+  },
+  {
+   "n_qubits": 15,
+   "seed": 7,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.00930164847522974,
+   "nu_rel_err": 0.069835152477026,
+   "rel_l2_T": 0.011199279611188242,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 531.9250388145447,
+   "s_per_epoch": 0.026596372047301097
+  },
+  {
+   "n_qubits": 15,
+   "seed": 8,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.009995871223509312,
+   "nu_rel_err": 0.0004128776490688532,
+   "rel_l2_T": 0.004244910982517518,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 698.9091944694519,
+   "s_per_epoch": 0.03494536822435528
+  },
+  {
+   "n_qubits": 15,
+   "seed": 9,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.010435274802148342,
+   "nu_rel_err": 0.04352748021483419,
+   "rel_l2_T": 0.006326087148746402,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 653.8996579647064,
+   "s_per_epoch": 0.032694772384340653
+  },
+  {
    "n_qubits": 3,
    "seed": 0,
    "model": "quantum",
@@ -887,6 +1768,446 @@
    },
    "time_s": 446.52993988990784,
    "s_per_epoch": 0.022326330459117888
+  },
+  {
+   "n_qubits": 5,
+   "seed": 0,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.009708044119179249,
+   "nu_rel_err": 0.02919558808207514,
+   "rel_l2_T": 0.01537643166169676,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 498.72979044914246,
+   "s_per_epoch": 0.0249366372446697
+  },
+  {
+   "n_qubits": 5,
+   "seed": 10,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.771320643266746,
+   "nu": 0.009174484759569168,
+   "nu_rel_err": 0.0825515240430832,
+   "rel_l2_T": 0.03415411562455104,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 619.3966293334961,
+   "s_per_epoch": 0.030969728069952997
+  },
+  {
+   "n_qubits": 5,
+   "seed": 1,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.010041910223662853,
+   "nu_rel_err": 0.004191022366285303,
+   "rel_l2_T": 0.013191747176882625,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 580.8023841381073,
+   "s_per_epoch": 0.029039025276897848
+  },
+  {
+   "n_qubits": 5,
+   "seed": 2,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.008608851581811905,
+   "nu_rel_err": 0.13911484181880954,
+   "rel_l2_T": 0.017893474647819336,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 703.9567515850067,
+   "s_per_epoch": 0.035196921868207214
+  },
+  {
+   "n_qubits": 5,
+   "seed": 3,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.010275092907249928,
+   "nu_rel_err": 0.02750929072499273,
+   "rel_l2_T": 0.010449670933883368,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 565.4297294616699,
+   "s_per_epoch": 0.028270146698825115
+  },
+  {
+   "n_qubits": 5,
+   "seed": 4,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.0076904394663870335,
+   "nu_rel_err": 0.23095605336129668,
+   "rel_l2_T": 0.02416486400045977,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 466.0862820148468,
+   "s_per_epoch": 0.02330443490606003
+  },
+  {
+   "n_qubits": 5,
+   "seed": 5,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.00891021266579628,
+   "nu_rel_err": 0.10897873342037202,
+   "rel_l2_T": 0.012704661787474925,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 567.8241653442383,
+   "s_per_epoch": 0.02839162126887625
+  },
+  {
+   "n_qubits": 5,
+   "seed": 6,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.01007094606757164,
+   "nu_rel_err": 0.007094606757163981,
+   "rel_l2_T": 0.012655742794159514,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 568.1306402683258,
+   "s_per_epoch": 0.028405248323043135
+  },
+  {
+   "n_qubits": 5,
+   "seed": 7,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.007276625372469425,
+   "nu_rel_err": 0.2723374627530575,
+   "rel_l2_T": 0.02790023494916255,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 528.2023553848267,
+   "s_per_epoch": 0.026410425714900706
+  },
+  {
+   "n_qubits": 5,
+   "seed": 8,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.010013192892074585,
+   "nu_rel_err": 0.0013192892074584753,
+   "rel_l2_T": 0.007904345241245739,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 522.8317573070526,
+   "s_per_epoch": 0.026141284531286654
+  },
+  {
+   "n_qubits": 5,
+   "seed": 9,
+   "model": "quantum",
+   "Tfin": 1.0,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.009538753889501095,
+   "nu_rel_err": 0.04612461104989054,
+   "rel_l2_T": 0.026629311827321017,
+   "epochs": 20000,
+   "adjustments": {
+    "hard_ic": false,
+    "n_ic": 10,
+    "w_ic": 10.0,
+    "warmup": 10,
+    "plateau": {
+     "patience": 5,
+     "factor": 1.5,
+     "threshold": 0.01
+    }
+   },
+   "cfg": {
+    "lr_net": 0.0307,
+    "lr_net_min": 0.0012,
+    "betas_net": [
+     0.77,
+     0.99
+    ],
+    "weight_decay": 6.4e-06,
+    "grad_clip": 10.0,
+    "r_ramp": 20,
+    "w_d": 85.8,
+    "lr_nu": 0.97,
+    "lr_nu_min": 0.128,
+    "inner_steps": 16
+   },
+   "time_s": 571.7969114780426,
+   "s_per_epoch": 0.028589629239991664
   },
   {
    "n_qubits": 7,

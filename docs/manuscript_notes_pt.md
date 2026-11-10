@@ -151,7 +151,7 @@ Todos os números abaixo saem de `manuscript/data/inverse/` (conferidos em 10/11
 - **K = 200, T = 0,1:** ε_ν mediano 1,9 % (HQPINN) × 4,6 %; p = 0,43; HQPINN melhor em 6/10. L2 0,011 × 0,009 (clássica melhor em 6/10, p = 0,32).
 - **K = 200, T = 1:** ε_ν 36,9 % × 18,0 %; p = 0,23; clássica melhor em 7/10. L2 0,063 × 0,050 (7/10, p = 0,11). ν subestimado em 10/10 e 7/10. Oscilação de ν nas últimas 20 épocas ≈ 20 % (2 % em T = 0,1).
 - **K = 200, mesmos pesos com o circuito ideal:** T = 0,1: pior em 9/10, fator mediano 1,09. T = 1: 4/10, fator 0,99.
-- **K = 20 000:** T = 0,1: 1,0 % × 0,6 % (clássica melhor em 22/33, p = 0,024); T = 1: 3,1 % × 2,9 % (21/33, p = 0,023). L2 0,005 × 0,003 e 0,012 × 0,007.
+- **K = 20 000 (n = 3, 5, 7, 10, 12, 15; 66 pares):** T = 0,1: 0,9 % × 0,8 % (HQPINN melhor em 34/66, p = 0,71); T = 1: 2,5 % × 1,7 % (clássica melhor em 38/66, p = 0,034). L2 0,004 × 0,003 e 0,011 × 0,007. Em T = 1 a HQPINN melhora com n: 11,7 % (n = 3), 4,6 % (n = 5), 1,2–2,2 % (n ≥ 7).
 - **Clássica, só as épocas (n = 10):** T = 1: 18,0 % (K = 200) → 1,8 % (K = 20 000).
 - **Não reconferido (dados apagados, não estão no histórico):** os 147 testes de treino e o proxy (38,5 → 12,7 %, 0,23 → 0,067, 32,7 → 20,7 %, 10,5 % e 4,2 %), e os 6,7 % × 4,0 % da seleção de hiperparâmetros. Vêm de `data/Inverso_110/README.md` e do rascunho; há `\TODO` no Apêndice C. O README cita 0,065 para o L2 só com a IC fraca e o rascunho, 0,067 com os três ajustes.
 

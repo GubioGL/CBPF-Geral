@@ -1,0 +1,30 @@
+{
+ "neurons": 5,
+ "seed": 9,
+ "model": "classical",
+ "Tfin": 0.1,
+ "nu_true": 0.01,
+ "nu_init": 0.010374153885699955,
+ "nu": 0.010183660313487053,
+ "nu_rel_err": 0.01836603134870527,
+ "rel_l2_T": 0.0028961897355723252,
+ "epochs": 20000,
+ "adjustments": null,
+ "cfg": {
+  "lr_net": 0.0253,
+  "lr_net_min": 0.00032,
+  "betas_net": [
+   0.73,
+   0.99
+  ],
+  "weight_decay": 0.00093,
+  "grad_clip": 10.0,
+  "r_ramp": 10,
+  "w_d": 37.8,
+  "lr_nu": 0.5,
+  "lr_nu_min": 0.163,
+  "inner_steps": 16
+ },
+ "time_s": 453.5127010345459,
+ "s_per_epoch": 0.022675337222309265
+}

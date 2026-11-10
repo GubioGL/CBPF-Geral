@@ -1,0 +1,40 @@
+{
+ "neurons": 12,
+ "seed": 6,
+ "model": "classical",
+ "Tfin": 1.0,
+ "nu_true": 0.01,
+ "nu_init": 0.8928601514360016,
+ "nu": 0.01018308661878109,
+ "nu_rel_err": 0.018308661878108957,
+ "rel_l2_T": 0.005934391643566182,
+ "epochs": 20000,
+ "adjustments": {
+  "hard_ic": false,
+  "n_ic": 10,
+  "w_ic": 10.0,
+  "warmup": 10,
+  "plateau": {
+   "patience": 5,
+   "factor": 1.5,
+   "threshold": 0.01
+  }
+ },
+ "cfg": {
+  "lr_net": 0.0253,
+  "lr_net_min": 0.00032,
+  "betas_net": [
+   0.73,
+   0.99
+  ],
+  "weight_decay": 0.00093,
+  "grad_clip": 10.0,
+  "r_ramp": 10,
+  "w_d": 37.8,
+  "lr_nu": 0.5,
+  "lr_nu_min": 0.163,
+  "inner_steps": 16
+ },
+ "time_s": 464.6470067501068,
+ "s_per_epoch": 0.023231893952199593
+}

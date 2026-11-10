@@ -6,11 +6,13 @@ Inverser_quantum_hardware_pinn_E110.train), with each model's CONFIG (the best o
 T = 1, the same ADJUSTMENTS. nu_true = 0.01, N_col = 10 per epoch, T = 0.1 and 1. Only the epochs (the cosine decays
 stretch over them), the sizes, the seeds and the quantum layer change, through a preset:
 
-  ideal      20 000 epochs, n = 3/7/10, seeds 0-10, IDEAL (noiseless) circuit        -> data/Inverso/      (132 runs)
+  ideal      20 000 epochs, n = 3/5/7/10/12/15, seeds 0-10, IDEAL (noiseless) circuit -> data/Inverso/   (264 runs)
   aachen200  200 epochs, n = 10, seeds 0-9, circuit on FakeAachen (as data/Inverso_500) -> data/Inverso_200/  (40 runs)
 
     python run/Inverser_runs_paralelo.py --benchmark                       # a few epochs of each kind of run -> time of everything
-    python run/Inverser_runs_paralelo.py                                   # preset ideal (resumable: runs already saved are skipped)
+    python run/Inverser_runs_paralelo.py                                   # preset ideal (resumable: runs already saved are skipped,
+                                                                           # so with n = 3/7/10 done only 5/12/15 run)
+    python run/Inverser_runs_paralelo.py --sizes 5 12 15 --benchmark       # time of the new sizes only
     python run/Inverser_runs_paralelo.py --preset aachen200 --benchmark
     python run/Inverser_runs_paralelo.py --preset aachen200
     python run/Inverser_runs_paralelo.py --models quantum --tfin 0.1 --workers 12
@@ -66,7 +68,8 @@ import numpy as np  # noqa: E402
 from tqdm import tqdm  # noqa: E402
 
 PRESETS = {
-    "ideal": dict(epochs=20000, sizes=(3, 7, 10), seeds=tuple(range(11)), backend=None,
+    # 3, 7, 10: the first sweep (09/11/2026); 5, 12, 15 added on 10/11/2026. Runs already saved are skipped.
+    "ideal": dict(epochs=20000, sizes=(3, 5, 7, 10, 12, 15), seeds=tuple(range(11)), backend=None,
                   out=os.path.join("data", "Inverso"), bench_epochs=100),
     "aachen200": dict(epochs=200, sizes=(10,), seeds=tuple(range(10)), backend="ibm_aachen",
                       out=os.path.join("data", "Inverso_200"), bench_epochs=10,
@@ -214,7 +217,11 @@ def benchmark(args, threads):
     """Every kind of run (model x size x T) for a few epochs, repeated with other seeds until all the processes are busy
     (the machine loaded as in the real run), then the time of the whole plan from the measured seconds per epoch.
     Nothing is written in the output folder but benchmark.json."""
-    kinds = [(m, n, T) for m in args.models for n in args.sizes for T in args.tfin]
+    todo = [(m, n, s, T) for m in args.models for n in args.sizes for T in args.tfin for s in args.seeds
+            if not is_done(args.out, m, args.backend, T, n, s, args.epochs)]
+    kinds = sorted({(m, n, T) for m, n, s, T in todo})
+    if not kinds:
+        return print("benchmark: nothing left to run")
     jobs = [(m, n, i // len(kinds), T) for i, (m, n, T) in
             ((i, kinds[i % len(kinds)]) for i in range(max(len(kinds), args.workers)))]
     scratch = tempfile.mkdtemp(prefix="bench_", dir=args.out)
@@ -232,17 +239,20 @@ def benchmark(args, threads):
     for r in results:
         rate.setdefault(key(r["model"], r.get("neurons", r.get("n_qubits")), r["Tfin"]), []).append(r["s_per_epoch"])
     rate = {k: float(np.mean(v)) for k, v in rate.items()}
-    with open(os.path.join(args.out, "benchmark.json"), "w") as f:
+    path = os.path.join(args.out, "benchmark.json")
+    old = json.load(open(path))["s_per_epoch"] if os.path.exists(path) else {}   # keep the rates of earlier kinds
+    with open(path, "w") as f:
         json.dump(dict(workers=args.workers, bench_epochs=args.bench_epochs, backend=args.backend or "ideal",
-                       s_per_epoch=rate), f, indent=1)
+                       s_per_epoch={**old, **rate}), f, indent=1)
     print(f"\n{'run':<26}{'s/epoch':>9}{'one run':>12}")
     for k, v in sorted(rate.items()):
         print(f"{k:<26}{v:9.3f}{hours(v * args.epochs):>12}")
-    plan = [rate[key(m, n, T)] * args.epochs for m in args.models for n in args.sizes for T in args.tfin for _ in args.seeds]
+    plan = [rate[key(m, n, T)] * args.epochs for m, n, s, T in todo]
     for m in args.models:
-        part = [rate[key(m, n, T)] * args.epochs for n in args.sizes for T in args.tfin for _ in args.seeds]
-        print(f"{m}: {len(part)} runs, {hours(makespan(part, args.workers))} alone on {args.workers} processes")
-    print(f"everything: {len(plan)} runs of {args.epochs} epochs on {args.workers} processes: about "
+        part = [rate[key(mm, n, T)] * args.epochs for mm, n, s, T in todo if mm == m]
+        if part:
+            print(f"{m}: {len(part)} runs, {hours(makespan(part, args.workers))} alone on {args.workers} processes")
+    print(f"everything still to run: {len(plan)} runs of {args.epochs} epochs on {args.workers} processes: about "
           f"{hours(makespan(plan, args.workers))}")
 
 

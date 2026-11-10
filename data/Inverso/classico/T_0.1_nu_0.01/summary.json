@@ -4,9 +4,10 @@
  "epochs": 20000,
  "n_collocation": 10,
  "model": "classical",
- "nu_rel_err_median": 0.005720626562833765,
- "nu_rel_err_mean": 0.007640794596888789,
- "nu_rel_err_max": 0.031090691685676554,
+ "backend": "ideal",
+ "nu_rel_err_median": 0.008183322846889475,
+ "nu_rel_err_mean": 0.009686534998543321,
+ "nu_rel_err_max": 0.045632921159267405,
  "runs": [
   {
    "neurons": 10,
@@ -339,6 +340,666 @@
    "s_per_epoch": 0.03863344256877899
   },
   {
+   "neurons": 12,
+   "seed": 0,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.010181741788983345,
+   "nu_rel_err": 0.018174178898334482,
+   "rel_l2_T": 0.0053228181597593975,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 388.0189034938812,
+   "s_per_epoch": 0.01940053043034537
+  },
+  {
+   "neurons": 12,
+   "seed": 10,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.771320643266746,
+   "nu": 0.010138792917132378,
+   "nu_rel_err": 0.013879291713237742,
+   "rel_l2_T": 0.00527028852205828,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 529.1176834106445,
+   "s_per_epoch": 0.026455813464215234
+  },
+  {
+   "neurons": 12,
+   "seed": 1,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.010122247971594334,
+   "nu_rel_err": 0.012224797159433344,
+   "rel_l2_T": 0.003956934607302691,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 473.97547221183777,
+   "s_per_epoch": 0.023697517318626397
+  },
+  {
+   "neurons": 12,
+   "seed": 2,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.010029616765677929,
+   "nu_rel_err": 0.0029616765677928716,
+   "rel_l2_T": 0.002120066076034175,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 485.1791572570801,
+   "s_per_epoch": 0.02425933297893227
+  },
+  {
+   "neurons": 12,
+   "seed": 3,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.010091086849570274,
+   "nu_rel_err": 0.009108684957027414,
+   "rel_l2_T": 0.002694239408059168,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 467.9947085380554,
+   "s_per_epoch": 0.023399484283334344
+  },
+  {
+   "neurons": 12,
+   "seed": 4,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.010159190744161606,
+   "nu_rel_err": 0.015919074416160563,
+   "rel_l2_T": 0.003145551305912473,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 472.12348556518555,
+   "s_per_epoch": 0.023606457944643295
+  },
+  {
+   "neurons": 12,
+   "seed": 5,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.010157011449337006,
+   "nu_rel_err": 0.01570114493370054,
+   "rel_l2_T": 0.0038098576990483065,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 424.13965940475464,
+   "s_per_epoch": 0.021206693283539604
+  },
+  {
+   "neurons": 12,
+   "seed": 6,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.009991977363824844,
+   "nu_rel_err": 0.0008022636175155848,
+   "rel_l2_T": 0.0026084740887667448,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 507.631352186203,
+   "s_per_epoch": 0.02538071741395679
+  },
+  {
+   "neurons": 12,
+   "seed": 7,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.01010480523109436,
+   "nu_rel_err": 0.010480523109436014,
+   "rel_l2_T": 0.008275378105576324,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 424.18716073036194,
+   "s_per_epoch": 0.021209553102414794
+  },
+  {
+   "neurons": 12,
+   "seed": 8,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.010049008764326572,
+   "nu_rel_err": 0.004900876432657221,
+   "rel_l2_T": 0.002217681223775905,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 401.1808512210846,
+   "s_per_epoch": 0.020057760660001842
+  },
+  {
+   "neurons": 12,
+   "seed": 9,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.010107677429914474,
+   "nu_rel_err": 0.010767742991447428,
+   "rel_l2_T": 0.001857694611320232,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 526.6044838428497,
+   "s_per_epoch": 0.02633069753587243
+  },
+  {
+   "neurons": 15,
+   "seed": 0,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.010259645991027355,
+   "nu_rel_err": 0.0259645991027355,
+   "rel_l2_T": 0.0036242358994934792,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 417.81744623184204,
+   "s_per_epoch": 0.020890555755395498
+  },
+  {
+   "neurons": 15,
+   "seed": 10,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.771320643266746,
+   "nu": 0.010107412002980709,
+   "nu_rel_err": 0.010741200298070887,
+   "rel_l2_T": 0.003965436780033572,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 490.50940990448,
+   "s_per_epoch": 0.024524991181714695
+  },
+  {
+   "neurons": 15,
+   "seed": 1,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.010139716789126396,
+   "nu_rel_err": 0.013971678912639597,
+   "rel_l2_T": 0.001834716215512074,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 561.0369040966034,
+   "s_per_epoch": 0.028051856613330848
+  },
+  {
+   "neurons": 15,
+   "seed": 2,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.010081453248858452,
+   "nu_rel_err": 0.008145324885845164,
+   "rel_l2_T": 0.0020389035031150487,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 445.0193417072296,
+   "s_per_epoch": 0.022250723580109058
+  },
+  {
+   "neurons": 15,
+   "seed": 3,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.010055086575448513,
+   "nu_rel_err": 0.005508657544851282,
+   "rel_l2_T": 0.0029762592637991915,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 423.80804324150085,
+   "s_per_epoch": 0.021189359612653027
+  },
+  {
+   "neurons": 15,
+   "seed": 4,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.010120641440153122,
+   "nu_rel_err": 0.012064144015312174,
+   "rel_l2_T": 0.0018000074319854348,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 394.2922570705414,
+   "s_per_epoch": 0.019714771982991545
+  },
+  {
+   "neurons": 15,
+   "seed": 5,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.009998735971748829,
+   "nu_rel_err": 0.00012640282511713202,
+   "rel_l2_T": 0.001973452877372159,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 418.27544951438904,
+   "s_per_epoch": 0.02091253374247463
+  },
+  {
+   "neurons": 15,
+   "seed": 6,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.009982314892113209,
+   "nu_rel_err": 0.0017685107886791437,
+   "rel_l2_T": 0.0025292186121073485,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 488.3253231048584,
+   "s_per_epoch": 0.024416565233435928
+  },
+  {
+   "neurons": 15,
+   "seed": 7,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.010024519637227058,
+   "nu_rel_err": 0.0024519637227058202,
+   "rel_l2_T": 0.001967413823744929,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 486.5581738948822,
+   "s_per_epoch": 0.02432776491691711
+  },
+  {
+   "neurons": 15,
+   "seed": 8,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.010070196352899075,
+   "nu_rel_err": 0.007019635289907435,
+   "rel_l2_T": 0.0037804373637721524,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 382.68488073349,
+   "s_per_epoch": 0.01913298379839036
+  },
+  {
+   "neurons": 15,
+   "seed": 9,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.01006401889026165,
+   "nu_rel_err": 0.006401889026164988,
+   "rel_l2_T": 0.002904986425486726,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 384.8796513080597,
+   "s_per_epoch": 0.01924409939769602
+  },
+  {
    "neurons": 3,
    "seed": 0,
    "model": "classical",
@@ -667,6 +1328,336 @@
    },
    "time_s": 427.8810303211212,
    "s_per_epoch": 0.021393922519683837
+  },
+  {
+   "neurons": 5,
+   "seed": 0,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.5488135039273248,
+   "nu": 0.010121519677340984,
+   "nu_rel_err": 0.012151967734098414,
+   "rel_l2_T": 0.0022810573964553572,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 536.611977815628,
+   "s_per_epoch": 0.02683056956011329
+  },
+  {
+   "neurons": 5,
+   "seed": 10,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.771320643266746,
+   "nu": 0.010143334046006203,
+   "nu_rel_err": 0.014333404600620249,
+   "rel_l2_T": 0.003196589231512034,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 476.9846615791321,
+   "s_per_epoch": 0.02384861728371224
+  },
+  {
+   "neurons": 5,
+   "seed": 1,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.417022004702574,
+   "nu": 0.010107465088367462,
+   "nu_rel_err": 0.010746508836746195,
+   "rel_l2_T": 0.001870628217775468,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 378.2033712863922,
+   "s_per_epoch": 0.018909720004966924
+  },
+  {
+   "neurons": 5,
+   "seed": 2,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.43599490214200376,
+   "nu": 0.010456329211592674,
+   "nu_rel_err": 0.045632921159267405,
+   "rel_l2_T": 0.0045242835457208475,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 379.4429750442505,
+   "s_per_epoch": 0.01897079924701649
+  },
+  {
+   "neurons": 5,
+   "seed": 3,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.5507979025745755,
+   "nu": 0.010165369138121605,
+   "nu_rel_err": 0.01653691381216047,
+   "rel_l2_T": 0.00157321409316777,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 434.60945773124695,
+   "s_per_epoch": 0.021729487586935804
+  },
+  {
+   "neurons": 5,
+   "seed": 4,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.9670298390136767,
+   "nu": 0.010155708529055119,
+   "nu_rel_err": 0.015570852905511835,
+   "rel_l2_T": 0.0028341137171438986,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 444.8979318141937,
+   "s_per_epoch": 0.02224462507629318
+  },
+  {
+   "neurons": 5,
+   "seed": 5,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.22199317108973948,
+   "nu": 0.009966804645955563,
+   "nu_rel_err": 0.0033195354044437617,
+   "rel_l2_T": 0.0038794062922336598,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 443.85642409324646,
+   "s_per_epoch": 0.022192591303282664
+  },
+  {
+   "neurons": 5,
+   "seed": 6,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.8928601514360016,
+   "nu": 0.010109788738191128,
+   "nu_rel_err": 0.010978873819112757,
+   "rel_l2_T": 0.0019664817390061527,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 414.7252757549286,
+   "s_per_epoch": 0.020735943041430026
+  },
+  {
+   "neurons": 5,
+   "seed": 7,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.07630828937395717,
+   "nu": 0.009933080524206161,
+   "nu_rel_err": 0.006691947579383871,
+   "rel_l2_T": 0.0014119349299604991,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 444.574045419693,
+   "s_per_epoch": 0.02222844437185696
+  },
+  {
+   "neurons": 5,
+   "seed": 8,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.8734294027918162,
+   "nu": 0.010237518697977066,
+   "nu_rel_err": 0.023751869797706583,
+   "rel_l2_T": 0.0029951962748204063,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 454.788370847702,
+   "s_per_epoch": 0.02273962731253857
+  },
+  {
+   "neurons": 5,
+   "seed": 9,
+   "model": "classical",
+   "Tfin": 0.1,
+   "nu_true": 0.01,
+   "nu_init": 0.010374153885699955,
+   "nu": 0.010183660313487053,
+   "nu_rel_err": 0.01836603134870527,
+   "rel_l2_T": 0.0028961897355723252,
+   "epochs": 20000,
+   "adjustments": null,
+   "cfg": {
+    "lr_net": 0.0253,
+    "lr_net_min": 0.00032,
+    "betas_net": [
+     0.73,
+     0.99
+    ],
+    "weight_decay": 0.00093,
+    "grad_clip": 10.0,
+    "r_ramp": 10,
+    "w_d": 37.8,
+    "lr_nu": 0.5,
+    "lr_nu_min": 0.163,
+    "inner_steps": 16
+   },
+   "time_s": 453.5127010345459,
+   "s_per_epoch": 0.022675337222309265
   },
   {
    "neurons": 7,
