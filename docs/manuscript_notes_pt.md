@@ -24,7 +24,7 @@ Layout e comandos: `README.md` e `manuscript/README.md`.
 
 - Fig. 1: só a arquitetura, sem os painéis de resíduo e de fluxo de treino, sem tamanhos de rede e com a saída apenas `u_Θ`. O resíduo e o laço de treino estão no texto da Sec. II e no Apêndice B.
 - Figs. 2(b,e) e 3(b,d) (09/11/2026): razão entre os passos médios da clássica e da HQPINN, em escala log; na Fig. 3, uma só cor (marrom) e a largura pelo marcador.
-- Problema inverso no texto (10/11/2026): Fig. 5 = melhor run de cada modelo e T com 200 épocas, HQPINN no FakeAachen (`data/Inverso_200`). Apêndice C: Fig. 8 = erro × tamanho n como as Figs. 2(a,d); Fig. 9 = melhores runs com 20 000 épocas e circuito ideal. Não há análogo da Fig. 3: todas as runs do inverso usam N_col = 10. As pastas de 110 e 500 épocas foram apagadas pelo autor (commit 201f0b3c6) e saíram do artigo.
+- Problema inverso no texto (10/11/2026): Fig. 5 = melhor run de cada modelo e T com 200 épocas, HQPINN no FakeAachen (`data/Inverso_200`). Apêndice C: Fig. 8 = erro × tamanho n como as Figs. 2(a,d); Fig. 9 = melhores runs com 20 000 épocas e circuito ideal. Não há análogo da Fig. 3: todas as runs do inverso usam N_col = 10. As pastas de 110 e 500 épocas foram apagadas pelo autor (commit a36240c96) e saíram do artigo.
 
 ## Organização dos resultados: problema direto
 
@@ -135,7 +135,7 @@ Medidas nesta máquina (i7-13620H):
 - **Mesmo setup:** `build_paper_data.py` para com erro se os dois modelos não tiverem o mesmo critério de parada e o mesmo alvo por seed.
 - **QPU real, T = 0,1 (n = 10, 110 épocas):** 5,7 % (MSE 1,45×10⁻³), inicial 29,4 %. Clássica, mesma seed e largura: 31,2 %. Mediana das 50
   clássicas: 24,7 %; só 1 de 50 termina abaixo. HQPINN ideal: 3,9–15,1 % (mediana 9,1 %). Clássica com o melhor cronograma: 11,4 % (6,2–19,5 %).
-- **FakeBerlin:** seed 0 (4,13 %), a mesma rede no `ibm_berlin` (4,83 %) e com o circuito ideal (3,18 %) conferidos em `data/quantum_ibm_faker/T_0.1/run_*.json`, restaurado do commit `3298f9a` deste repositório.
+- **FakeBerlin:** seed 0 (4,13 %), a mesma rede no `ibm_berlin` (4,83 %) e com o circuito ideal (3,18 %) conferidos em `data/quantum_ibm_faker/T_0.1/run_*.json`, restaurado do commit `daebd09` deste repositório.
   **Não reconferido:** seeds 1–4 (6,9–8,1 %): os arquivos brutos não estão nem no histórico. Vêm da versão anterior destas notas; há um `\TODO` no Apêndice B, e daí depende a frase "seed 0 foi a melhor de 5".
 
 ## Problema inverso

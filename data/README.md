@@ -13,14 +13,14 @@ Nothing in this folder goes to Overleaf: the manuscript reads `manuscript/data/`
 | `quantum_forward_hardware_real/T_0.1/` | the training run on `ibm_berlin`, complete: it is the record of the experiment. The run at T = 1 will go to `T_1.0/` | Fig. 4, chip map, device table |
 | `Forward/classical_vs_qpu/T_0.1/` | classical control with the QPU protocol | Fig. 4 |
 | `derived/` | replayed learning curves, same-budget simulations, hardware-budget controls. **Record of the author's Windows machine: do not regenerate on another platform** (`manuscript/README.md`) | Fig. 4, Appendix B |
-| `quantum_ibm_faker/T_0.1/` | log of the FakeBerlin run with seed 0 and of its prediction on `ibm_berlin` (restored from the git history, commit `3298f9a`). The raw history of that run and the seeds 1–4 are not available | Appendix B |
+| `quantum_ibm_faker/T_0.1/` | log of the FakeBerlin run with seed 0 and of its prediction on `ibm_berlin` (restored from the git history, commit `daebd09`). The raw history of that run and the seeds 1–4 are not available | Appendix B |
 | `Inverso_200/` | **inverse problem, 200 epochs, HQPINN on FakeAachen**: n = 10, seeds 0-9, 10 runs per model and T (see its README) | Fig. 5, Tables II, IX |
 | `Inverso/` | **inverse problem, 20 000 epochs, ideal circuit**: same training, n = 3, 7, 10, seeds 0-10, 33 runs per model and T (`classico/`, `quantico_ideal/`; see its README) | Figs. 8, 9, Tables II, X |
-| ~~`Inverso_110/`~~, ~~`Inverso_500/`~~ | inverse problem, 110 epochs on FakeBerlin and 500 on FakeAachen. **Deleted by the author on 09/11/2026**; they are in the git history (commit `201f0b3c6`) and are no longer in the paper | -- |
+| ~~`Inverso_110/`~~, ~~`Inverso_500/`~~ | inverse problem, 110 epochs on FakeBerlin and 500 on FakeAachen. **Deleted by the author on 09/11/2026**; they are in the git history (commit `a36240c96`) and are no longer in the paper | -- |
 
 A real-QPU run of the inverse problem will go to `Inverso_real/<backend>/` (it does not exist yet).
 
-The older long-budget sweeps of the inverse problem (another protocol, formerly in `Inverso/`) were deleted on 09/11/2026 at the author's request; they are in the git history (commit `201f0b3c6`). The old scripts that wrote them now point to `Inverso_antigo/`, so that they cannot mix with the new runs.
+The older long-budget sweeps of the inverse problem (another protocol, formerly in `Inverso/`) were deleted on 09/11/2026 at the author's request; they are in the git history (commit `a36240c96`). The old scripts that wrote them now point to `Inverso_antigo/`, so that they cannot mix with the new runs.
 
 ## Not used by the paper (archive)
 

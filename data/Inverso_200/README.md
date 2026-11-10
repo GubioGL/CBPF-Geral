@@ -1,6 +1,6 @@
 # Problema inverso de Burgers em 200 épocas: PINN clássica × HQPINN no FakeAachen
 
-Mesmo treino da antiga `Inverso_500` (apagada em 09/11/2026; no histórico do git, commit `201f0b3c6`): mesmos CONFIGs,
+Mesmo treino da antiga `Inverso_500` (apagada em 09/11/2026; no histórico do git, commit `a36240c96`): mesmos CONFIGs,
 ajustes em T = 1, ν = 0,01, N = 10 pontos por época, QPU fake **FakeAachen**, com **200 épocas**, só **n = 10**
 (neurônios ou qubits) e **seeds 0–9**: 10 runs por modelo e por T, 40 no total. As cadeias e a calibração de 10 qubits
 são as da antiga `Inverso_500` (`quantico/calibration_NQ10_fake_aachen.npz`, copiada de lá).
