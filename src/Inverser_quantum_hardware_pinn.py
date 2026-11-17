@@ -113,6 +113,10 @@ MITIGATIONS = {
     "none": dict(resilience_level=0),                                   # raw counts
     "trex": dict(resilience_level=0, resilience=_TREX),                 # = Estimator default (level 1)
     "suppress": dict(resilience_level=0, resilience=_TREX, **_SUPPRESS),   # + DD + Pauli twirling
+    # DD + Pauli twirling without TREX (17/11/2026): no extra shot -- the shots of each parameter set are split
+    # over the twirling randomizations -- where TREX adds a readout-calibration block of 1024 shots to every job
+    # (+50% shots per epoch job, +33% over a 200-epoch run); on FakeAachen TREX did not improve nu or u(x,T)
+    "dd_twirl": dict(resilience_level=0, **_SUPPRESS),
     "zne": dict(resilience_level=0, **_SUPPRESS,                        # + ZNE, ~3x circuits
                 resilience=dict(**_TREX, zne_mitigation=True,
                                 zne=dict(amplifier="gate_folding", noise_factors=(1, 3, 5),
