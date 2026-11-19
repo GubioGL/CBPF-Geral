@@ -1,0 +1,6 @@
+nohup: ignorando entrada
+base_primitive.get_mode_service_backend:WARNING:2026-11-17 22:06:11,569: A backend was passed in as the mode but a session context manager is open so this job will run inside this session/batch instead of in job mode.
+base_primitive.get_mode_service_backend:WARNING:2026-11-17 22:06:33,864: A backend was passed in as the mode but a session context manager is open so this job will run inside this session/batch instead of in job mode.
+epoch 200 of 200: state saved in data/Inverso_real/ibm_aachen/quantico/T_0.1_nu_0.01/checkpoint_10_NQ10_1_E200.pt
+ibm_aachen (mitigation dd_twirl): NU=0.01, T=0.1, N_col=10, 200 epochs, unadjusted training -- learned nu (relative error)
+  NQ10 seed 1: 0.0103 (3.3%)

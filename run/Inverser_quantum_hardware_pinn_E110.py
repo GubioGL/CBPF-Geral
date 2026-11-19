@@ -89,6 +89,22 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 
+
+def _ensure_libgomp():
+    """Linux pip venv: qiskit_aer and torch need their libgomp preloaded ("cannot allocate memory in static TLS
+    block" otherwise). Re-executes the script once with them in LD_PRELOAD (as run/Inverser_runs_paralelo.py);
+    nothing to do where the libraries are not found (Windows, conda)."""
+    site = glob.glob(os.path.join(sys.prefix, "lib", "python3.*", "site-packages"))
+    libs = [p for s in site for pat in ("qiskit_aer.libs/libgomp*.so*", "torch/lib/libgomp.so*")
+            for p in sorted(glob.glob(os.path.join(s, pat)))[:1]]
+    if libs and not all(lib in os.environ.get("LD_PRELOAD", "") for lib in libs):
+        os.environ["LD_PRELOAD"] = ":".join(libs)
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
+if __name__ == "__main__":   # as a module, the importing script takes care of it
+    _ensure_libgomp()
+
 import matplotlib
 matplotlib.use("Agg")  # headless backend -- safe across worker processes
 import numpy as np
