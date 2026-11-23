@@ -161,6 +161,19 @@ VAL_POINTS = 100                  # validation: x points at t = TFIN, one replic
 SESSION_MAX_TIME = "2h"           # --real: safety limit of the Session
 # --real: error suppression of the inverse runs (author's choice, 17/11/2026): dynamical decoupling + Pauli twirling,
 # no TREX -- the same shots as the raw circuits (TREX adds 1024 shots per job and did not help on FakeAachen)
+# Review with the select-error-mitigation skill (Qiskit/skills), 19/11/2026, for the T = 1 run: keep Pauli twirling
+# (gates + measurement) only. REAL_MITIGATION stays dd_twirl, the preset of the T = 0.1 run, until the author decides
+# (a "twirl" preset breaks the protocol match with T = 0.1 and needs a new calibration):
+#   * twirling, kept: CZ is Clifford; the Aer noise has no coherent error, so only the real chip can show its effect;
+#   * DD, dropped: idle windows <= 120 ns against a median T2 of 251 us (ibm_aachen), nothing to protect;
+#   * TREX, dropped: the measured polynomial already absorbs the static readout error. On FakeAachen it raised the
+#     slope of <Z> vs the ideal circuit 0.977 -> 0.994, but the misfit to the polynomial stayed at shot noise
+#     (0.029-0.030) and nu did not move, for ~50% more shots per job;
+#   * ZNE / PEA / PEC (and the Executor-only PEC+SLC, PNA, post-selection), not used: their overhead multiplies the
+#     200 epoch jobs, the validation has to use the training's preset, and the circuit is too shallow (depth 2) for PEA.
+#   On FakeAachen (seed 1, 200 epochs) none, trex, trex_twirl, dd_twirl and the ideal circuit all gave nu errors of
+#   42-65%: at T = 1 the error comes from the training (nu jitters ~20% per epoch at the end, also in the noiseless
+#   classical PINN), not from the noise. The median of nu over epochs 101-200 gave 1-7%. Rerun: run/test_mitigation_T1.py.
 REAL_MITIGATION = "dd_twirl"
 # --real, author's choices of 17/11/2026 (the emulator runs keep CAL_SAMPLES, VAL_POINTS and the greedy packing):
 REAL_PACKING = "max"      # as many disjoint chains as fit on the chip (12 of 10 qubits on ibm_aachen), not the greedy 10
