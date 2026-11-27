@@ -4,7 +4,9 @@
 
 data/forward/classico/simulacao_classico_T_<T>.csv     one row per run (width and N_col studies, column `study`)
 data/forward/quantico/simulador_quantico_T_<T>.csv     noiseless HQPINN, the same
-data/forward/quantico/qpu_<backend>_T_<T>_*.csv        real-QPU run: resumo, perfil, curva, cadeias
+data/forward/quantico/qpu_<backend>_T_<T>_*.csv        real-QPU run: resumo, perfil, curva (T = 0.1) or historico
+                                                       (T = 1: losses per epoch, no MSE-vs-FDM curve was saved), cadeias
+data/forward/quantico/qpu_ibm_berlin_T_0.1_derivados/  replayed curves and controls of the T = 0.1 run (input, not output)
 data/inverse/<model>/<source>_T_<T>_*.csv              rodadas (one row per run), historico (nu and losses per epoch;
                                                        log-binned medians at 20 000 epochs), perfis (u(x,T) per run)
 data/inverse/quantico/qpu_<backend>_T_<T>_*.csv        real-QPU run
@@ -39,10 +41,13 @@ EXACT_NCOL = {3: "CBPF_quantum_exact_results_Brickwork3", 5: "CBPF_quantum_exact
               7: "CBPF_quantum_exact_results_fixed_BrickWork7", 10: "CBPF_quantum_exact_results_fixed_BrickWork10",
               15: "CBPF_quantum_exact_results_fixed_BrickWork15"}
 MAX_N_COLLOCATION = 100
-# forward real-QPU runs: run_/validation_ files, classical control, replayed learning curves (data/derived)
+# forward real-QPU runs: run_/validation_ files, classical control, replayed learning curves (..._derivados/)
+DERIVED_T01 = OUT_F / "quantico/qpu_ibm_berlin_T_0.1_derivados"
 FORWARD_QPU = {0.1: dict(backend="ibm_berlin", raw=DATA / "quantum_forward_hardware_real/T_0.1",
                          tag="10_NQ10_0_ibm_berlin_none_HW110", classical=DATA / "Forward/classical_vs_qpu/T_0.1",
-                         curves=DATA / "derived/learning_curves.npz", sims=DATA / "derived/same_budget_sims.npz")}
+                         curves=DERIVED_T01 / "learning_curves.npz", sims=DERIVED_T01 / "same_budget_sims.npz")}
+# forward real-QPU run of run/run_quantumIBMTrain_vol2_parallel8.ipynb (8 replicas of 10 qubits, AdamW + L-BFGS)
+FORWARD_QPU_PARALLEL = {1.0: dict(backend="ibm_aachen", raw=DATA / "quantum_forward_hardware_real/T_1")}
 
 INV_CASE = {0.1: "T_0.1_nu_0.01", 1.0: "T_1.0_nu_0.01"}
 INV_BUDGETS = {200: dict(root=DATA / "Inverso_200", quantum="quantico", sizes=(10,)),          # HQPINN on FakeAachen
@@ -104,6 +109,55 @@ def forward_qpu(T, c):
             rows.append(pd.DataFrame(dict(series="noiseless_hqpinn", width=run["n_qubits"], seed=s, epoch=ep,
                                           mse=sims["ideal_mse"][j])))
         write(pd.concat(rows), Path(f"{base}_curva.csv"))
+
+
+def _tanh_mlp(state, prefix, n_in, n_out, width=10):
+    import torch as tc
+    net = tc.nn.Sequential(tc.nn.Linear(n_in, width, dtype=tc.float64), tc.nn.Tanh(),
+                           tc.nn.Linear(width, n_out, dtype=tc.float64))
+    net.load_state_dict({k[len(prefix):]: v for k, v in state.items() if k.startswith(prefix)})
+    return net
+
+
+def forward_qpu_parallel(T, c):
+    """Final-grid evaluation on the QPU (all replicas on the same grid, last weights), rebuilt from the saved means:
+    the notebook's u_x_Tfin.npz/csv were not kept. u = post(<Z>) (soft initial condition)."""
+    import torch as tc
+    from main.functions import reference_at_time, solve_burgers_fd
+    raw = c["raw"]
+    if not (raw / "checkpoint_last.pt").exists():
+        return
+    state = tc.load(raw / "checkpoint_last.pt", map_location="cpu", weights_only=False)
+    cfg, opt, hw = state["config"], state["options"], state["hardware_identity"]
+    n, R, nq = opt["evaluation_points"], hw["replicas"], hw["n_qubits"]
+    found = [np.load(f)["means"] for f in sorted(raw.glob("qpu_requests/*/means.npz"))]
+    found = [m for m in found if m.shape == (n * R, nq)]   # the training requests have 384/385 rows
+    assert len(found) == 1, f"expected one final-grid request with {n * R} rows, found {len(found)}"
+    x = np.linspace(0.0, cfg["L"], n)
+    xt = np.column_stack((x, np.full(n, cfg["Tfin"])))
+    phase = 2 * np.pi * xt[:, :1] / cfg["L"]
+    with tc.no_grad():   # rows are point-major: point i, replica r -> row i * R + r
+        u = _tanh_mlp(state["model_state"], "post.", nq, 1)(tc.as_tensor(found[0])).numpy().reshape(n, R)
+        cls = tc.load(raw / "classical_comparison/classical_checkpoint_final.pt", map_location="cpu", weights_only=False)
+        u_cls = _tanh_mlp(cls["model_state"], "network.", 3, 1)(
+            tc.as_tensor(np.hstack((np.sin(phase), np.cos(phase), xt[:, 1:] / cfg["Tfin"])))).numpy().ravel()
+    x_ref, t_ref, U_ref = solve_burgers_fd(L=cfg["L"], Tfin=cfg["Tfin"], nu=cfg["nu"])
+    ref = col(reference_at_time(cfg["Tfin"], t_ref, x_ref, U_ref, x.reshape(-1, 1), L=cfg["L"])[0])
+    u_mean = u.mean(axis=1)
+    base = OUT_F / "quantico" / f"qpu_{c['backend']}_T_{T:g}"
+    write(pd.DataFrame([dict(backend=hw["backend_name"], seed=opt["seed"], n_qubits=nq, replicas=R,
+                             n_collocation=cfg["n_collocation"], Tfin=cfg["Tfin"], mitigation="none",
+                             shots=opt["evaluation_shots"], mse=float(np.mean((u_mean - ref) ** 2)),
+                             relative_l2=float(np.linalg.norm(u_mean - ref) / np.linalg.norm(ref)),
+                             mse_classical=float(np.mean((u_cls - ref) ** 2)),
+                             relative_l2_classical=float(np.linalg.norm(u_cls - ref) / np.linalg.norm(ref)),
+                             epochs=state["epoch"], best_monitor_epoch=state["best_epoch"])]),
+          Path(f"{base}_resumo.csv"))
+    prof = dict(x=x, u_fdm=ref, u_qpu=u_mean) | {f"u_qpu_replica{r}": u[:, r] for r in range(R)}
+    write(pd.DataFrame(prof | {f"u_classical_seed{opt['seed']}": u_cls}), Path(f"{base}_perfil.csv"))
+    write(pd.DataFrame([dict(chain=k + 1, qubit=q) for k, ch in enumerate(hw["layouts"]) for q in ch]),
+          Path(f"{base}_cadeias.csv"))
+    write(pd.read_csv(raw / "training_history.csv"), Path(f"{base}_historico.csv"))
 
 
 # ---- inverse --------------------------------------------------------------------------
@@ -203,6 +257,8 @@ if __name__ == "__main__":
             forward_simulations(T)
         if T in FORWARD_QPU:
             forward_qpu(T, FORWARD_QPU[T])
+    for T, c in FORWARD_QPU_PARALLEL.items():
+        forward_qpu_parallel(T, c)
     for T in INV_CASE:
         for model in INV_MODELS:
             inverse_runs(T, model)

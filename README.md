@@ -29,7 +29,7 @@ CBPF-Geral/
 ├── run/                 entry points: training runs (forward and inverse), QPU and emulator runs, plots
 ├── data/                raw results (see data/README.md)
 │   ├── Forward/                         forward problem, simulations
-│   ├── quantum_forward_hardware_real/   forward problem on ibm_berlin
+│   ├── forward/quantico/                forward problem, HQPINN tables (real QPU: ibm_berlin T=0.1, ibm_aachen T=1)
 │   ├── Inverso_200/                     inverse problem, 200 epochs, HQPINN on FakeAachen
 │   └── Inverso/                         inverse problem, 20 000 epochs, ideal circuit
 ├── docs/                notes on the results

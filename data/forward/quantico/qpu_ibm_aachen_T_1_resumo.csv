@@ -1,0 +1,2 @@
+backend,seed,n_qubits,replicas,n_collocation,Tfin,mitigation,shots,mse,relative_l2,mse_classical,relative_l2_classical,epochs,best_monitor_epoch
+ibm_aachen,2,10,8,128,1.0,none,1024,0.0001132295709996847,0.05068456062573978,0.0018694516611610246,0.2059457694533007,500,440
