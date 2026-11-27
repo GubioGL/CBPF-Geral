@@ -6,6 +6,8 @@ data/forward/classico/simulacao_classico_T_<T>.csv     one row per run (width an
 data/forward/quantico/simulador_quantico_T_<T>.csv     noiseless HQPINN, the same
 data/forward/quantico/qpu_<backend>_T_<T>_*.csv        real-QPU run: resumo, perfil, curva (T = 0.1) or historico
                                                        (T = 1: losses per epoch, no MSE-vs-FDM curve was saved), cadeias
+data/forward/quantico/simulacao_<fake backend>_T_<T>_*.csv EMULATED hardware (fake backend, not a QPU), one row/column
+                                                       per recipe: resumo, perfil, historico, cadeias, comparacao
 data/forward/quantico/qpu_ibm_berlin_T_0.1_derivados/  replayed curves and controls of the T = 0.1 run (input, not output)
 data/inverse/<model>/<source>_T_<T>_*.csv              rodadas (one row per run), historico (nu and losses per epoch;
                                                        log-binned medians at 20 000 epochs), perfis (u(x,T) per run)
@@ -46,6 +48,9 @@ DERIVED_T01 = OUT_F / "quantico/qpu_ibm_berlin_T_0.1_derivados"
 FORWARD_QPU = {0.1: dict(backend="ibm_berlin", raw=DATA / "quantum_forward_hardware_real/T_0.1",
                          tag="10_NQ10_0_ibm_berlin_none_HW110", classical=DATA / "Forward/classical_vs_qpu/T_0.1",
                          curves=DERIVED_T01 / "learning_curves.npz", sims=DERIVED_T01 / "same_budget_sims.npz")}
+# forward runs on a fake backend (emulator, NOT a QPU) of run/run_quantum_hardware.py, one per --recipe (tag suffix)
+FORWARD_FAKE = {1.0: dict(backend="fake_aachen", raw=DATA / "quantum_forward_hardware/T_1.0",
+                          tag="10_NQ10_{}_fake_aachen_HW200", recipes={"degraus": "", "ajustada": "_ajustada"})}
 # forward real-QPU run of run/run_quantumIBMTrain_vol2_parallel8.ipynb (8 replicas of 10 qubits, AdamW + L-BFGS)
 FORWARD_QPU_PARALLEL = {1.0: dict(backend="ibm_aachen", raw=DATA / "quantum_forward_hardware_real/T_1")}
 
@@ -109,6 +114,43 @@ def forward_qpu(T, c):
             rows.append(pd.DataFrame(dict(series="noiseless_hqpinn", width=run["n_qubits"], seed=s, epoch=ep,
                                           mse=sims["ideal_mse"][j])))
         write(pd.concat(rows), Path(f"{base}_curva.csv"))
+
+
+def forward_fake(T, c):
+    """Emulated hardware (simulacao_ prefix): one row/column/block per training recipe of run_quantum_hardware.py."""
+    raw, runs, prof, hist, chains = c["raw"], [], {}, [], None
+    for recipe, sfx in c["recipes"].items():
+        one, batch = (raw / f"{kind}_{c['tag'].format(s)}{sfx}" for kind, s in (("run", 0), ("run", "seeds0-0")))
+        if not one.with_suffix(".json").exists():
+            continue
+        run, b = json.loads(one.with_suffix(".json").read_text()), json.loads(batch.with_suffix(".json").read_text())
+        v = np.load(raw / f"validation_{c['tag'].format(0)}{sfx}.npz")
+        h = np.load(raw / f"losshist_{c['tag'].format('seeds0-0')}{sfx}.npz")
+        runs.append(dict(backend=run["backend"], simulation=True, recipe=recipe, seed=run["seed"], n_qubits=run["n_qubits"],
+                         n_collocation=run["n_collocation"], Tfin=run["Tfin"], shots=b["shots"],
+                         epochs=run["stopped_at_step"], mse=run["mse"], mae=run["mae"], relative_l2=run["relative_l2"],
+                         rms_q_fake_vs_exact=run["rms_q_qpu_vs_exact"], fit_rms_mean=float(np.mean(b["fit_rms"])),
+                         wall_time_s=b["wall_time_s"], training_config=json.dumps(run["training_config"])))
+        prof.setdefault("x", col(v["x"])); prof.setdefault("u_fdm", col(v["u_reference"]))
+        prof |= {f"u_fake_{recipe}": col(v["u_qpu"]), f"u_fake_weights_ideal_circuit_{recipe}": col(v["u_ideal"])}
+        epochs = np.arange(len(h["loss_monitor"]))   # loss_monitor has epoch 0 (before training); the rest start at 1
+        pad = lambda a: np.concatenate(([np.nan], col(a)))
+        hist.append(pd.DataFrame(dict(recipe=recipe, epoch=epochs, lr=pad(h["lr"]), loss_fake=pad(h["loss_qpu"]),
+                                      loss_monitor=col(h["loss_monitor"]))))
+        assert chains is None or chains == b["chains"], "the recipes used different chains"
+        chains = b["chains"]
+    if not runs:
+        return
+    base = OUT_F / "quantico" / f"simulacao_{c['backend']}_T_{T:g}"
+    write(pd.DataFrame(runs), Path(f"{base}_resumo.csv"))
+    write(pd.DataFrame(prof), Path(f"{base}_perfil.csv"))
+    write(pd.concat(hist), Path(f"{base}_historico.csv"))
+    write(pd.DataFrame([dict(chain=k + 1, qubit=q) for k, ch in enumerate(chains) for q in ch]), Path(f"{base}_cadeias.csv"))
+    comp = raw / f"fwd_T{T:g}_comparacao.json"   # L2 of ideal / fake / classical with each recipe (scratch plot script)
+    if comp.exists():
+        rows = [dict(model=k.split()[0], recipe=k.split()[1].replace("fake", "degraus"), seed=s, relative_l2=l2)
+                for k, d in json.loads(comp.read_text()).items() for s, l2 in enumerate(d["seeds"])]
+        write(pd.DataFrame(rows), Path(f"{base}_comparacao.csv"))
 
 
 def _tanh_mlp(state, prefix, n_in, n_out, width=10):
@@ -259,6 +301,8 @@ if __name__ == "__main__":
             forward_qpu(T, FORWARD_QPU[T])
     for T, c in FORWARD_QPU_PARALLEL.items():
         forward_qpu_parallel(T, c)
+    for T, c in FORWARD_FAKE.items():
+        forward_fake(T, c)
     for T in INV_CASE:
         for model in INV_MODELS:
             inverse_runs(T, model)

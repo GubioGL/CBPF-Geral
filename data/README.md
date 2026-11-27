@@ -12,7 +12,7 @@ Nothing in this folder goes to Overleaf: the manuscript reads `manuscript/data/`
 | `Forward/CBPF_quantum_exact_results_Brickwork3/`, `__Brickwork5/`, `_fixed_BrickWork7/`, `_fixed_BrickWork10/`, `_fixed_BrickWork15/` | noiseless HQPINN versus N_col | Fig. 3 |
 | `quantum_forward_hardware_real/T_0.1/` | the training run on `ibm_berlin` (raw files removed in commit `1c2412dd5`; recover them from its parent, `git checkout 1c2412dd5~1 -- data/quantum_forward_hardware_real/T_0.1`). Compiled in `forward/quantico/qpu_ibm_berlin_T_0.1_*.csv` | Fig. 4, chip map, device table |
 | `quantum_forward_hardware_real/T_1/` | real-QPU run on `ibm_aachen`, T = 1: HQPINN, 8 replicas of 10 qubits, seed 2, N_col = 128, soft IC, AdamW + L-BFGS, 500 epochs, from `run/run_quantumIBMTrain_vol2_parallel8.ipynb` (with its matched classical PINN in `classical_comparison/`). Compiled in `forward/quantico/qpu_ibm_aachen_T_1_*.csv` (resumo, perfil, cadeias, historico). Raw files removed after compiling; recover them with `git checkout e2be4d229 -- data/quantum_forward_hardware_real/T_1` | -- |
-| `quantum_forward_hardware/T_1.0/` | **simulations only** (FakeAachen emulator, `run/run_quantum_hardware.py`), not a QPU run | -- |
+| `quantum_forward_hardware/T_1.0/` | **simulations only** (FakeAachen emulator, `run/run_quantum_hardware.py`, `--recipe degraus` and `ajustada`), not a QPU run. Compiled in `forward/quantico/simulacao_fake_aachen_T_1_*.csv` (resumo, perfil, historico, cadeias, comparacao; figures in `simulacao_fake_aachen_T_1_figuras/`, not in git). Raw files removed after compiling; recover them with `git checkout 45fec6512 -- data/quantum_forward_hardware` | -- |
 | `Forward/classical_vs_qpu/T_0.1/` | classical control with the QPU protocol | Fig. 4 |
 | `forward/quantico/qpu_ibm_berlin_T_0.1_derivados/` (formerly `derived/`) | of the T = 0.1 `ibm_berlin` run: replayed learning curves (`learning_curves.npz`), same-budget simulations (`same_budget_sims.npz`), hardware-budget controls (`controls_hardware_budget.npz`). Input of `qpu_ibm_berlin_T_0.1_curva.csv`; the rest (fake curves, per-epoch profiles, controls) is in no CSV. **Record of the author's Windows machine: do not regenerate on another platform** | Fig. 4, Appendix B |
 | `quantum_ibm_faker/T_0.1/` | log of the FakeBerlin run with seed 0 and of its prediction on `ibm_berlin` (restored from the git history, commit `daebd09`). The raw history of that run and the seeds 1–4 are not available | Appendix B |
@@ -20,7 +20,10 @@ Nothing in this folder goes to Overleaf: the manuscript reads `manuscript/data/`
 | `Inverso/` | **inverse problem, 20 000 epochs, ideal circuit**: same training, n = 3, 7, 10, seeds 0-10, 33 runs per model and T (`classico/`, `quantico_ideal/`; see its README) | Figs. 8, 9, Tables II, X |
 | ~~`Inverso_110/`~~, ~~`Inverso_500/`~~ | inverse problem, 110 epochs on FakeBerlin and 500 on FakeAachen. **Deleted by the author on 09/11/2026**; they are in the git history (commit `a36240c96`) and are no longer in the paper | -- |
 
-A real-QPU run of the inverse problem will go to `Inverso_real/<backend>/` (it does not exist yet).
+`Inverso_real/ibm_aachen/`: real-QPU run of the inverse problem (T = 0.1, seed 1, 200 epochs), compiled in
+`inverse/quantico/qpu_ibm_aachen_T_0.1_*.csv` and `acoplamento_ibm_aachen.csv` (regenerated and checked identical on
+27/11/2026). `ibm_aachen_backup_run_20261117-2237/` was the same run (identical files, plus its log). Raw files removed
+after compiling; recover them with `git checkout 45fec6512 -- data/Inverso_real`.
 
 The older long-budget sweeps of the inverse problem (another protocol, formerly in `Inverso/`) were deleted on 09/11/2026 at the author's request; they are in the git history (commit `a36240c96`). The old scripts that wrote them now point to `Inverso_antigo/`, so that they cannot mix with the new runs.
 
