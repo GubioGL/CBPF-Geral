@@ -1,0 +1,74 @@
+{
+  "seed": 0,
+  "mse": 0.004860959675384523,
+  "mae": 0.03606470928715174,
+  "relative_l2": 0.3320907387377676,
+  "surrogate": {
+    "mse": 0.004816139091875469,
+    "mae": 0.03516451265796275,
+    "relative_l2": 0.3305561682518759
+  },
+  "ideal_circuit": {
+    "mse": 0.004897643616294578,
+    "mae": 0.036685168642537014,
+    "relative_l2": 0.3333414690574123
+  },
+  "rms_q_qpu_vs_surrogate": 0.008809563162355713,
+  "rms_q_qpu_vs_exact": 0.015569889987716821,
+  "final_loss_qpu": 0.0024500980507582426,
+  "final_loss_monitor": 0.026735708117485046,
+  "network": "brickwork_cnot",
+  "n_cnot_layers": 1,
+  "Tfin": 1.0,
+  "n_collocation": 10,
+  "n_qubits": 10,
+  "backend": "fake_aachen",
+  "stopped_at_step": 200,
+  "adam_steps": 200,
+  "lbfgs_steps": 0,
+  "model_config": {
+    "n_qubits": 10,
+    "pre_neurons": 10,
+    "pre_depth": 1,
+    "post_neurons": 10,
+    "post_depth": 1,
+    "fixed_layer": "brickwork_cnot",
+    "fixed_layer_repeats": 1,
+    "input_rotation_axis": "ry",
+    "angle_scale": null,
+    "L": 1.0,
+    "Tfin": 1.0
+  },
+  "training_config": {
+    "epochs": 200,
+    "lr0": 0.1,
+    "lr_step": 0.01,
+    "lr_every": 10,
+    "lr_min": 0.01,
+    "weight_decay": 1e-06,
+    "grad_clip": 1.0,
+    "recal_every": 10,
+    "collocation_distribution": "random",
+    "n_evaluation_points": 200,
+    "L": 1.0,
+    "nu": 0.01,
+    "hx": 0.001953125,
+    "ht": 0.001,
+    "recipe": {
+      "name": "ajustada",
+      "sched": "exp",
+      "lr0": 0.07,
+      "lr_min": 0.003,
+      "inner": 8,
+      "hard_ic": false,
+      "n_ic": 10,
+      "w_ic": 10.0,
+      "betas": [
+        0.77,
+        0.99
+      ],
+      "grad_clip": 10.0
+    }
+  },
+  "batch_log": "/home/gubio/CODESPACE/CBPF-Geral/data/quantum_forward_hardware/T_1.0/run_10_NQ10_seeds0-0_fake_aachen_HW200_ajustada.json"
+}

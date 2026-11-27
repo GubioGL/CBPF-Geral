@@ -1,0 +1,2 @@
+backend,seed,n_qubits,n_collocation,Tfin,mitigation,shots,mse,relative_l2,epochs
+ibm_berlin,0,10,10,0.1,none,1024,0.0014541102919788744,0.05666299351429952,110
